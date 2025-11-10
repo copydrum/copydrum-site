@@ -16,6 +16,8 @@ const AdminPage = lazy(() => import('../pages/admin/page'));
 const MyOrdersPage = lazy(() => import('../pages/my-orders/page'));
 const CustomOrdersPage = lazy(() => import('../pages/custom-orders/page'));
 const CustomerSupportPage = lazy(() => import('../pages/customer-support/page'));
+const EventSalePage = lazy(() => import('../pages/event-sale/page'));
+const CollectionsPage = lazy(() => import('../pages/collections/page'));
 const NotFoundPage = lazy(() => import('../pages/NotFound'));
 
 // 로딩 컴포넌트
@@ -138,6 +140,22 @@ const routes: RouteObject[] = [
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <CustomerSupportPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/event-sale',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <EventSalePage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/collections',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <CollectionsPage />
       </Suspense>
     ),
   },

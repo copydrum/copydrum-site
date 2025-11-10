@@ -1,7 +1,8 @@
 
 import { BrowserRouter } from 'react-router-dom'
 import { AppRoutes } from './router'
-import { useEffect } from 'react'
+import { useEffect, Suspense } from 'react'
+import { RouteErrorBoundary } from './components/common/RouteErrorBoundary'
 
 function App() {
   useEffect(() => {
@@ -15,7 +16,11 @@ function App() {
 
   return (
     <BrowserRouter basename={__BASE_PATH__}>
-      <AppRoutes />
+      <Suspense fallback={<div>로딩 중...</div>}>
+        <RouteErrorBoundary>
+          <AppRoutes />
+        </RouteErrorBoundary>
+      </Suspense>
     </BrowserRouter>
   )
 }
