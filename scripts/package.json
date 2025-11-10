@@ -1,0 +1,27 @@
+{
+  "name": "migration-scripts",
+  "version": "1.0.0",
+  "description": "아임웹에서 Supabase로 데이터 마이그레이션 스크립트",
+  "scripts": {
+    "migrate:users": "tsx migrate-users.ts",
+    "migrate:pdfs": "tsx migrate-pdfs.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
+    "csv-parse": "^5.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.8.3"
+  }
+}
+
+
+
+
+
+
+
+
+
