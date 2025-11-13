@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import Footer from '../../components/common/Footer';
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -98,12 +99,31 @@ export default function ResetPassword() {
     }
 
     try {
-      const { error: updateError } = await supabase.auth.updateUser({
+      const { data: updatedUserResponse, error: updateError } = await supabase.auth.updateUser({
         password: password
       });
 
       if (updateError) {
         throw updateError;
+      }
+
+      try {
+        const resolvedUserId =
+          updatedUserResponse?.user?.id ||
+          (await supabase.auth.getUser()).data.user?.id;
+
+        if (resolvedUserId) {
+          const { error: profileUpdateError } = await supabase
+            .from('profiles')
+            .update({ migrated_at: null })
+            .eq('id', resolvedUserId);
+
+          if (profileUpdateError) {
+            console.error('프로필 업데이트 오류:', profileUpdateError);
+          }
+        }
+      } catch (profileUpdateCatchError) {
+        console.error('마이그레이션 플래그 초기화 중 오류:', profileUpdateCatchError);
       }
 
       setSuccess('비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해주세요.');
@@ -143,7 +163,6 @@ export default function ResetPassword() {
               </Link>
               <nav className="hidden md:flex space-x-8">
                 <a href="/categories" className="text-gray-700 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer">악보 카테고리</a>
-                <a href="#" className="text-gray-700 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer">신규 악보</a>
                 <a href="/event-sale" className="text-gray-700 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer">이벤트 할인악보</a>
               </nav>
               <div className="flex items-center space-x-4">
@@ -191,8 +210,6 @@ export default function ResetPassword() {
             <nav className="hidden md:flex space-x-8">
               <Link to="/" className="text-gray-700 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer">홈</Link>
               <a href="#" className="text-gray-700 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer">악보 카테고리</a>
-              <a href="#" className="text-gray-700 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer">신규 악보</a>
-              <a href="#" className="text-gray-700 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer">인기 악보</a>
             </nav>
             <div className="flex items-center space-x-4">
               <button className="text-gray-700 hover:text-gray-900 cursor-pointer">
@@ -336,66 +353,9 @@ export default function ResetPassword() {
         </div>
       </div>
 
-      <footer className="bg-gray-900 text-white py-12 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div>
-              <h4 className="text-xl font-bold mb-4" style={{ fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Noto Sans KR", sans-serif', fontWeight: 800 }}>
-                카피드럼
-              </h4>
-              <p className="text-gray-400 mb-4">
-                전문 드러머를 위한 최고 품질의 드럼 악보를 제공합니다.
-              </p>
-              <div className="flex space-x-4">
-                <a href="#" className="text-gray-400 hover:text-white cursor-pointer">
-                  <i className="ri-facebook-fill text-xl"></i>
-                </a>
-                <a href="#" className="text-gray-400 hover:text-white cursor-pointer">
-                  <i className="ri-instagram-line text-xl"></i>
-                </a>
-                <a href="#" className="text-gray-400 hover:text-white cursor-pointer">
-                  <i className="ri-youtube-fill text-xl"></i>
-                </a>
-              </div>
-            </div>
-            <div>
-              <h5 className="font-semibold mb-4">악보 카테고리</h5>
-              <ul className="space-y-2">
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">록 드럼</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">재즈 드럼</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">팝 드럼</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">메탈 드럼</a></li>
-              </ul>
-            </div>
-            <div>
-              <h5 className="font-semibold mb-4">고객 지원</h5>
-              <ul className="space-y-2">
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">자주 묻는 질문</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">다운로드 가이드</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">환불 정책</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">문의하기</a></li>
-              </ul>
-            </div>
-            <div>
-              <h5 className="font-semibold mb-4">회사 정보</h5>
-              <ul className="space-y-2">
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">회사 소개</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">이용약관</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">개인정보처리방침</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">파트너십</a></li>
-              </ul>
-            </div>
-          </div>
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center">
-            <p className="text-gray-400">
-              © 2024 카피드럼. All rights reserved. | 
-              <a href="https://readdy.ai/?origin=logo" className="text-gray-400 hover:text-white ml-1 cursor-pointer">
-                Website Builder
-              </a>
-            </p>
-          </div>
-        </div>
-      </footer>
+      <div className="mt-16">
+        <Footer />
+      </div>
     </div>
   );
 }

@@ -1,8 +1,17 @@
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import MainHeader from '../../components/common/MainHeader';
+import Footer from '../../components/common/Footer';
+import UserSidebar from '../../components/feature/UserSidebar';
+import { supabase } from '../../lib/supabase';
+import type { User } from '@supabase/supabase-js';
 
 export default function CustomerSupport() {
-  const [activeTab, setActiveTab] = useState('faq');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'faq' | 'contact'>(() =>
+    searchParams.get('tab') === 'contact' ? 'contact' : 'faq',
+  );
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -10,6 +19,71 @@ export default function CustomerSupport() {
     subject: '',
     message: ''
   });
+  const [submitting, setSubmitting] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setUser(user ?? null);
+    };
+
+    fetchUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+
+    if (tabParam === 'contact' && activeTab !== 'contact') {
+      setActiveTab('contact');
+      return;
+    }
+
+    if (!tabParam && activeTab !== 'faq') {
+      setActiveTab('faq');
+    }
+  }, [activeTab, searchParams]);
+
+  const handleTabChange = useCallback(
+    (tab: 'faq' | 'contact') => {
+      setActiveTab(tab);
+
+      setSearchParams((prev) => {
+        const params = new URLSearchParams(prev);
+
+        if (tab === 'faq') {
+          params.delete('tab');
+        } else {
+          params.set('tab', tab);
+        }
+
+        return params;
+      });
+    },
+    [setSearchParams],
+  );
+
+  useEffect(() => {
+    if (user) {
+      setFormData((prev) => ({
+        ...prev,
+        name: prev.name || (user.user_metadata?.name as string) || '',
+        email: prev.email || user.email || '',
+      }));
+    }
+  }, [user]);
 
   const faqs = [
     {
@@ -82,74 +156,65 @@ export default function CustomerSupport() {
     }
 
     try {
-      const response = await fetch('https://readdy.ai/api/form/d40rqa22kqgi5a0pu3og', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          name: formData.name,
-          email: formData.email,
-          category: formData.category,
-          subject: formData.subject,
-          message: formData.message
-        })
+      setSubmitting(true);
+      const trimmedName = formData.name.trim();
+      const trimmedEmail = formData.email.trim();
+      const trimmedSubject = formData.subject.trim();
+      const trimmedMessage = formData.message.trim();
+
+      const { error: insertError } = await supabase.from('customer_inquiries').insert({
+        user_id: user?.id ?? null,
+        name: trimmedName,
+        email: trimmedEmail,
+        category: formData.category,
+        subject: trimmedSubject,
+        message: trimmedMessage,
+        status: 'pending',
       });
 
-      if (response.ok) {
-        alert('문의가 성공적으로 접수되었습니다. 빠른 시일 내에 답변드리겠습니다.');
-        setFormData({
-          name: '',
-          email: '',
-          category: '',
-          subject: '',
-          message: ''
-        });
-      } else {
-        throw new Error('전송 실패');
+      if (insertError) {
+        throw insertError;
       }
+
+      alert('문의가 성공적으로 접수되었습니다. 빠른 시일 내에 답변드리겠습니다.');
+      setFormData({
+        name: user
+          ? ((user.user_metadata?.name as string) ?? trimmedName)
+          : '',
+        email: user ? user.email ?? trimmedEmail : '',
+        category: '',
+        subject: '',
+        message: ''
+      });
     } catch (error) {
+      console.error('고객 문의 저장 실패:', error);
       alert('문의 전송 중 오류가 발생했습니다. 다시 시도해주세요.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4">
-            <a href="/" className="flex flex-col items-start cursor-pointer">
-              <h1 className="text-3xl font-bold text-gray-900" style={{ fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Noto Sans KR", sans-serif', fontWeight: 800 }}>
-                카피드럼
-              </h1>
-              <p className="text-xs text-gray-600 mt-0.5">국내 최대 드럼악보 사이트</p>
-            </a>
-            <nav className="flex items-center space-x-8">
-              <a href="/categories" className="text-gray-700 hover:text-blue-600 cursor-pointer">악보 카테고리</a>
-              <a href="/custom-order" className="text-gray-700 hover:text-blue-600 cursor-pointer">주문제작</a>
-              <a href="/customer-support" className="text-blue-600 font-semibold cursor-pointer">고객센터</a>
-            </nav>
-          </div>
-        </div>
-      </div>
-
-      {/* Hero Section */}
-      <section className="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-16">
+      <MainHeader user={user} />
+      <UserSidebar user={user} />
+      <div className={user ? 'mr-64' : ''}>
+        {/* Hero Section */}
+        <section className="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-4xl font-bold mb-4">고객센터</h1>
           <p className="text-xl text-blue-100">
             궁금한 점이 있으시면 언제든지 문의해주세요. 빠르고 정확한 답변을 드리겠습니다.
           </p>
         </div>
-      </section>
+        </section>
 
-      {/* Tab Navigation */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Tab Navigation */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-center mb-8">
           <div className="bg-gray-100 rounded-lg p-1 flex">
             <button
-              onClick={() => setActiveTab('faq')}
+              onClick={() => handleTabChange('faq')}
               className={`px-6 py-3 rounded-md font-medium transition-colors whitespace-nowrap cursor-pointer ${
                 activeTab === 'faq'
                   ? 'bg-white text-blue-600 shadow-sm'
@@ -159,7 +224,7 @@ export default function CustomerSupport() {
               자주 묻는 질문
             </button>
             <button
-              onClick={() => setActiveTab('contact')}
+              onClick={() => handleTabChange('contact')}
               className={`px-6 py-3 rounded-md font-medium transition-colors whitespace-nowrap cursor-pointer ${
                 activeTab === 'contact'
                   ? 'bg-white text-blue-600 shadow-sm'
@@ -305,9 +370,10 @@ export default function CustomerSupport() {
 
                 <button
                   type="submit"
-                  className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 font-medium transition-colors whitespace-nowrap cursor-pointer"
+                  disabled={submitting}
+                  className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 font-medium transition-colors whitespace-nowrap cursor-pointer disabled:bg-blue-300 disabled:cursor-not-allowed"
                 >
-                  문의 보내기
+                  {submitting ? '전송 중...' : '문의 보내기'}
                 </button>
               </form>
             </div>
@@ -329,7 +395,7 @@ export default function CustomerSupport() {
                 <i className="ri-mail-line text-blue-600 text-2xl"></i>
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">이메일 문의</h3>
-              <p className="text-gray-600 mb-2">support@copydrum.com</p>
+              <p className="text-gray-600 mb-2">copydrum@hanmail.net</p>
               <p className="text-sm text-gray-500">24시간 접수, 1일 내 답변</p>
             </div>
             
@@ -338,7 +404,7 @@ export default function CustomerSupport() {
                 <i className="ri-time-line text-blue-600 text-2xl"></i>
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">운영시간</h3>
-              <p className="text-gray-600 mb-2">평일 09:00 - 18:00</p>
+              <p className="text-gray-600 mb-2">평일 09:00 - 17:00</p>
               <p className="text-sm text-gray-500">주말 및 공휴일 휴무</p>
             </div>
             
@@ -354,56 +420,8 @@ export default function CustomerSupport() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div>
-              <h4 className="text-xl font-bold mb-4" style={{ fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Noto Sans KR", sans-serif', fontWeight: 800 }}>
-                카피드럼
-              </h4>
-              <p className="text-gray-400 mb-4">
-                전문 드러머를 위한 최고 품질의 드럼 악보를 제공합니다.
-              </p>
-            </div>
-            <div>
-              <h5 className="font-semibold mb-4">악보 카테고리</h5>
-              <ul className="space-y-2">
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">록 드럼</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">재즈 드럼</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">팝 드럼</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">메탈 드럼</a></li>
-              </ul>
-            </div>
-            <div>
-              <h5 className="font-semibold mb-4">고객 지원</h5>
-              <ul className="space-y-2">
-                <li><a href="/customer-support" className="text-gray-400 hover:text-white cursor-pointer">자주 묻는 질문</a></li>
-                <li><a href="/customer-support" className="text-gray-400 hover:text-white cursor-pointer">문의하기</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">다운로드 가이드</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">환불 정책</a></li>
-              </ul>
-            </div>
-            <div>
-              <h5 className="font-semibold mb-4">회사 정보</h5>
-              <ul className="space-y-2">
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">회사 소개</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">이용약관</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">개인정보처리방침</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white cursor-pointer">파트너십</a></li>
-              </ul>
-            </div>
-          </div>
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center">
-            <p className="text-gray-400">
-              © 2024 카피드럼. All rights reserved. | 
-              <a href="https://readdy.ai/?origin=logo" className="text-gray-400 hover:text-white ml-1 cursor-pointer">
-                Website Builder
-              </a>
-            </p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
+      </div>
     </div>
   );
 }

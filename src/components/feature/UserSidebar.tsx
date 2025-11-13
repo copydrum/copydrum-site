@@ -1,20 +1,27 @@
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
 import { supabase } from '../../lib/supabase';
 import { kakaoAuth } from '../../lib/kakao';
 import { googleAuth } from '../../lib/google';
 import type { User } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../hooks/useCart';
+import { startCashCharge } from '../../lib/payments';
+import type { VirtualAccountInfo } from '../../lib/payments';
 
 interface UserSidebarProps {
   user: User | null;
 }
 
 export default function UserSidebar({ user }: UserSidebarProps) {
-  const [userCash, setUserCash] = useState(50000); // 모의 캐쉬 잔액
+  const [userCash, setUserCash] = useState(0);
   const [showCashChargeModal, setShowCashChargeModal] = useState(false);
   const [chargeAmount, setChargeAmount] = useState(10000);
+  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank'>('card');
+  const [chargeAgreementChecked, setChargeAgreementChecked] = useState(false);
+  const [chargeProcessing, setChargeProcessing] = useState(false);
+  const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
+  const [isKakaoChatReady, setIsKakaoChatReady] = useState(false);
 
   // 로그인 폼 상태
   const [email, setEmail] = useState('');
@@ -22,21 +29,13 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   const [rememberMe, setRememberMe] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [loginInfo, setLoginInfo] = useState('');
   const [kakaoLoading, setKakaoLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const navigate = useNavigate();
 
   const { cartItems } = useCart();
-
-  const menuItems = [
-    { icon: 'ri-home-line', label: '홈', path: '/' },
-    { icon: 'ri-list-check', label: '카테고리', path: '/categories' },
-    { icon: 'ri-file-music-line', label: '주문제작', path: '/custom-order' },
-    { icon: 'ri-file-list-3-line', label: '주문제작 신청내역', path: '/my-orders' },
-    { icon: 'ri-shopping-cart-line', label: '장바구니', path: '/cart' },
-    { icon: 'ri-user-line', label: '마이페이지', path: '/mypage' },
-  ];
 
   const handleLogout = async () => {
     try {
@@ -62,10 +61,13 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     e.preventDefault();
     setLoginLoading(true);
     setLoginError('');
+    setLoginInfo('');
+
+    const normalizedEmail = email.trim().toLowerCase();
 
     try {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
+        email: normalizedEmail,
         password,
       });
 
@@ -78,7 +80,35 @@ export default function UserSidebar({ user }: UserSidebarProps) {
       }
     } catch (err: any) {
       console.error('로그인 오류:', err);
-      if (err.message.includes('Invalid login credentials')) {
+      if (err.message?.includes('Invalid login credentials')) {
+        try {
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('migrated_at')
+            .eq('email', normalizedEmail)
+            .maybeSingle();
+
+          if (!profileError && profile?.migrated_at) {
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+              redirectTo: `${window.location.origin}/auth/reset-password`,
+            });
+
+            if (resetError) {
+              console.error('비밀번호 재설정 메일 발송 오류:', resetError);
+              setLoginError('비밀번호 재설정 메일 발송 중 오류가 발생했습니다. 다시 시도해주세요.');
+            } else {
+              setLoginInfo('기존 회원님이시군요! 비밀번호 재설정 이메일을 발송했습니다. 메일함을 확인해주세요.');
+            }
+            return;
+          }
+
+          if (profileError && profileError.code !== 'PGRST116') {
+            console.error('프로필 조회 오류:', profileError);
+          }
+        } catch (checkError) {
+          console.error('마이그레이션 사용자 확인 오류:', checkError);
+        }
+
         setLoginError('이메일 또는 비밀번호가 올바르지 않습니다.');
       } else if (err.message.includes('Email not confirmed')) {
         setLoginError('이메일 인증이 필요합니다. 이메일을 확인해주세요.');
@@ -275,27 +305,172 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   };
 
   const handleCashCharge = () => {
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+    setBankTransferInfo(null);
+    setChargeAgreementChecked(false);
+    setChargeProcessing(false);
     setShowCashChargeModal(true);
   };
 
-  const handleChargeConfirm = () => {
-    // 실제로는 결제 API 연동
-    setUserCash(prev => prev + chargeAmount);
+  const handleCloseCashChargeModal = () => {
     setShowCashChargeModal(false);
-    alert(`${chargeAmount.toLocaleString()}원이 충전되었습니다!`);
+    setChargeAgreementChecked(false);
+    setChargeProcessing(false);
+    setBankTransferInfo(null);
   };
 
-  const handleMyPageClick = () => {
-    navigate('/mypage');
+  const handleChargeConfirm = async () => {
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    if (!chargeAgreementChecked) {
+      alert('결제 약관에 동의해 주세요.');
+      return;
+    }
+
+    const selectedOption = chargeOptions.find((option) => option.amount === chargeAmount);
+    if (!selectedOption) {
+      alert('선택한 충전 금액을 확인할 수 없습니다.');
+      return;
+    }
+
+    if (selectedPayment === 'kakaopay') {
+      alert('카카오페이는 준비 중입니다. 다른 결제 수단을 선택해 주세요.');
+      return;
+    }
+
+    setChargeProcessing(true);
+
+    try {
+      const paymentMethod = selectedPayment === 'bank' ? 'bank_transfer' : 'card';
+      const description = `캐쉬 충전 ${selectedOption.amount.toLocaleString('ko-KR')}원`;
+      const result = await startCashCharge({
+        userId: user.id,
+        amount: selectedOption.amount,
+        bonusAmount: selectedOption.bonus ?? 0,
+        paymentMethod,
+        description,
+        buyerName: user.email ?? null,
+        buyerEmail: user.email ?? null,
+        returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
+      });
+
+      if (paymentMethod === 'bank_transfer') {
+        setBankTransferInfo(result.virtualAccountInfo ?? null);
+        await loadUserCash();
+        alert('무통장입금 안내가 생성되었습니다.\n안내에 따라 입금 후 자동으로 충전됩니다.');
+      } else {
+        setBankTransferInfo(null);
+        setShowCashChargeModal(false);
+      }
+
+      setChargeAgreementChecked(false);
+    } catch (error) {
+      console.error('캐쉬 충전 오류:', error);
+      alert(error instanceof Error ? error.message : '캐쉬 충전 중 오류가 발생했습니다.');
+    } finally {
+      setChargeProcessing(false);
+    }
   };
 
   const handleCustomerSupportClick = () => {
     navigate('/customer-support');
   };
 
+  const handleNavigate = useCallback(
+    (path: string) => {
+      if (!path) {
+        return;
+      }
+      navigate(path);
+    },
+    [navigate],
+  );
+
+  const handleKakaoChatClick = useCallback(() => {
+    const channelPublicId = '_Hbxezxl';
+    const channelUrl = `https://pf.kakao.com/${channelPublicId}/chat`;
+
+    try {
+      const kakao = window.Kakao;
+      if (kakao) {
+        if (!kakao.isInitialized()) {
+          kakao.init('f8269368f9d501a595c3f3d6d99e4ff5');
+        }
+        if (kakao.Channel) {
+          kakao.Channel.chat({
+            channelPublicId,
+          });
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('카카오 채팅 상담 연결 중 오류:', error);
+    }
+
+    window.open(channelUrl, '_blank', 'noopener,noreferrer');
+  }, []);
+
+  const sidebarMenuItems = useMemo(
+    () => [
+      {
+        icon: 'ri-history-line',
+        label: '악보캐쉬 내역',
+        onClick: () => handleNavigate('/mypage?section=cash-history'),
+      },
+      {
+        icon: 'ri-user-settings-line',
+        label: '회원정보 업데이트',
+        onClick: () => handleNavigate('/mypage?section=profile'),
+      },
+      {
+        icon: 'ri-shopping-cart-line',
+        label: '장바구니',
+        onClick: () => handleNavigate('/cart'),
+        badge: cartItems.length,
+      },
+      {
+        icon: 'ri-file-list-3-line',
+        label: '구입목록',
+        onClick: () => handleNavigate('/my-orders'),
+      },
+      {
+        icon: 'ri-edit-2-line',
+        label: '주문제작하기',
+        onClick: () => handleNavigate('/custom-order'),
+      },
+      {
+        icon: 'ri-user-line',
+        label: '마이페이지',
+        onClick: () => handleNavigate('/mypage'),
+      },
+      {
+        icon: 'ri-customer-service-2-line',
+        label: '고객센터',
+        onClick: () => handleNavigate('/customer-support'),
+      },
+      {
+        icon: 'ri-question-answer-line',
+        label: '1:1 문의',
+        onClick: () => handleNavigate('/mypage?section=inquiries'),
+      },
+      {
+        icon: 'ri-question-line',
+        label: '검색/구매가이드',
+        onClick: () => handleNavigate('/guide'),
+      },
+    ],
+    [cartItems.length, handleNavigate],
+  );
+
   const chargeOptions = [
-    { amount: 30000, bonus: 0, label: '3천원' },
-    { amount: 50000, bonus: 500, label: '5천원', bonusPercent: '10%' },
+    { amount: 3000, bonus: 0, label: '3천원' },
+    { amount: 5000, bonus: 500, label: '5천원', bonusPercent: '10%' },
     { amount: 10000, bonus: 1500, label: '1만원', bonusPercent: '15%' },
     { amount: 30000, bonus: 6000, label: '3만원', bonusPercent: '20%' },
     { amount: 50000, bonus: 11000, label: '5만원', bonusPercent: '22%' },
@@ -303,20 +478,104 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   ];
 
   const paymentMethods = [
-    { id: 'kakaopay', name: '카카오페이', icon: 'ri-kakao-talk-fill', color: 'text-yellow-600' },
     { id: 'card', name: '신용카드', icon: 'ri-bank-card-line', color: 'text-blue-600' },
+    {
+      id: 'kakaopay',
+      name: '카카오페이',
+      icon: 'ri-kakao-talk-fill',
+      color: 'text-yellow-600',
+      disabled: true,
+      badge: '준비 중',
+    },
     { id: 'bank', name: '무통장입금', icon: 'ri-bank-line', color: 'text-green-600' },
-    { id: 'phone', name: '휴대폰결제', icon: 'ri-smartphone-line', color: 'text-purple-600' },
-  ];
+  ] as const;
 
-  const [selectedPayment, setSelectedPayment] = useState('kakaopay');
+  // 사용자 캐쉬 로드
+  useEffect(() => {
+    const loadUserCash = async () => {
+      if (!user) {
+        setUserCash(0);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('credits')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error('캐쉬 조회 오류:', error);
+          // 프로필이 없으면 기본값 0 사용
+          setUserCash(0);
+          return;
+        }
+
+        // credits가 null이거나 undefined인 경우 0으로 설정
+        setUserCash(data?.credits || 0);
+      } catch (error) {
+        console.error('캐쉬 로드 오류:', error);
+        setUserCash(0);
+      }
+    };
+
+    loadUserCash();
+  }, [user]);
+
+  useEffect(() => {
+    const ensureKakaoSdk = () => {
+      const kakao = window.Kakao;
+      if (kakao) {
+        try {
+          if (!kakao.isInitialized()) {
+            kakao.init('f8269368f9d501a595c3f3d6d99e4ff5');
+          }
+          setIsKakaoChatReady(true);
+        } catch (error) {
+          console.error('카카오 SDK 초기화 중 오류:', error);
+        }
+        return;
+      }
+
+      const existingScript = document.getElementById('kakao-sdk');
+      if (existingScript) {
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.id = 'kakao-sdk';
+      script.src = 'https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js';
+      script.integrity = 'sha384-TiCUE00h649CAMonG018J2ujOgDKW/kVWlChEuu4jK2vxfAAD0eZxzCKakxg55G4';
+      script.crossOrigin = 'anonymous';
+      script.async = true;
+      script.onload = () => {
+        try {
+          const kakaoOnLoad = window.Kakao;
+          if (kakaoOnLoad && !kakaoOnLoad.isInitialized()) {
+            kakaoOnLoad.init('f8269368f9d501a595c3f3d6d99e4ff5');
+          }
+          setIsKakaoChatReady(true);
+        } catch (error) {
+          console.error('카카오 SDK 로드 후 초기화 실패:', error);
+        }
+      };
+      script.onerror = () => {
+        console.error('카카오 SDK 로드 실패');
+      };
+
+      document.head.appendChild(script);
+    };
+
+    ensureKakaoSdk();
+  }, []);
 
   // 로그인하지 않은 경우 로그인 사이드바 표시
   if (!user) {
     return (
       <div className="fixed top-0 right-0 h-full w-64 bg-white shadow-2xl z-50 border-l border-gray-200">
         {/* 헤더 */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-4 text-white">
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white flex flex-col items-center justify-center" style={{ height: '156px' }}>
           <h2 className="text-lg font-bold text-center">로그인</h2>
           <p className="text-blue-100 text-xs text-center mt-1">악보 구매를 위해 로그인하세요</p>
         </div>
@@ -324,9 +583,21 @@ export default function UserSidebar({ user }: UserSidebarProps) {
         {/* 로그인 폼 */}
         <div className="p-4 h-full overflow-y-auto pb-16">
           <form onSubmit={handleLogin} className="space-y-4">
+            {loginInfo && (
+              <div className="bg-blue-50 border border-blue-200 text-blue-700 px-3 py-2 rounded-md text-xs">
+                {loginInfo}
+              </div>
+            )}
+
             {loginError && (
-              <div className="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-md text-xs">
-                {loginError}
+              <div className="space-y-2">
+                <div className="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-md text-xs">
+                  {loginError}
+                </div>
+                <div className="text-xs text-gray-600 bg-gray-50 border border-gray-200 px-3 py-2 rounded-md">
+                  로그인이 되지 않는 경우, 사이트 이전으로 인해 비밀번호 재설정이 필요할 수 있습니다.<br />
+                  아래 <span className="font-semibold text-blue-600">비밀번호 찾기</span>를 눌러 새 비밀번호를 설정해 주세요.
+                </div>
               </div>
             )}
 
@@ -448,20 +719,20 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                 회원가입
               </a>
 
-              <div className="flex space-x-2">
-                <a
-                  href="/auth/forgot-password"
-                  className="flex-1 text-center py-2 px-3 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md hover:bg-blue-50 cursor-pointer"
-                >
-                  아이디 찾기
-                </a>
-                <a
-                  href="/auth/forgot-password"
-                  className="flex-1 text-center py-2 px-3 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md hover:bg-blue-50 cursor-pointer"
-                >
-                  비밀번호 찾기
-                </a>
-              </div>
+            <div className="flex space-x-2">
+              <a
+                href="/auth/forgot-password"
+                className="flex-1 text-center py-2 px-3 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md hover:bg-blue-50 cursor-pointer"
+              >
+                아이디 찾기
+              </a>
+              <a
+                href="/auth/forgot-password"
+                className="flex-1 text-center py-2 px-3 text-xs text-white bg-blue-600 hover:bg-blue-700 border border-blue-600 rounded-md cursor-pointer"
+              >
+                비밀번호 찾기
+              </a>
+            </div>
             </div>
 
             {/* 고객센터 */}
@@ -525,49 +796,51 @@ export default function UserSidebar({ user }: UserSidebarProps) {
               </div>
             </button>
 
-            {/* 일반 메뉴들 */}
-            <button className="w-full flex items-center p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer">
-              <i className="ri-history-line text-gray-600 text-sm mr-3"></i>
-              <span className="text-gray-800 text-sm">악보캐쉬 내역</span>
-            </button>
+            {sidebarMenuItems.map((item) => (
+              <Fragment key={item.label}>
+                <button
+                  onClick={item.onClick}
+                  className="w-full flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center">
+                    <i className={`${item.icon} text-gray-600 text-sm mr-3`}></i>
+                    <span className="text-gray-800 text-sm">{item.label}</span>
+                  </div>
+                  {item.badge ? (
+                    <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-600">
+                      {item.badge}
+                    </span>
+                  ) : null}
+                </button>
 
-            <button className="w-full flex items-center p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer">
-              <i className="ri-user-settings-line text-gray-600 text-sm mr-3"></i>
-              <span className="text-gray-800 text-sm">회원정보 업데이트</span>
-            </button>
-
-            <button className="w-full flex items-center p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer">
-              <i className="ri-shopping-cart-line text-gray-600 text-sm mr-3"></i>
-              <span className="text-gray-800 text-sm">장바구니</span>
-            </button>
-
-            <button className="w-full flex items-center p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer">
-              <i className="ri-file-list-3-line text-gray-600 text-sm mr-3"></i>
-              <span className="text-gray-800 text-sm">구입목록</span>
-            </button>
-
-            <button 
-                onClick={handleMyPageClick}
-                className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-              >
-                <div className="w-5 h-5 flex items-center justify-center">
-                  <i className="ri-user-line text-gray-600"></i>
-                </div>
-                <span className="text-gray-800 text-sm">마이페이지</span>
-              </button>
-
-            <button 
-              onClick={handleCustomerSupportClick}
-              className="w-full flex items-center p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
-            >
-              <i className="ri-customer-service-2-line text-gray-600 text-sm mr-3"></i>
-              <span className="text-gray-800 text-sm">고객센터</span>
-            </button>
-
-            <button className="w-full flex items-center p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer">
-              <i className="ri-question-line text-gray-600 text-sm mr-3"></i>
-              <span className="text-gray-800 text-sm">검색/구매가이드</span>
-            </button>
+                {item.label === '검색/구매가이드' && (
+                  <div className="pt-2 pb-2">
+                    <button
+                      onClick={handleKakaoChatClick}
+                      className="group w-full flex items-center gap-3 rounded-xl border border-yellow-300 bg-[#FEE500] px-3 py-3 shadow-sm transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
+                    >
+                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-black/5">
+                        <img
+                          src="/kakao.svg"
+                          alt="카카오톡 채널"
+                          className="h-8 w-auto"
+                          loading="lazy"
+                        />
+                      </div>
+                      <div className="flex flex-1 flex-col items-start text-left">
+                        <span className="text-sm font-semibold text-gray-900">카카오 채팅 상담</span>
+                        {!isKakaoChatReady && (
+                          <span className="text-xs text-gray-800/70">
+                            클릭하면 카카오톡 상담으로 이동합니다.
+                          </span>
+                        )}
+                      </div>
+                      <i className="ri-external-link-line text-base text-gray-900 transition-transform group-hover:translate-x-0.5"></i>
+                    </button>
+                  </div>
+                )}
+              </Fragment>
+            ))}
           </div>
         </div>
       </div>
@@ -578,11 +851,8 @@ export default function UserSidebar({ user }: UserSidebarProps) {
           <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
             {/* 헤더 */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">포인트 충전</h2>
-              <button
-                onClick={() => setShowCashChargeModal(false)}
-                className="text-gray-400 hover:text-gray-600 cursor-pointer"
-              >
+              <h2 className="text-lg font-bold text-gray-900">캐쉬충전</h2>
+              <button onClick={handleCloseCashChargeModal} className="text-gray-400 hover:text-gray-600 cursor-pointer">
                 <i className="ri-close-line text-xl"></i>
               </button>
             </div>
@@ -591,107 +861,166 @@ export default function UserSidebar({ user }: UserSidebarProps) {
               {/* 현재 포인트 */}
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6 flex items-center">
                 <i className="ri-coins-line text-yellow-600 text-lg mr-2"></i>
-                <span className="text-sm text-gray-700">보유 포인트</span>
+                <span className="text-sm text-gray-700">보유 악보캐쉬</span>
                 <span className="ml-auto font-bold text-yellow-600">{userCash.toLocaleString()} P</span>
               </div>
 
-              {/* 결제금액 */}
-              <div className="mb-6">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">결제금액</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {chargeOptions.map((option, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setChargeAmount(option.amount)}
-                      className={`relative p-3 border rounded-lg text-left transition-colors cursor-pointer ${
-                        chargeAmount === option.amount
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">{option.label}</span>
-                        <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
-                          {chargeAmount === option.amount && (
-                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                          )}
-                        </div>
-                      </div>
-                      {option.bonus > 0 && (
-                        <div className="mt-1">
-                          <span className="text-xs text-gray-500">
-                            +{option.bonus.toLocaleString()} 적립
+              {bankTransferInfo ? (
+                <div className="space-y-5">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h3 className="text-sm font-semibold text-blue-800 mb-3">무통장입금 안내</h3>
+                    <ul className="space-y-2 text-sm text-gray-700">
+                      <li>
+                        <span className="font-medium text-gray-900">은행</span> {bankTransferInfo.bankName}
+                      </li>
+                      <li>
+                        <span className="font-medium text-gray-900">계좌번호</span>{' '}
+                        {bankTransferInfo.accountNumber}
+                      </li>
+                      <li>
+                        <span className="font-medium text-gray-900">예금주</span> {bankTransferInfo.depositor}
+                      </li>
+                      <li>
+                        <span className="font-medium text-gray-900">입금금액</span>{' '}
+                        {new Intl.NumberFormat('ko-KR').format(bankTransferInfo.amount ?? chargeAmount)}원
+                      </li>
+                      {bankTransferInfo.expectedDepositor ? (
+                        <li>
+                          <span className="font-medium text-gray-900">입금자명</span>{' '}
+                          <span className="text-blue-600 font-semibold">
+                            {bankTransferInfo.expectedDepositor}
                           </span>
-                          <span className="ml-1 bg-red-500 text-white text-xs px-1 py-0.5 rounded">
-                            {option.bonusPercent}
-                          </span>
-                        </div>
-                      )}
-                    </button>
-                  ))}
+                        </li>
+                      ) : null}
+                    </ul>
+                    {bankTransferInfo.message ? (
+                      <p className="mt-4 text-xs text-gray-600">{bankTransferInfo.message}</p>
+                    ) : null}
+                  </div>
+
+                  <button
+                    onClick={handleCloseCashChargeModal}
+                    className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 font-bold text-sm transition-colors"
+                  >
+                    확인
+                  </button>
                 </div>
-              </div>
-
-              {/* 결제방법 */}
-              <div className="mb-6">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">결제방법</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {paymentMethods.map((method) => (
-                    <button
-                      key={method.id}
-                      onClick={() => setSelectedPayment(method.id)}
-                      className={`p-3 border rounded-lg text-left transition-colors cursor-pointer ${
-                        selectedPayment === method.id
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <i className={`${method.icon} ${method.color} text-lg mr-2`}></i>
-                          <span className="text-sm font-medium">{method.name}</span>
-                        </div>
-                        <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
-                          {selectedPayment === method.id && (
-                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              ) : (
+                <>
+                  {/* 결제금액 */}
+                  <div className="mb-6">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">결제금액</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {chargeOptions.map((option, index) => (
+                        <button
+                          key={index}
+                          onClick={() => setChargeAmount(option.amount)}
+                          className={`relative p-3 border rounded-lg text-left transition-colors ${
+                            chargeAmount === option.amount
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">{option.label}</span>
+                            <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
+                              {chargeAmount === option.amount && (
+                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                              )}
+                            </div>
+                          </div>
+                          {option.bonus > 0 && (
+                            <div className="mt-1">
+                              <span className="text-xs text-gray-500">
+                                +{option.bonus.toLocaleString()} 적립
+                              </span>
+                              <span className="ml-1 bg-red-500 text-white text-xs px-1 py-0.5 rounded">
+                                {option.bonusPercent}
+                              </span>
+                            </div>
                           )}
-                        </div>
-                      </div>
-                      {method.id === 'kakaopay' && (
-                        <div className="mt-1 flex items-center">
-                          <span className="bg-yellow-400 text-black text-xs px-2 py-0.5 rounded font-bold">
-                            pay
-                          </span>
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-              {/* 약관 동의 */}
-              <div className="mb-6">
-                <label className="flex items-start cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
-                  />
-                  <span className="ml-2 text-xs text-gray-600 leading-relaxed">
-                    결제 내용을 확인하였으며, 약관에 동의합니다.
-                    <button className="text-blue-600 hover:text-blue-800 ml-1">
-                      <i className="ri-arrow-down-s-line"></i>
-                    </button>
-                  </span>
-                </label>
-              </div>
+                  {/* 결제방법 */}
+                  <div className="mb-6">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">결제방법</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {paymentMethods.map((method) => {
+                        const isSelected = selectedPayment === method.id;
+                        const isDisabled = method.disabled;
+                        return (
+                          <button
+                            key={method.id}
+                            type="button"
+                            onClick={() => {
+                              if (isDisabled) {
+                                alert('해당 결제수단은 현재 준비 중입니다.');
+                                return;
+                              }
+                              setSelectedPayment(method.id);
+                            }}
+                            disabled={isDisabled}
+                            className={`p-3 border rounded-lg text-left transition-colors ${
+                              isSelected
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-200 hover:border-gray-300'
+                            } ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                <i className={`${method.icon} ${method.color} text-lg mr-2`}></i>
+                                <span className="text-sm font-medium">{method.name}</span>
+                              </div>
+                              <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
+                                {isSelected && <div className="w-2 h-2 bg-blue-500 rounded-full"></div>}
+                              </div>
+                            </div>
+                            {method.badge ? (
+                              <div className="mt-1">
+                                <span className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded">
+                                  {method.badge}
+                                </span>
+                              </div>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
 
-              {/* 충전하기 버튼 */}
-              <button
-                onClick={handleChargeConfirm}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-lg hover:from-blue-700 hover:to-purple-700 font-bold text-sm transition-colors cursor-pointer"
-              >
-                충전하기
-              </button>
+                  {/* 약관 동의 */}
+                  <div className="mb-6">
+                    <label className="flex items-start cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={chargeAgreementChecked}
+                        onChange={(event) => setChargeAgreementChecked(event.target.checked)}
+                        className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                      />
+                      <span className="ml-2 text-xs text-gray-600 leading-relaxed">
+                        결제 내용을 확인하였으며, 약관에 동의합니다.
+                        <button type="button" className="text-blue-600 hover:text-blue-800 ml-1">
+                          <i className="ri-arrow-down-s-line"></i>
+                        </button>
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* 충전하기 버튼 */}
+                  <button
+                    onClick={handleChargeConfirm}
+                    disabled={chargeProcessing}
+                    className={`w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-lg font-bold text-sm transition-colors ${
+                      chargeProcessing ? 'opacity-70 cursor-not-allowed' : 'hover:from-blue-700 hover:to-purple-700'
+                    }`}
+                  >
+                    {chargeProcessing ? '결제 준비 중...' : '충전하기'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

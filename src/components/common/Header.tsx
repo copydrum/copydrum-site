@@ -1,0 +1,174 @@
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
+import type { User } from '@supabase/supabase-js';
+
+interface HeaderProps {
+  user?: User | null;
+}
+
+export default function Header({ user: propUser }: HeaderProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [user, setUser] = useState<User | null>(propUser || null);
+  const [customOrderCategoryId, setCustomOrderCategoryId] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!propUser) {
+      const getUser = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        setUser(user);
+      };
+      getUser();
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        (event, session) => {
+          setUser(session?.user ?? null);
+        }
+      );
+
+      return () => subscription.unsubscribe();
+    } else {
+      setUser(propUser);
+    }
+  }, [propUser]);
+
+  const handleSearch = () => {
+    if (searchQuery.trim()) {
+      navigate(`/categories?search=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
+  const isActive = (path: string) => {
+    return location.pathname === path;
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchCustomOrderCategory = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('categories')
+          .select('id')
+          .eq('name', '주문제작')
+          .maybeSingle();
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (error) {
+          console.error('주문제작 카테고리 조회 실패:', error);
+          return;
+        }
+
+        setCustomOrderCategoryId(data?.id ?? null);
+      } catch (err) {
+        if (isMounted) {
+          console.error('주문제작 카테고리 연동 중 오류:', err);
+        }
+      }
+    };
+
+    fetchCustomOrderCategory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const customOrderLink = customOrderCategoryId
+    ? `/categories?category=${customOrderCategoryId}`
+    : '/custom-order';
+
+  const isCustomOrderActive = () => {
+    if (customOrderCategoryId) {
+      const params = new URLSearchParams(location.search);
+      return location.pathname === '/categories' && params.get('category') === customOrderCategoryId;
+    }
+
+    return location.pathname === '/custom-order';
+  };
+
+  return (
+    <div className={`bg-blue-700 ${user ? 'mr-64' : ''}`}>
+      <div className="mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+        {/* Logo, Search Row */}
+        <div className="flex items-center justify-between py-4">
+          {/* Logo */}
+          <div className="flex items-center">
+            <img 
+              src="/logo.png" 
+              alt="카피드럼" 
+              className="h-12 w-auto mr-3 cursor-pointer"
+              onClick={() => navigate('/')}
+            />
+            <h1 
+              className="text-2xl font-bold text-white cursor-pointer"
+              style={{ fontFamily: '"Noto Sans KR", "Malgun Gothic", sans-serif' }}
+              onClick={() => navigate('/')}
+            >
+              카피드럼
+            </h1>
+          </div>
+
+          {/* Search Bar */}
+          <div className="flex-1 max-w-2xl mx-8">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="곡명, 아티스트, 장르로 검색..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSearch();
+                  }
+                }}
+                className="w-full px-6 py-3 text-base border-0 rounded-full focus:outline-none pr-12 bg-blue-50 placeholder-gray-400 text-gray-900"
+              />
+              <button 
+                onClick={handleSearch}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-blue-700 cursor-pointer transition-colors duration-200"
+              >
+                <i className="ri-search-line text-xl"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation Menu - Below Search Bar */}
+        <nav className="flex items-center justify-center space-x-8 pb-4">
+          <a 
+            href="/" 
+            className={`font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors duration-200 ${
+              isActive('/') ? 'text-white' : 'text-white hover:text-blue-200'
+            }`}
+          >
+            홈
+          </a>
+          <a 
+            href="/categories" 
+            className={`font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors duration-200 ${
+              isActive('/categories') ? 'text-white' : 'text-white hover:text-blue-200'
+            }`}
+          >
+            악보 카테고리
+          </a>
+          <a 
+            href={customOrderLink} 
+            className={`font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors duration-200 ${
+              isCustomOrderActive() ? 'text-white' : 'text-white hover:text-blue-200'
+            }`}
+          >
+            주문제작
+          </a>
+        </nav>
+      </div>
+    </div>
+  );
+}
+
+

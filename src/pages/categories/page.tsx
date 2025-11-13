@@ -1,12 +1,21 @@
 
-import { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { User } from '@supabase/supabase-js';
-import { Search, Filter, Grid, List, ShoppingCart, Star, ChevronDown, ChevronUp, X } from 'lucide-react';
+import type { User } from '@supabase/supabase-js';
 import React from 'react';
 import UserSidebar from '../../components/feature/UserSidebar';
 import { useCart } from '../../hooks/useCart';
+import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
+import type { EventDiscountMap } from '../../lib/eventDiscounts';
+import { buildEventDiscountMap, fetchEventDiscountList, purchaseEventDiscount } from '../../lib/eventDiscounts';
+import { fetchUserFavorites, toggleFavorite } from '../../lib/favorites';
+import MainHeader from '../../components/common/MainHeader';
+import { processCashPurchase } from '../../lib/cashPurchases';
+import { hasPurchasedSheet } from '../../lib/purchaseCheck';
+import { PaymentMethodSelector } from '../../components/payments';
+import { startSheetPurchase } from '../../lib/payments';
+import type { VirtualAccountInfo } from '../../lib/payments';
 
 interface Category {
   id: string;
@@ -26,31 +35,73 @@ interface DrumSheet {
   preview_image_url: string;
   is_featured: boolean;
   created_at: string;
-  categories?: { name: string };
+  categories?: { name: string } | null;
   thumbnail_url?: string;
-  album?: string;
+  album_name?: string;
   page_count?: number;
-  purchase_count?: number;
-  view_count?: number;
-  click_count?: number;
 }
 
 const CategoriesPage: React.FC = () => {
   // ... existing code ...
 
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [drumSheets, setDrumSheets] = useState<DrumSheet[]>([]);
   const [topSheets, setTopSheets] = useState<DrumSheet[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [hoveredSheet, setHoveredSheet] = useState<DrumSheet | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>(() => searchParams.get('category') || '');
   const [selectedSheet, setSelectedSheet] = useState<DrumSheet | null>(null);
-  const [cart, setCart] = useState<Set<string>>(new Set());
+  const [searchTerm, setSearchTerm] = useState<string>(() => searchParams.get('search') || '');
+  const [showFilters, setShowFilters] = useState<boolean>(false);
+  const [showSortFilter, setShowSortFilter] = useState<boolean>(false);
+  const [sortBy, setSortBy] = useState<string>(() => searchParams.get('sort') || 'newest');
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string>(() => searchParams.get('difficulty') || '');
+  const [priceRange, setPriceRange] = useState(() => ({
+    min: searchParams.get('priceMin') || '',
+    max: searchParams.get('priceMax') || '',
+  }));
+  const [selectedArtist, setSelectedArtist] = useState<string>(() => searchParams.get('artist') || '');
+  const [selectedAlbum, setSelectedAlbum] = useState<string>(() => searchParams.get('album') || '');
+  const [currentPage, setCurrentPage] = useState<number>(() => {
+    const pageParam = parseInt(searchParams.get('page') || '1', 10);
+    return Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
+  });
+  const [itemsPerPage] = useState<number>(20);
+  const [eventDiscounts, setEventDiscounts] = useState<EventDiscountMap>({});
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [favoriteLoadingIds, setFavoriteLoadingIds] = useState<Set<string>>(new Set());
+  const [buyingSheetId, setBuyingSheetId] = useState<string | null>(null);
+  const [showPaymentSelector, setShowPaymentSelector] = useState(false);
+  const [pendingPurchaseSheet, setPendingPurchaseSheet] = useState<DrumSheet | null>(null);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
+
+  // 장르 목록 (순서대로)
+  const genreList = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
 
   const { addToCart, isInCart } = useCart();
+
+  const updateQueryParams = useCallback(
+    (updates: Record<string, string | null | undefined>, options: { replace?: boolean } = {}) => {
+      const newParams = new URLSearchParams(searchParams);
+      Object.entries(updates).forEach(([key, value]) => {
+        if (
+          value === undefined ||
+          value === null ||
+          value === '' ||
+          (key === 'page' && value === '1')
+        ) {
+          newParams.delete(key);
+        } else {
+          newParams.set(key, value);
+        }
+      });
+      setSearchParams(newParams, options);
+    },
+    [searchParams, setSearchParams]
+  );
 
   useEffect(() => {
     checkAuth();
@@ -59,10 +110,68 @@ const CategoriesPage: React.FC = () => {
 
   useEffect(() => {
     const categoryParam = searchParams.get('category');
-    if (categoryParam) {
-      setSelectedCategory(categoryParam);
+    const searchParam = searchParams.get('search') || '';
+    const sortParam = searchParams.get('sort') || 'newest';
+    const difficultyParamRaw = searchParams.get('difficulty');
+    const difficultyParam = difficultyParamRaw && difficultyParamRaw !== 'all' ? difficultyParamRaw : '';
+    const priceMinParam = searchParams.get('priceMin') || '';
+    const priceMaxParam = searchParams.get('priceMax') || '';
+    const artistParam = searchParams.get('artist') || '';
+    const albumParam = searchParams.get('album') || '';
+    const pageParam = parseInt(searchParams.get('page') || '1', 10);
+    const normalizedPage = Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
+
+    // 카테고리 파라미터가 없고 검색어가 없으면 첫 번째 장르(가요)로 자동 이동
+    if (!categoryParam && !searchParam.trim() && categories.length > 0) {
+      const firstGenre = genreList[0]; // '가요'
+      const firstCategory = categories.find(cat => cat.name === firstGenre);
+      if (firstCategory) {
+        setSelectedCategory(firstCategory.id);
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set('category', firstCategory.id);
+        newParams.delete('page');
+        setSearchParams(newParams, { replace: true });
+        return;
+      }
     }
-  }, [searchParams]);
+
+    const categoryValue = categoryParam || '';
+    if (selectedCategory !== categoryValue) {
+      setSelectedCategory(categoryValue);
+    }
+    if (searchTerm !== searchParam) {
+      setSearchTerm(searchParam);
+    }
+    if (sortBy !== sortParam) {
+      setSortBy(sortParam);
+    }
+    if (selectedDifficulty !== difficultyParam) {
+      setSelectedDifficulty(difficultyParam);
+    }
+    if (priceRange.min !== priceMinParam || priceRange.max !== priceMaxParam) {
+      setPriceRange({ min: priceMinParam, max: priceMaxParam });
+    }
+    if (selectedArtist !== artistParam) {
+      setSelectedArtist(artistParam);
+    }
+    if (selectedAlbum !== albumParam) {
+      setSelectedAlbum(albumParam);
+    }
+    if (currentPage !== normalizedPage) {
+      setCurrentPage(normalizedPage);
+    }
+  }, [
+    searchParams,
+    categories,
+    selectedCategory,
+    searchTerm,
+    sortBy,
+    selectedDifficulty,
+    priceRange,
+    selectedArtist,
+    selectedAlbum,
+    currentPage,
+  ]);
 
   useEffect(() => {
     calculateTopSheets();
@@ -77,24 +186,117 @@ const CategoriesPage: React.FC = () => {
     }
   };
 
-  const handleLogout = async () => {
+  const handlePurchaseMethodSelect = async (method: 'cash' | 'card' | 'bank') => {
+    if (!user || !pendingPurchaseSheet) return;
+
+    const sheet = pendingPurchaseSheet;
+    const sheetId = sheet.id;
+    const event = getEventForSheet(sheetId);
+    const price = Math.max(0, (event?.discount_price ?? sheet.price) ?? 0);
+
+    setShowPaymentSelector(false);
+    setPaymentProcessing(true);
+
     try {
-      await supabase.auth.signOut();
-      setUser(null);
-    } catch (err) {
-      console.error('Logout failed:', err);
+      if (method === 'cash') {
+        const result = await processCashPurchase({
+          userId: user.id,
+          totalPrice: price,
+          description: `악보 바로구매: ${sheet.title}`,
+          items: [{ sheetId, sheetTitle: sheet.title, price }],
+          sheetIdForTransaction: sheetId,
+        });
+
+        if (!result.success) {
+          if (result.reason === 'INSUFFICIENT_CREDIT') {
+            alert(
+              `보유 캐쉬가 부족합니다.\n현재 잔액: ${result.currentCredits.toLocaleString(
+                'ko-KR',
+              )}P\n캐쉬를 충전한 뒤 다시 시도해주세요.`,
+            );
+          }
+          return;
+        }
+
+        if (event && event.status === 'active') {
+          try {
+            await purchaseEventDiscount(event);
+          } catch (eventError) {
+            console.warn('이벤트 할인 처리 중 경고:', eventError);
+          }
+        }
+
+        alert('구매가 완료되었습니다. 마이페이지에서 악보를 확인하세요.');
+        navigate('/my-orders');
+        return;
+      }
+
+      const result = await startSheetPurchase({
+        userId: user.id,
+        items: [{ sheetId, sheetTitle: sheet.title, price }],
+        amount: price,
+        paymentMethod: method === 'card' ? 'card' : 'bank_transfer',
+        description: `악보 바로구매: ${sheet.title}`,
+        buyerName: user.email ?? null,
+        buyerEmail: user.email ?? null,
+        returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
+      });
+
+      if (method === 'bank') {
+        setBankTransferInfo(result.virtualAccountInfo ?? null);
+        alert('무통장입금 안내가 생성되었습니다.\n입금 후 자동으로 구매가 완료됩니다.');
+      } else {
+        setBankTransferInfo(null);
+        alert('결제창이 열립니다. 결제를 완료해 주세요.');
+      }
+    } catch (error) {
+      console.error('주문 처리 오류:', error);
+      alert(error instanceof Error ? error.message : '구매 중 오류가 발생했습니다.');
+    } finally {
+      setPaymentProcessing(false);
+      setBuyingSheetId(null);
+      setPendingPurchaseSheet(null);
     }
   };
 
+  const loadEventDiscounts = async () => {
+    try {
+      const data = await fetchEventDiscountList();
+      setEventDiscounts(buildEventDiscountMap(data));
+    } catch (err) {
+      console.error('이벤트 할인 악보 정보 로드 오류:', err);
+    }
+  };
+
+  const loadFavorites = useCallback(async () => {
+    if (!user) {
+      setFavoriteIds(new Set());
+      setFavoriteLoadingIds(new Set());
+      return;
+    }
+
+    try {
+      const favorites = await fetchUserFavorites(user.id);
+      setFavoriteIds(new Set(favorites.map((favorite) => favorite.sheet_id)));
+      setFavoriteLoadingIds(new Set());
+    } catch (err) {
+      console.error('찜 목록 로드 오류:', err);
+    }
+  }, [user]);
+
   const loadData = async () => {
     try {
-      await Promise.all([loadCategories(), loadDrumSheets()]);
+      await Promise.all([loadCategories(), loadDrumSheets(), loadEventDiscounts()]);
     } catch (error) {
       console.error('Data loading error:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadFavorites();
+  }, [loadFavorites]);
 
   const loadCategories = async () => {
     try {
@@ -112,13 +314,71 @@ const CategoriesPage: React.FC = () => {
 
   const loadDrumSheets = async () => {
     try {
-      const { data, error } = await supabase
+      // 먼저 총 개수 확인
+      const { count: totalCount, error: countError } = await supabase
         .from('drum_sheets')
-        .select('*, categories (name)')
-        .order('created_at', { ascending: false });
+        .select('*', { count: 'exact', head: true });
 
-      if (error) throw error;
-      setDrumSheets(data ?? []);
+      if (countError) {
+        console.error('악보 개수 확인 오류:', countError);
+        throw countError;
+      }
+
+      console.log(`📊 총 악보 개수: ${totalCount}개`);
+
+      let allSheets: DrumSheet[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      const totalPages = Math.ceil((totalCount || 0) / pageSize);
+
+      console.log(`악보 데이터 로드 시작... (총 ${totalPages}페이지 예상)`);
+
+      // 1000개씩 페이지네이션하여 모든 데이터 가져오기
+      for (let page = 0; page < totalPages; page++) {
+        const to = from + pageSize - 1;
+        console.log(`[${page + 1}/${totalPages}] 악보 데이터 로드 중: ${from} ~ ${to}`);
+        
+        const { data, error } = await supabase
+          .from('drum_sheets')
+          .select('id, title, artist, difficulty, price, category_id, tempo, pdf_url, preview_image_url, is_featured, created_at, thumbnail_url, album_name, page_count, categories (name)')
+          .order('created_at', { ascending: false })
+          .range(from, to)
+          .limit(pageSize);
+
+        if (error) {
+          console.error(`[${page + 1}/${totalPages}] 악보 데이터 로드 오류:`, error);
+          console.error('에러 상세:', JSON.stringify(error, null, 2));
+          throw error;
+        }
+
+        if (data && data.length > 0) {
+          const normalizedSheets = (data as any[]).map((sheet) => {
+            const normalizedCategory =
+              Array.isArray(sheet?.categories) && sheet.categories.length > 0
+                ? sheet.categories[0]
+                : sheet?.categories ?? null;
+
+            return {
+              ...sheet,
+              categories: normalizedCategory ? { name: normalizedCategory.name ?? '' } : null,
+            } as DrumSheet;
+          });
+
+          allSheets = [...allSheets, ...normalizedSheets];
+          console.log(`✅ [${page + 1}/${totalPages}] 현재까지 로드된 악보 수: ${allSheets.length}개 (이번 페이지: ${data.length}개)`);
+          from += pageSize;
+        } else {
+          console.log(`⚠️ [${page + 1}/${totalPages}] 데이터가 없습니다.`);
+          break;
+        }
+      }
+
+      setDrumSheets(allSheets);
+      console.log(`🎉 최종 로드 완료: 총 ${allSheets.length}개의 악보를 로드했습니다. (예상: ${totalCount}개)`);
+      
+      if (allSheets.length !== totalCount) {
+        console.warn(`⚠️ 경고: 로드된 악보 수(${allSheets.length})와 총 개수(${totalCount})가 일치하지 않습니다.`);
+      }
     } catch (err) {
       console.error('Drum sheets loading error:', err);
     }
@@ -127,208 +387,576 @@ const CategoriesPage: React.FC = () => {
   const calculateTopSheets = () => {
     let filtered = [...drumSheets];
 
-    if (selectedCategory !== 'all') {
+    // 선택된 카테고리가 있으면 필터링
+    if (selectedCategory) {
       filtered = filtered.filter((sheet) => sheet.category_id === selectedCategory);
     }
 
-    const scored = filtered.map(sheet => ({
-      ...sheet,
-      popularityScore: (sheet.purchase_count || 0) * 3 + (sheet.view_count || 0) * 2 + (sheet.click_count || 0) * 1
-    }));
-
-    const top5 = scored
-      .sort((a, b) => b.popularityScore - a.popularityScore)
+    // TOP 5는 최신순으로 표시 (인기도 점수는 추후 구현)
+    const top5 = filtered
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 5);
 
     setTopSheets(top5);
     
+    // 선택된 악보가 없거나 리스트에 없으면 첫 번째로 설정
     if (top5.length > 0) {
-      setSelectedSheet(top5[0]);
+      if (!selectedSheet || !top5.find(s => s.id === selectedSheet.id)) {
+        setSelectedSheet(top5[0]);
+      }
     }
   };
 
-  const getDifficultyBadgeColor = (difficulty: string) => {
-    switch (difficulty) {
-      case '초급':
-      case 'beginner':
-        return 'bg-green-100 text-green-800';
-      case '중급':
-      case 'intermediate':
-        return 'bg-yellow-100 text-yellow-800';
-      case '고급':
-      case 'advanced':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getDifficultyDisplayText = (difficulty: string) => {
-    switch (difficulty) {
-      case 'beginner':
-        return '초급';
-      case 'intermediate':
-        return '중급';
-      case 'advanced':
-        return '고급';
-      case '초급':
-      case '중급':
-      case '고급':
-        return difficulty;
-      default:
-        return difficulty;
-    }
-  };
-
-  const getThumbnailUrl = async (sheet: DrumSheet): Promise<string> => {
+  const getThumbnailUrl = (sheet: DrumSheet): string => {
     if (sheet.thumbnail_url) {
       return sheet.thumbnail_url;
     }
-
-    try {
-      const response = await fetch('/api/music-thumbnail', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          artist: sheet.artist,
-          title: sheet.title
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.success && data.imageUrl) {
-        return data.imageUrl;
-      }
-    } catch (error) {
-      console.error('Failed to fetch album cover:', error);
-    }
-
-    return '';
-  };
-
-  const toggleCart = (sheetId: string) => {
-    const newCart = new Set(cart);
-    if (newCart.has(sheetId)) {
-      newCart.delete(sheetId);
-    } else {
-      newCart.add(sheetId);
-    }
-    setCart(newCart);
+    // Spotify에서 썸네일을 가져오지 못한 경우 기본 썸네일 생성
+    return generateDefaultThumbnail(400, 400);
   };
 
   const handleCategorySelect = (categoryId: string) => {
     setSelectedCategory(categoryId);
-    const newSearchParams = new URLSearchParams(searchParams);
-    if (categoryId === 'all') {
-      newSearchParams.delete('category');
-    } else {
-      newSearchParams.set('category', categoryId);
-    }
-    navigate(`/categories?${newSearchParams.toString()}`, { replace: true });
-  };
-
-  const handlePurchase = (sheet: DrumSheet) => {
-    if (!user) {
-      navigate('/auth/login');
-      return;
-    }
-    alert(`"${sheet.title}" 악보를 구매합니다.`);
+    setSearchTerm('');
+    setCurrentPage(1);
+    updateQueryParams(
+      {
+        category: categoryId || null,
+        search: null,
+        page: null,
+      }
+    );
   };
 
   const handleAddToCart = async (sheetId: string) => {
+    if (user) {
+      try {
+        const alreadyPurchased = await hasPurchasedSheet(user.id, sheetId);
+        if (alreadyPurchased) {
+          const targetSheet =
+            drumSheets.find((sheet) => sheet.id === sheetId) ||
+            topSheets.find((sheet) => sheet.id === sheetId) ||
+            selectedSheet;
+
+          const title = targetSheet?.title ? `"${targetSheet.title}"` : '선택하신 악보';
+          alert(`${title}는 이미 구매하신 악보입니다.\n마이페이지에서 다운로드해 주세요.`);
+          return;
+        }
+      } catch (error) {
+        console.error('장바구니 담기 전 구매 이력 확인 오류:', error);
+        alert('구매 이력 확인 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        return;
+      }
+    }
+
     const success = await addToCart(sheetId);
     if (success) {
       alert('장바구니에 추가되었습니다.');
     }
   };
 
-  const handleBuyNow = (sheetId: string) => {
-    console.log('바로구매:', sheetId);
+  const handleBuyNow = async (sheetId: string) => {
+    if (!user) {
+      navigate('/auth/login');
+      return;
+    }
+
+    const sheet = drumSheets.find((item) => item.id === sheetId);
+    if (!sheet) {
+      alert('선택한 악보 정보를 찾을 수 없습니다.');
+      return;
+    }
+
+    setBuyingSheetId(sheetId);
+    setBankTransferInfo(null);
+    try {
+      const alreadyPurchased = await hasPurchasedSheet(user.id, sheetId);
+      if (alreadyPurchased) {
+        alert('이미 구매하신 악보입니다.\n마이페이지에서 다운로드해 주세요.');
+        setBuyingSheetId(null);
+        return;
+      }
+
+      setPendingPurchaseSheet(sheet);
+      setShowPaymentSelector(true);
+    } catch (error) {
+      console.error('바로구매 사전 확인 오류:', error);
+      alert('구매 이력 확인 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      setBuyingSheetId(null);
+    } finally {
+      // keep buyingSheetId while modal is open
+    }
   };
 
-  // The following UI implementation was provided in the modified content.
-  // It may reference variables (searchTerm, cartItemsCount, showFilters, viewMode,
-  // sortBy, filteredSheets, selectedDifficulty, priceRange) that are not defined
-  // in the original code. They remain as placeholders as per the merge request.
+  const handleToggleFavorite = async (sheetId: string) => {
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    const wasFavorite = favoriteIds.has(sheetId);
+
+    setFavoriteIds((prev) => {
+      const next = new Set(prev);
+      if (wasFavorite) {
+        next.delete(sheetId);
+      } else {
+        next.add(sheetId);
+      }
+      return next;
+    });
+
+    setFavoriteLoadingIds((prev) => {
+      const next = new Set(prev);
+      next.add(sheetId);
+      return next;
+    });
+
+    try {
+      const isNowFavorite = await toggleFavorite(sheetId, user.id);
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        if (isNowFavorite) {
+          next.add(sheetId);
+        } else {
+          next.delete(sheetId);
+        }
+        return next;
+      });
+    } catch (error) {
+      console.error('찜하기 처리 오류:', error);
+      alert('찜하기 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        if (wasFavorite) {
+          next.add(sheetId);
+        } else {
+          next.delete(sheetId);
+        }
+        return next;
+      });
+    } finally {
+      setFavoriteLoadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(sheetId);
+        return next;
+      });
+    }
+  };
+
+  // Helper function to remove spaces and convert to lowercase for fuzzy search
+  const formatCurrency = (value: number) => `₩${value.toLocaleString('ko-KR')}`;
+
+  const normalizeString = (str: string): string => {
+    return str.replace(/\s+/g, '').toLowerCase();
+  };
+
+  const getEventForSheet = (sheetId: string) => eventDiscounts[sheetId];
+
+  const getDisplayPrice = (sheet: DrumSheet) => {
+    const event = getEventForSheet(sheet.id);
+    return event ? event.discount_price : sheet.price;
+  };
+
+  // Filtered sheets based on search, category, difficulty, price range, artist, album
+  const filteredSheets = React.useMemo(() => {
+    let filtered = [...drumSheets];
+    
+    // Search filter with space-insensitive matching
+    if (searchTerm.trim()) {
+      const normalizedSearch = normalizeString(searchTerm);
+      
+      filtered = filtered.filter(sheet => {
+        const normalizedTitle = normalizeString(sheet.title);
+        const normalizedArtist = normalizeString(sheet.artist);
+        const normalizedCategory = sheet.categories?.name ? normalizeString(sheet.categories.name) : '';
+        
+        // Search in individual fields (title, artist, category)
+        const matchesIndividual = 
+          normalizedTitle.includes(normalizedSearch) ||
+          normalizedArtist.includes(normalizedSearch) ||
+          normalizedCategory.includes(normalizedSearch);
+        
+        // Search in combined artist + title (e.g., "아이유 넘지 못할 산이 있거든")
+        const combinedArtistTitle = normalizedArtist + normalizedTitle;
+        const matchesCombined = combinedArtistTitle.includes(normalizedSearch);
+        
+        return matchesIndividual || matchesCombined;
+      });
+    }
+    
+    // Category filter
+    if (selectedCategory) {
+      filtered = filtered.filter(sheet => sheet.category_id === selectedCategory);
+    }
+    
+    // Artist filter
+    if (selectedArtist) {
+      filtered = filtered.filter(sheet => sheet.artist === selectedArtist);
+    }
+    
+    // Album filter
+    if (selectedAlbum) {
+      filtered = filtered.filter(sheet => sheet.album_name === selectedAlbum);
+    }
+    
+    // Difficulty filter
+    if (selectedDifficulty && selectedDifficulty !== 'all') {
+      filtered = filtered.filter(sheet => sheet.difficulty === selectedDifficulty);
+    }
+    
+    // Price range filter
+    if (priceRange.min) {
+      const minPrice = parseInt(priceRange.min, 10);
+      if (!Number.isNaN(minPrice)) {
+        filtered = filtered.filter(sheet => getDisplayPrice(sheet) >= minPrice);
+      }
+    }
+    if (priceRange.max) {
+      const maxPrice = parseInt(priceRange.max, 10);
+      if (!Number.isNaN(maxPrice)) {
+        filtered = filtered.filter(sheet => getDisplayPrice(sheet) <= maxPrice);
+      }
+    }
+    
+    // Sort
+    let sorted = [...filtered];
+    switch (sortBy) {
+      case 'newest':
+        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        break;
+      case 'oldest':
+        sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        break;
+      case 'price-low':
+        sorted.sort((a, b) => getDisplayPrice(a) - getDisplayPrice(b));
+        break;
+      case 'price-high':
+        sorted.sort((a, b) => getDisplayPrice(b) - getDisplayPrice(a));
+        break;
+      case 'popular':
+        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()); // 최신순 정렬
+        break;
+      default:
+        break;
+    }
+    
+    return sorted;
+  }, [drumSheets, searchTerm, selectedCategory, selectedDifficulty, priceRange, sortBy, selectedArtist, selectedAlbum, eventDiscounts]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredSheets.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedSheets = filteredSheets.slice(startIndex, endIndex);
+
+  const selectedEventInfo = selectedSheet ? getEventForSheet(selectedSheet.id) : undefined;
+  const selectedDisplayPrice = selectedSheet ? getDisplayPrice(selectedSheet) : 0;
+  const selectedSheetIsFavorite = selectedSheet ? favoriteIds.has(selectedSheet.id) : false;
+  const selectedSheetFavoriteLoading = selectedSheet ? favoriteLoadingIds.has(selectedSheet.id) : false;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* 헤더 */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-8">
-              <Link to="/" className="text-2xl font-bold text-blue-600" style={{ fontFamily: '"Pacifico", serif' }}>
-                logo
-              </Link>
-              <nav className="hidden md:flex space-x-8">
-                <Link to="/" className="text-gray-700 hover:text-blue-600 transition-colors">홈</Link>
-                <Link to="/categories" className="text-blue-600 font-medium">카테고리</Link>
-                <Link to="/custom-order" className="text-gray-700 hover:text-blue-600 transition-colors">맞춤 제작</Link>
-                <Link to="/customer-support" className="text-gray-700 hover:text-blue-600 transition-colors">고객지원</Link>
-              </nav>
+    <div className="min-h-screen bg-white">
+      <MainHeader user={user} />
+
+      {/* User Sidebar - 로그인 시 항상 표시 */}
+      <UserSidebar user={user} />
+
+      {/* Main Content - 사이드바 공간 확보 */}
+      <div className="mr-64">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        {bankTransferInfo ? (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-blue-900">무통장입금 안내</h3>
+              <button
+                type="button"
+                onClick={() => setBankTransferInfo(null)}
+                className="text-blue-600 hover:text-blue-800 text-xs"
+              >
+                닫기
+              </button>
             </div>
-            
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <i className="ri-search-line absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4"></i>
-                <input
-                  type="text"
-                  placeholder="악보 검색..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 w-64 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                />
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div>
+                <span className="font-medium text-gray-900">은행</span> {bankTransferInfo.bankName}
               </div>
-              
-              <Link to="/cart" className="relative p-2 text-gray-700 hover:text-blue-600 transition-colors">
-                <i className="ri-shopping-cart-line w-5 h-5"></i>
-                {cartItemsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {cartItemsCount}
-                  </span>
-                )}
-              </Link>
-              
-              {user ? (
-                <div className="flex items-center space-x-3">
-                  <Link to="/mypage" className="text-gray-700 hover:text-blue-600 transition-colors">
-                    마이페이지
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="text-gray-700 hover:text-blue-600 transition-colors"
-                  >
-                    로그아웃
-                  </button>
+              <div>
+                <span className="font-medium text-gray-900">계좌번호</span> {bankTransferInfo.accountNumber}
+              </div>
+              <div>
+                <span className="font-medium text-gray-900">예금주</span> {bankTransferInfo.depositor}
+              </div>
+              <div>
+                <span className="font-medium text-gray-900">입금금액</span>{' '}
+                {new Intl.NumberFormat('ko-KR').format(bankTransferInfo.amount ?? 0)}원
+              </div>
+              {bankTransferInfo.expectedDepositor ? (
+                <div className="sm:col-span-2">
+                  <span className="font-medium text-gray-900">입금자명</span>{' '}
+                  <span className="text-blue-600 font-semibold">{bankTransferInfo.expectedDepositor}</span>
                 </div>
-              ) : (
-                <div className="flex items-center space-x-3">
-                  <Link to="/login" className="text-gray-700 hover:text-blue-600 transition-colors">
-                    로그인
-                  </Link>
-                  <Link to="/register" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap">
-                    회원가입
-                  </Link>
+              ) : null}
+            </div>
+            {bankTransferInfo.message ? (
+              <p className="mt-3 text-xs text-gray-600">{bankTransferInfo.message}</p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* 페이지 제목 */}
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            {selectedArtist ? `${selectedArtist}의 곡` : selectedAlbum ? `${selectedAlbum} 앨범` : '드럼 악보 카테고리'}
+          </h1>
+          {selectedArtist && (
+            <button
+              onClick={() => {
+                setSelectedArtist('');
+                setCurrentPage(1);
+                updateQueryParams(
+                  {
+                    artist: null,
+                    page: null,
+                  }
+                );
+              }}
+              className="text-sm text-blue-600 hover:text-blue-800 mt-2"
+            >
+              ← 전체 악보로 돌아가기
+            </button>
+          )}
+          {selectedAlbum && (
+            <button
+              onClick={() => {
+                setSelectedAlbum('');
+                setCurrentPage(1);
+                updateQueryParams(
+                  {
+                    album: null,
+                    page: null,
+                  }
+                );
+              }}
+              className="text-sm text-blue-600 hover:text-blue-800 mt-2"
+            >
+              ← 전체 악보로 돌아가기
+            </button>
+          )}
+          {!selectedArtist && !selectedAlbum && (
+            <p className="text-gray-600">원하는 장르와 스타일의 드럼 악보를 찾아보세요</p>
+          )}
+        </div>
+
+        {/* 장르 하위 메뉴 */}
+        <div className="mb-8 border-b border-gray-200">
+          <div className="flex flex-wrap gap-3">
+            {genreList.map((genre) => {
+              const category = categories.find(cat => cat.name === genre);
+              const isSelected = selectedCategory === (category?.id || '');
+              return (
+                <button
+                  key={genre}
+                  onClick={() => {
+                    const categoryId = category?.id || '';
+                    handleCategorySelect(categoryId);
+                  }}
+                  className={`px-5 py-3 text-base font-semibold transition-all rounded-t-lg ${
+                    isSelected
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  {genre}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* TOP 5 섹션 */}
+        {!loading && topSheets.length > 0 && (
+          <div className="mb-8 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">TOP 5</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* 왼쪽: TOP 5 리스트 */}
+              <div className="space-y-2">
+                {topSheets.map((sheet, index) => {
+                  const isFavorite = favoriteIds.has(sheet.id);
+                  const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
+                  return (
+                    <div
+                      key={sheet.id}
+                      onClick={() => setSelectedSheet(sheet)}
+                      className={`p-4 rounded-lg cursor-pointer transition-colors ${
+                        selectedSheet?.id === sheet.id
+                          ? 'bg-blue-50 border-2 border-blue-500'
+                          : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`text-lg font-bold ${
+                              selectedSheet?.id === sheet.id ? 'text-blue-600' : 'text-gray-400'
+                            }`}
+                          >
+                            {index + 1}
+                          </span>
+                          <img
+                            src={getThumbnailUrl(sheet)}
+                            alt={sheet.title}
+                            className="w-12 h-12 object-cover rounded border border-gray-200 flex-shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-900 truncate">{sheet.title}</p>
+                            <p className="text-sm text-gray-600 truncate">{sheet.artist}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleToggleFavorite(sheet.id);
+                          }}
+                          disabled={isFavoriteLoading}
+                          className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
+                            isFavorite
+                              ? 'border-red-200 bg-red-50 text-red-500'
+                              : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                          } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          aria-label={isFavorite ? '찜 해제' : '찜하기'}
+                        >
+                          <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 오른쪽: 선택된 악보 상세 정보 */}
+              {selectedSheet && (
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <div className="flex items-start space-x-4 mb-4">
+                    <img
+                      src={getThumbnailUrl(selectedSheet)}
+                      alt={selectedSheet.title}
+                      className="w-48 h-48 object-cover rounded-lg border border-gray-300 flex-shrink-0"
+                    />
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold text-gray-900 mb-1">{selectedSheet.title}</h3>
+                      <p className="text-gray-600 mb-2">{selectedSheet.artist}</p>
+                      {selectedEventInfo && (
+                        <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 mb-3">
+                          <span>🔥</span> 이벤트 할인악보 (100원)
+                        </span>
+                      )}
+                      {selectedSheet.categories?.name && (
+                        <p className="text-sm text-gray-500 mb-1">{selectedSheet.categories.name}</p>
+                      )}
+                      {selectedSheet.difficulty && (
+                        <div className="text-sm text-gray-500 space-y-1">
+                          <p>
+                            {selectedSheet.difficulty === 'beginner'
+                              ? '초급'
+                              : selectedSheet.difficulty === 'intermediate'
+                              ? '중급'
+                              : '고급'}
+                            {selectedSheet.page_count && ` / ${selectedSheet.page_count}P`}
+                          </p>
+                          <p>
+                            난이도 :{' '}
+                            {selectedSheet.difficulty === 'beginner'
+                              ? '초급'
+                              : selectedSheet.difficulty === 'intermediate'
+                              ? '중급'
+                              : '고급'}
+                          </p>
+                          {selectedSheet.page_count && <p>페이지수 : {selectedSheet.page_count}페이지</p>}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleFavorite(selectedSheet.id)}
+                        disabled={selectedSheetFavoriteLoading}
+                        className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${
+                          selectedSheetIsFavorite
+                            ? 'border-red-200 bg-red-50 text-red-500'
+                            : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                        } ${selectedSheetFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        aria-label={selectedSheetIsFavorite ? '찜 해제' : '찜하기'}
+                      >
+                        <i className={`ri-heart-${selectedSheetIsFavorite ? 'fill' : 'line'} text-xl`} />
+                      </button>
+                      <button type="button" className="text-gray-400 hover:text-gray-600">
+                        <i className="ri-information-line text-xl"></i>
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="border-t border-gray-200 pt-4">
+                    <div className="flex items-center justify-end mb-4">
+                      <div className="flex items-center space-x-2">
+                        <div className="flex flex-col items-end space-y-1">
+                          {selectedEventInfo ? (
+                            <>
+                              <span className="text-sm text-gray-400 line-through">
+                                {formatCurrency(selectedSheet.price)}
+                              </span>
+                              <span className="text-2xl font-extrabold text-red-500">
+                                {formatCurrency(selectedDisplayPrice)}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-2xl font-bold text-gray-900">
+                              {formatCurrency(selectedDisplayPrice)}
+                            </span>
+                          )}
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={isInCart(selectedSheet.id)}
+                          onChange={() => handleAddToCart(selectedSheet.id)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-end">
+                        <span className="font-bold text-gray-900">
+                          TOTAL {formatCurrency(selectedDisplayPrice)}
+                        </span>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleAddToCart(selectedSheet.id)}
+                          className="flex-1 bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+                        >
+                          장바구니 담기
+                        </button>
+                        <button
+                          onClick={() => handleBuyNow(selectedSheet.id)}
+                          disabled={buyingSheetId === selectedSheet.id}
+                          className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {buyingSheetId === selectedSheet.id ? '구매 중...' : '바로 구매'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
           </div>
-        </div>
-      </header>
+        )}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* 페이지 제목 */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">드럼 악보 카테고리</h1>
-          <p className="text-gray-600">원하는 장르와 스타일의 드럼 악보를 찾아보세요</p>
-        </div>
-
-        {/* 필터 및 정렬 */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
+        {/* 필터 및 정렬 - 기본적으로 숨김 */}
+        {!loading && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center space-x-4">
               <button
@@ -340,45 +968,45 @@ const CategoriesPage: React.FC = () => {
                 <i className={`ri-arrow-${showFilters ? 'up' : 'down'}-s-line w-4 h-4`}></i>
               </button>
               
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-600">보기:</span>
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-2 rounded-lg transition-colors ${
-                    viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-gray-600'
-                  }`}
-                >
-                  <i className="ri-grid-line w-4 h-4"></i>
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-2 rounded-lg transition-colors ${
-                    viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-gray-600'
-                  }`}
-                >
-                  <i className="ri-list-unordered w-4 h-4"></i>
-                </button>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm pr-8"
+              <button
+                onClick={() => setShowSortFilter(!showSortFilter)}
+                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                <option value="newest">최신순</option>
-                <option value="popular">인기순</option>
-                <option value="price-low">가격 낮은순</option>
-                <option value="price-high">가격 높은순</option>
-                <option value="rating">평점순</option>
-              </select>
-              
-              <span className="text-sm text-gray-600">
-                총 {filteredSheets.length}개 악보
-              </span>
+                <i className="ri-sort-desc w-4 h-4"></i>
+                <span>정렬</span>
+                <i className={`ri-arrow-${showSortFilter ? 'up' : 'down'}-s-line w-4 h-4`}></i>
+              </button>
             </div>
           </div>
+          
+          {/* 정렬 옵션 - 클릭시 표시 */}
+          {showSortFilter && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="flex items-center space-x-4">
+                <label className="text-sm font-medium text-gray-700">정렬:</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSortBy(value);
+                    setCurrentPage(1);
+                    updateQueryParams(
+                      {
+                        sort: value === 'newest' ? null : value,
+                        page: null,
+                      }
+                    );
+                  }}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm pr-8"
+                >
+                  <option value="newest">최신순</option>
+                  <option value="popular">인기순</option>
+                  <option value="price-low">가격 낮은순</option>
+                  <option value="price-high">가격 높은순</option>
+                </select>
+              </div>
+            </div>
+          )}
           
           {/* 확장 필터 */}
           {showFilters && (
@@ -388,7 +1016,7 @@ const CategoriesPage: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">카테고리</label>
                   <select
                     value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    onChange={(e) => handleCategorySelect(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm pr-8"
                   >
                     <option value="">전체 카테고리</option>
@@ -404,7 +1032,17 @@ const CategoriesPage: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">난이도</label>
                   <select
                     value={selectedDifficulty}
-                    onChange={(e) => setSelectedDifficulty(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSelectedDifficulty(value);
+                      setCurrentPage(1);
+                      updateQueryParams(
+                        {
+                          difficulty: value || null,
+                          page: null,
+                        }
+                      );
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm pr-8"
                   >
                     <option value="">전체 난이도</option>
@@ -421,7 +1059,17 @@ const CategoriesPage: React.FC = () => {
                       type="number"
                       placeholder="최소"
                       value={priceRange.min}
-                      onChange={(e) => setPriceRange({...priceRange, min: e.target.value})}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setPriceRange((prev) => ({ ...prev, min: value }));
+                        setCurrentPage(1);
+                        updateQueryParams(
+                          {
+                            priceMin: value,
+                            page: null,
+                          }
+                        );
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                     />
                     <span className="text-gray-500">~</span>
@@ -429,7 +1077,17 @@ const CategoriesPage: React.FC = () => {
                       type="number"
                       placeholder="최대"
                       value={priceRange.max}
-                      onChange={(e) => setPriceRange({...priceRange, max: e.target.value})}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setPriceRange((prev) => ({ ...prev, max: value }));
+                        setCurrentPage(1);
+                        updateQueryParams(
+                          {
+                            priceMax: value,
+                            page: null,
+                          }
+                        );
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                     />
                   </div>
@@ -439,9 +1097,17 @@ const CategoriesPage: React.FC = () => {
               <div className="mt-4 flex justify-end">
                 <button
                   onClick={() => {
-                    setSelectedCategory('');
+                    handleCategorySelect('');
                     setSelectedDifficulty('');
                     setPriceRange({ min: '', max: '' });
+                    updateQueryParams(
+                      {
+                        difficulty: null,
+                        priceMin: null,
+                        priceMax: null,
+                        page: null,
+                      }
+                    );
                   }}
                   className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
                 >
@@ -450,155 +1116,292 @@ const CategoriesPage: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
-
-        {/* 악보 목록 */}
-        {viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredSheets.map((sheet) => (
-              <div key={sheet.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group">
-                <div className="relative">
-                  <img
-                    src={sheet.thumbnail_url || `https://readdy.ai/api/search-image?query=drum%20sheet%20music%20$%7Bsheet.title%7D%20modern%20minimalist%20background&width=300&height=200&seq=${sheet.id}&orientation=landscape`}
-                    alt={sheet.title}
-                    className="w-full h-48 object-cover object-top"
-                  />
-                  <div className="absolute top-3 right-3">
-                    <button
-                      onClick={() => addToCart(sheet)}
-                      className="bg-white/90 backdrop-blur-sm text-gray-700 p-2 rounded-full hover:bg-white hover:text-blue-600 transition-all opacity-0 group-hover:opacity-100"
-                    >
-                      <i className="ri-shopping-cart-line w-4 h-4"></i>
-                    </button>
-                  </div>
-                  {sheet.difficulty && (
-                    <div className="absolute top-3 left-3">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        sheet.difficulty === 'beginner' ? 'bg-green-100 text-green-800' :
-                        sheet.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {sheet.difficulty === 'beginner' ? '초급' :
-                         sheet.difficulty === 'intermediate' ? '중급' : '고급'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-semibold text-gray-900 line-clamp-2 flex-1">
-                      {sheet.title}
-                    </h3>
-                    <div className="flex items-center ml-2">
-                      <i className="ri-star-fill text-yellow-400 w-4 h-4"></i>
-                      <span className="text-sm text-gray-600 ml-1">
-                        {sheet.rating || 4.5}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                    {sheet.description}
-                  </p>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-lg font-bold text-blue-600">
-                      {sheet.price.toLocaleString()}원
-                    </span>
-                    <Link
-                      to={`/sheet-detail/${sheet.id}`}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm whitespace-nowrap"
-                    >
-                      상세보기
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {filteredSheets.map((sheet) => (
-              <div key={sheet.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
-                <div className="flex items-center space-x-6">
-                  <img
-                    src={sheet.thumbnail_url || `https://readdy.ai/api/search-image?query=drum%20sheet%20music%20$%7Bsheet.title%7D%20modern%20minimalist%20background&width=120&height=80&seq=${sheet.id}&orientation=landscape`}
-                    alt={sheet.title}
-                    className="w-24 h-16 object-cover object-top rounded-lg flex-shrink-0"
-                  />
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        {sheet.title}
-                      </h3>
-                      <div className="flex items-center space-x-4 ml-4">
-                        <div className="flex items-center">
-                          <i className="ri-star-fill text-yellow-400 w-4 h-4"></i>
-                          <span className="text-sm text-gray-600 ml-1">
-                            {sheet.rating || 4.5}
-                          </span>
-                        </div>
-                        <span className="text-xl font-bold text-blue-600">
-                          {sheet.price.toLocaleString()}원
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <p className="text-gray-600 mb-3 line-clamp-2">
-                      {sheet.description}
-                    </p>
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        {sheet.difficulty && (
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            sheet.difficulty === 'beginner' ? 'bg-green-100 text-green-800' :
-                            sheet.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {sheet.difficulty === 'beginner' ? '초급' :
-                             sheet.difficulty === 'intermediate' ? '중급' : '고급'}
-                          </span>
-                        )}
-                        <span className="text-sm text-gray-500">
-                          카테고리: {categories.find(c => c.id === sheet.category_id)?.name || '기타'}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center space-x-3">
-                        <button
-                          onClick={() => addToCart(sheet)}
-                          className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-2 whitespace-nowrap"
-                        >
-                          <i className="ri-shopping-cart-line w-4 h-4"></i>
-                          <span>장바구니</span>
-                        </button>
-                        <Link
-                          to={`/sheet-detail/${sheet.id}`}
-                          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
-                        >
-                          상세보기
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
           </div>
         )}
 
-        {/* 빈 상태 */}
-        {filteredSheets.length === 0 && (
+        {/* 악보 목록 - 리스트 형식 */}
+        {!loading && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <table className="w-full table-fixed">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="w-[34%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">곡명</th>
+                  <th className="w-[18%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">아티스트</th>
+                  <th className="w-[24%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">앨범</th>
+                  <th className="w-[24%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">구매</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {paginatedSheets.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                      악보가 없습니다.
+                    </td>
+                  </tr>
+                ) : (
+                paginatedSheets.map((sheet) => {
+                  const eventInfo = getEventForSheet(sheet.id);
+                  const displayPrice = getDisplayPrice(sheet);
+                  const isFavorite = favoriteIds.has(sheet.id);
+                  const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
+                  return (
+                  <tr key={sheet.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 align-top">
+                      <div className="flex items-center space-x-3 overflow-hidden">
+                        <img
+                          src={getThumbnailUrl(sheet)}
+                          alt={sheet.title}
+                          className="w-12 h-12 object-cover rounded border border-gray-200 cursor-pointer flex-shrink-0"
+                          onClick={() => navigate(`/sheet-detail/${sheet.id}`)}
+                        />
+                        <div className="flex flex-col space-y-1 min-w-0 flex-1">
+                          <div className="flex items-center space-x-2 min-w-0">
+                            <i className="ri-file-music-line text-gray-400 flex-shrink-0"></i>
+                            <span 
+                              className="block truncate text-sm font-bold text-gray-900 cursor-pointer hover:text-blue-600"
+                              title={sheet.title}
+                              onClick={() => navigate(`/sheet-detail/${sheet.id}`)}
+                            >
+                              {sheet.title}
+                            </span>
+                            {eventInfo && (
+                              <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600 flex-shrink-0 whitespace-nowrap">
+                                이벤트 할인악보
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center space-x-2 text-xs flex-shrink-0">
+                            {eventInfo ? (
+                              <>
+                                <span className="text-gray-400 line-through">
+                                  {formatCurrency(sheet.price)}
+                                </span>
+                                <span className="font-semibold text-red-500">
+                                  {formatCurrency(displayPrice)}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="font-semibold text-gray-700">
+                                {formatCurrency(displayPrice)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 align-top">
+                      <span 
+                        className="block truncate text-sm text-gray-600 cursor-pointer hover:text-blue-600"
+                        onClick={() => {
+                          setSelectedArtist(sheet.artist);
+                          setCurrentPage(1);
+                          updateQueryParams(
+                            {
+                              artist: sheet.artist,
+                              page: null,
+                            }
+                          );
+                        }}
+                      >
+                        {sheet.artist}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 align-top">
+                      <span 
+                        className="block truncate text-sm text-gray-600 cursor-pointer hover:text-blue-600"
+                        title={sheet.album_name || '-'}
+                        onClick={() => {
+                          if (sheet.album_name) {
+                            setSelectedAlbum(sheet.album_name);
+                            setCurrentPage(1);
+                            updateQueryParams(
+                              {
+                                album: sheet.album_name,
+                                page: null,
+                              }
+                            );
+                          }
+                        }}
+                      >
+                        {sheet.album_name || '-'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 align-top">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleFavorite(sheet.id);
+                          }}
+                          disabled={isFavoriteLoading}
+                          className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
+                            isFavorite
+                              ? 'border-red-200 bg-red-50 text-red-500'
+                              : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                          } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          aria-label={isFavorite ? '찜 해제' : '찜하기'}
+                        >
+                          <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddToCart(sheet.id);
+                          }}
+                          className="px-4 py-2.5 text-sm bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors"
+                        >
+                          장바구니
+                        </button>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await handleBuyNow(sheet.id);
+                          }}
+                          disabled={buyingSheetId === sheet.id || paymentProcessing}
+                          className="px-4 py-2.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {buyingSheetId === sheet.id
+                            ? paymentProcessing
+                              ? '결제 준비 중...'
+                              : '구매 중...'
+                            : '바로구매'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+              )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* 페이지네이션 */}
+        {!loading && totalPages > 1 && (
+          <div className="mt-6 flex items-center justify-center space-x-2">
+            <button
+              onClick={() => {
+                const previousPage = Math.max(1, currentPage - 1);
+                setCurrentPage(previousPage);
+                updateQueryParams(
+                  {
+                    page: previousPage > 1 ? String(previousPage) : null,
+                  }
+                );
+              }}
+              disabled={currentPage === 1}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                currentPage === 1
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
+            >
+              <i className="ri-arrow-left-s-line"></i>
+            </button>
+            
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+              // 현재 페이지 주변 2페이지씩만 표시
+              if (
+                page === 1 ||
+                page === totalPages ||
+                (page >= currentPage - 2 && page <= currentPage + 2)
+              ) {
+                return (
+                  <button
+                    key={page}
+                    onClick={() => {
+                      setCurrentPage(page);
+                      updateQueryParams(
+                        {
+                          page: page > 1 ? String(page) : null,
+                        }
+                      );
+                    }}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      currentPage === page
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                );
+              } else if (
+                page === currentPage - 3 ||
+                page === currentPage + 3
+              ) {
+                return (
+                  <span key={page} className="px-2 text-gray-400">
+                    ...
+                  </span>
+                );
+              }
+              return null;
+            })}
+            
+            <button
+              onClick={() => {
+                const nextPage = Math.min(totalPages, currentPage + 1);
+                setCurrentPage(nextPage);
+                updateQueryParams(
+                  {
+                    page: nextPage > 1 ? String(nextPage) : null,
+                  }
+                );
+              }}
+              disabled={currentPage === totalPages}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                currentPage === totalPages
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
+            >
+              <i className="ri-arrow-right-s-line"></i>
+            </button>
+          </div>
+        )}
+
+        {/* 로딩 중 */}
+        {loading && (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">🎧 악보를 불러오는 중입니다. 잠시만 기다려주세요!</h3>
+          </div>
+        )}
+
+        {/* 빈 상태 - 로딩이 완료되었고 결과가 없을 때만 표시 */}
+        {!loading && paginatedSheets.length === 0 && (
           <div className="text-center py-12">
             <i className="ri-file-music-line text-gray-300 w-16 h-16 mx-auto mb-4"></i>
             <h3 className="text-lg font-medium text-gray-900 mb-2">검색 결과가 없습니다</h3>
             <p className="text-gray-600">다른 검색어나 필터를 시도해보세요.</p>
           </div>
         )}
+        </div>
       </div>
+
+      <PaymentMethodSelector
+        open={showPaymentSelector}
+        amount={
+          pendingPurchaseSheet
+            ? Math.max(
+                0,
+                (
+                  getEventForSheet(pendingPurchaseSheet.id)?.discount_price ?? pendingPurchaseSheet.price
+                ) ?? 0,
+              )
+            : 0
+        }
+        onClose={() => {
+          setShowPaymentSelector(false);
+          setPendingPurchaseSheet(null);
+          setBuyingSheetId(null);
+          setPaymentProcessing(false);
+        }}
+        onSelect={handlePurchaseMethodSelect}
+      />
     </div>
   );
 };

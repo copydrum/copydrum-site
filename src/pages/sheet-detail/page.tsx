@@ -2,8 +2,21 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { User } from '@supabase/supabase-js';
+import type { User } from '@supabase/supabase-js';
 import { ArrowLeft, Download, Star, ShoppingCart, Music, Clock, DollarSign, ZoomIn, Eye, X } from 'lucide-react';
+import { useCart } from '../../hooks/useCart';
+import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
+import UserSidebar from '../../components/feature/UserSidebar';
+import MainHeader from '../../components/common/MainHeader';
+import Footer from '../../components/common/Footer';
+import type { EventDiscountSheet } from '../../lib/eventDiscounts';
+import { fetchEventDiscountBySheetId, isEventActive, purchaseEventDiscount } from '../../lib/eventDiscounts';
+import { processCashPurchase } from '../../lib/cashPurchases';
+import { isFavorite, toggleFavorite } from '../../lib/favorites';
+import { hasPurchasedSheet } from '../../lib/purchaseCheck';
+import { PaymentMethodSelector } from '../../components/payments';
+import { startSheetPurchase } from '../../lib/payments';
+import type { VirtualAccountInfo } from '../../lib/payments';
 
 interface DrumSheet {
   id: string;
@@ -15,11 +28,13 @@ interface DrumSheet {
   pdf_url: string;
   preview_image_url: string;
   thumbnail_url: string;
-  youtube_url: string; // 유튜브 URL 추가
-  album_name?: string; // 앨범명 추가
+  youtube_url: string;
+  album_name?: string;
+  page_count?: number;
+  tempo?: number;
   is_featured: boolean;
   created_at: string;
-  categories?: { name: string };
+  categories?: { name: string } | null;
 }
 
 export default function SheetDetailPage() {
@@ -29,8 +44,17 @@ export default function SheetDetailPage() {
   const [sheet, setSheet] = useState<DrumSheet | null>(null);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const { addToCart, isInCart, cartItems } = useCart();
+  const [eventDiscount, setEventDiscount] = useState<EventDiscountSheet | null>(null);
+  const [isFavoriteSheet, setIsFavoriteSheet] = useState(false);
+  const [favoriteProcessing, setFavoriteProcessing] = useState(false);
+  const [showPaymentSelector, setShowPaymentSelector] = useState(false);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
+  const eventIsActive = eventDiscount ? isEventActive(eventDiscount) : false;
+  const displayPrice = sheet ? (eventDiscount && eventIsActive ? eventDiscount.discount_price : sheet.price) : 0;
+  const formatCurrency = (value: number) => `₩${value.toLocaleString('ko-KR')}`;
 
   useEffect(() => {
     checkAuth();
@@ -38,6 +62,35 @@ export default function SheetDetailPage() {
       loadSheetDetail(id);
     }
   }, [id]);
+
+  useEffect(() => {
+    // 인증 상태 변화 감지
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setUser(session?.user ?? null);
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const loadFavoriteState = async () => {
+      if (!user || !id) {
+        setIsFavoriteSheet(false);
+        return;
+      }
+
+      try {
+        const favorite = await isFavorite(id, user.id);
+        setIsFavoriteSheet(favorite);
+      } catch (error) {
+        console.error('찜 상태 로드 오류:', error);
+      }
+    };
+
+    loadFavoriteState();
+  }, [user, id]);
 
   const checkAuth = async () => {
     try {
@@ -52,12 +105,31 @@ export default function SheetDetailPage() {
     try {
       const { data, error } = await supabase
         .from('drum_sheets')
-        .select('*, categories (name)')
+        .select('id, title, artist, difficulty, price, category_id, pdf_url, preview_image_url, thumbnail_url, youtube_url, album_name, page_count, tempo, is_featured, created_at, categories (name)')
         .eq('id', sheetId)
         .single();
 
       if (error) throw error;
-      setSheet(data);
+      
+      const normalizedCategory =
+        Array.isArray((data as any)?.categories) && (data as any)?.categories.length > 0
+          ? (data as any)?.categories[0]
+          : (data as any)?.categories ?? null;
+
+      const normalizedSheet = {
+        ...(data as unknown as Partial<DrumSheet>),
+        categories: normalizedCategory ? { name: normalizedCategory.name ?? '' } : null,
+      } as DrumSheet;
+
+      setSheet(normalizedSheet);
+
+      try {
+        const event = await fetchEventDiscountBySheetId(sheetId);
+        setEventDiscount(event);
+      } catch (eventError) {
+        console.error('이벤트 할인 악보 정보 로드 오류:', eventError);
+        setEventDiscount(null);
+      }
     } catch (error) {
       console.error('악보 상세 정보 로딩 오류:', error);
     } finally {
@@ -75,16 +147,40 @@ export default function SheetDetailPage() {
   };
 
   const getDifficultyBadgeColor = (difficulty: string) => {
-    switch (difficulty) {
+    const normalizedDifficulty = (difficulty || '').toLowerCase().trim();
+    switch (normalizedDifficulty) {
+      case 'beginner':
       case '초급':
         return 'bg-green-100 text-green-800';
+      case 'intermediate':
       case '중급':
         return 'bg-yellow-100 text-yellow-800';
+      case 'advanced':
       case '고급':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const getDifficultyDisplayText = (difficulty: string) => {
+    const normalizedDifficulty = (difficulty || '').toLowerCase().trim();
+    switch (normalizedDifficulty) {
+      case 'beginner':
+        return '초급';
+      case 'intermediate':
+        return '중급';
+      case 'advanced':
+        return '고급';
+      default:
+        return difficulty || '미설정';
+    }
+  };
+
+  const getSheetPrice = () => {
+    if (!sheet) return 0;
+    const basePrice = eventDiscount && eventIsActive ? eventDiscount.discount_price : sheet.price;
+    return Math.max(0, basePrice ?? 0);
   };
 
   const handlePurchase = async () => {
@@ -93,15 +189,145 @@ export default function SheetDetailPage() {
       return;
     }
 
-    setPurchasing(true);
+    if (!sheet) return;
+
     try {
-      // 여기에 결제 로직 구현
-      alert('결제 기능은 추후 구현 예정입니다.');
+      const alreadyPurchased = await hasPurchasedSheet(user.id, sheet.id);
+      if (alreadyPurchased) {
+        alert('이미 구매하신 악보입니다.\n마이페이지 > 악보 구매 내역에서 다운로드해 주세요.');
+        return;
+      }
+    } catch (error) {
+      console.error('구매 이력 확인 오류:', error);
+      alert('구매 이력 확인 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
+    setShowPaymentSelector(true);
+  };
+
+  const handlePaymentMethodSelect = async (method: 'cash' | 'card' | 'bank') => {
+    if (!user || !sheet) return;
+
+    setShowPaymentSelector(false);
+    setPurchasing(true);
+    setPaymentProcessing(true);
+
+    const price = getSheetPrice();
+
+    try {
+      if (method === 'cash') {
+        const purchaseResult = await processCashPurchase({
+          userId: user.id,
+          totalPrice: price,
+          description: `악보 구매: ${sheet.title}`,
+          items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
+          sheetIdForTransaction: sheet.id,
+        });
+
+        if (!purchaseResult.success) {
+          if (purchaseResult.reason === 'INSUFFICIENT_CREDIT') {
+            alert(
+              `보유 캐쉬가 부족합니다.\n현재 잔액: ${purchaseResult.currentCredits.toLocaleString(
+                'ko-KR',
+              )}P\n캐쉬를 충전한 뒤 다시 시도해주세요.`,
+            );
+          }
+          return;
+        }
+
+        let message = '구매가 완료되었습니다.';
+
+        if (eventDiscount && eventIsActive) {
+          try {
+            const eventResult = await purchaseEventDiscount(eventDiscount);
+            if (eventResult?.message) {
+              message = eventResult.message;
+            }
+          } catch (eventError) {
+            console.warn('이벤트 할인 처리 중 경고:', eventError);
+          }
+        }
+
+        alert(`${message}\n마이페이지에서 악보를 확인하세요.`);
+        return;
+      }
+
+      if (method === 'card' || method === 'bank') {
+        const purchaseItems = [{ sheetId: sheet.id, sheetTitle: sheet.title, price }];
+        const result = await startSheetPurchase({
+          userId: user.id,
+          items: purchaseItems,
+          amount: price,
+          paymentMethod: method === 'card' ? 'card' : 'bank_transfer',
+          description: `악보 구매: ${sheet.title}`,
+          buyerName: user.email ?? null,
+          buyerEmail: user.email ?? null,
+          returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
+        });
+
+        if (method === 'bank') {
+          setBankTransferInfo(result.virtualAccountInfo ?? null);
+          alert('무통장입금 안내가 생성되었습니다.\n입금 후 자동으로 구매가 완료됩니다.');
+        } else {
+          setBankTransferInfo(null);
+          alert('결제창이 열립니다. 결제를 완료해 주세요.');
+        }
+      }
     } catch (error) {
       console.error('구매 오류:', error);
-      alert('구매 중 오류가 발생했습니다.');
+      alert(error instanceof Error ? error.message : '구매 중 오류가 발생했습니다.');
     } finally {
       setPurchasing(false);
+      setPaymentProcessing(false);
+    }
+  };
+
+  const handleAddToCart = async () => {
+    if (!user) {
+      navigate('/auth/login');
+      return;
+    }
+
+    if (!sheet) return;
+
+    try {
+      const alreadyPurchased = await hasPurchasedSheet(user.id, sheet.id);
+      if (alreadyPurchased) {
+        alert('이미 구매하신 악보입니다.\n마이페이지 > 악보 구매 내역에서 다운로드해 주세요.');
+        return;
+      }
+    } catch (error) {
+      console.error('장바구니 담기 전 구매 이력 확인 오류:', error);
+      alert('구매 이력 확인 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
+    const success = await addToCart(sheet.id);
+    if (success) {
+      alert('장바구니에 추가되었습니다.');
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    if (!id) {
+      return;
+    }
+
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    setFavoriteProcessing(true);
+    try {
+      const favorite = await toggleFavorite(id, user.id);
+      setIsFavoriteSheet(favorite);
+    } catch (error) {
+      console.error('찜하기 처리 오류:', error);
+      alert('찜하기 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setFavoriteProcessing(false);
     }
   };
 
@@ -125,8 +351,8 @@ export default function SheetDetailPage() {
     }
   };
 
-  // 썸네일 이미지 URL 가져오기 (유튜브 우선)
-  const getThumbnailUrl = async () => {
+  // 썸네일 이미지 URL 가져오기
+  const getThumbnailUrl = () => {
     if (!sheet) return '';
 
     // 1. 유튜브 URL이 있는 경우 유튜브 썸네일 우선 사용
@@ -142,18 +368,9 @@ export default function SheetDetailPage() {
       return sheet.thumbnail_url;
     }
     
-    // 3. 썸네일이 없으면 빈 문자열 반환 (텍스트 표시용)
-    return '';
+    // 3. 기본 썸네일 생성
+    return generateDefaultThumbnail(400, 400);
   };
-
-  // 썸네일 URL 상태 관리
-  const [thumbnailUrl, setThumbnailUrl] = useState<string>('');
-
-  useEffect(() => {
-    if (sheet) {
-      getThumbnailUrl().then(setThumbnailUrl);
-    }
-  }, [sheet]);
 
   // 미리보기 이미지 생성 함수
   const getPreviewImageUrl = (sheet: DrumSheet) => {
@@ -211,128 +428,110 @@ export default function SheetDetailPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1
-                className="text-2xl font-bold text-gray-900 cursor-pointer"
-                style={{ fontFamily: '"Pacifico", serif' }}
-                onClick={() => navigate('/')}
-              >
-                카피드럼
-              </h1>
-            </div>
-            <nav className="hidden md:flex space-x-8">
-              <a href="/" className="text-gray-700 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer">
-                홈
-              </a>
-              <a href="/categories" className="text-gray-700 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer">
-                악보 카테고리
-              </a>
-              <a href="#" className="text-gray-700 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer">
-                신규 악보
-              </a>
-              <a href="#" className="text-gray-700 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer">
-                인기 악보
-              </a>
-              <a href="#" className="text-gray-700 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer">
-                고객지원
-              </a>
-              {user && (
-                <a href="/admin" className="text-gray-700 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer">
-                  관리자
-                </a>
-              )}
-            </nav>
-            <div className="flex items-center space-x-4">
-              <button className="text-gray-700 hover:text-gray-900 cursor-pointer">
-                <ShoppingCart className="w-5 h-5" />
-              </button>
-              {user ? (
-                <div className="flex items-center space-x-4">
-                  <span className="text-gray-700">{user.email?.split('@')[0]}님</span>
-                  <button
-                    onClick={handleLogout}
-                    className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 whitespace-nowrap cursor-pointer"
-                  >
-                    로그아웃
-                  </button>
-                </div>
-              ) : (
-                <a
-                  href="/auth/login"
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 whitespace-nowrap cursor-pointer"
-                >
-                  로그인
-                </a>
-              )}
-            </div>
-          </div>
+      {/* Main Header */}
+      <MainHeader user={user} />
+
+      {/* User Sidebar - 로그인 시 항상 표시 */}
+      <UserSidebar user={user} />
+
+      {/* Main Content - 로그인 시 사이드바 공간 확보 */}
+      <div className={user ? 'mr-64' : ''}>
+        {/* Back Button */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <button
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.history.length > 1) {
+                navigate(-1);
+              } else {
+                navigate('/categories');
+              }
+            }}
+            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>카테고리로 돌아가기</span>
+          </button>
         </div>
-      </header>
 
-      {/* Back Button */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <button
-          onClick={() => navigate('/categories')}
-          className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>카테고리로 돌아가기</span>
-        </button>
-      </div>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          {/* Thumbnail Image */}
-          <div className="space-y-6">
-            <div className="bg-gray-50 rounded-lg overflow-hidden">
-              {thumbnailUrl ? (
-                <img
-                  src={thumbnailUrl}
-                  alt={`${sheet.title} ${sheet.youtube_url ? '유튜브 썸네일' : '앨범 커버'}`}
-                  className="w-full h-auto object-cover object-top"
-                />
-              ) : (
-                <div className="w-full h-96 bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-white font-bold text-2xl leading-tight">
-                      COPYDRUM
-                    </div>
-                    <div className="text-white font-bold text-2xl leading-tight">
-                      SHEET MUSIC
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start space-x-3">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-blue-400 rounded-full flex items-center justify-center">
-                    <Music className="w-4 h-4 text-blue-800" />
-                  </div>
+        {/* Main Content */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+          {bankTransferInfo ? (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-blue-900">무통장입금 안내</h3>
+                <button
+                  type="button"
+                  onClick={() => setBankTransferInfo(null)}
+                  className="text-blue-600 hover:text-blue-800 text-xs"
+                >
+                  닫기
+                </button>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div>
+                  <span className="font-medium text-gray-900">은행</span> {bankTransferInfo.bankName}
                 </div>
                 <div>
-                  <h4 className="text-sm font-medium text-blue-800 mb-1">
-                    {sheet.youtube_url ? '유튜브 썸네일' : '앨범 커버'}
-                  </h4>
-                  <p className="text-sm text-blue-700">
-                    {thumbnailUrl ? 
-                      (sheet.youtube_url ? 
-                        '위 이미지는 해당 곡의 유튜브 썸네일입니다.' :
-                        '위 이미지는 해당 곡의 앨범 커버입니다.'
-                      ) :
-                      '썸네일 정보가 없습니다.'
-                    } 
-                    실제 악보 미리보기는 아래에서 확인하실 수 있습니다.
-                  </p>
+                  <span className="font-medium text-gray-900">계좌번호</span> {bankTransferInfo.accountNumber}
+                </div>
+                <div>
+                  <span className="font-medium text-gray-900">예금주</span> {bankTransferInfo.depositor}
+                </div>
+                <div>
+                  <span className="font-medium text-gray-900">입금금액</span>{' '}
+                  {formatCurrency(bankTransferInfo.amount ?? getSheetPrice())}
+                </div>
+                {bankTransferInfo.expectedDepositor ? (
+                  <div className="sm:col-span-2">
+                    <span className="font-medium text-gray-900">입금자명</span>{' '}
+                    <span className="text-blue-600 font-semibold">{bankTransferInfo.expectedDepositor}</span>
+                  </div>
+                ) : null}
+              </div>
+              {bankTransferInfo.message ? (
+                <p className="mt-3 text-xs text-gray-600">{bankTransferInfo.message}</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            {/* Thumbnail Image */}
+            <div className="space-y-6">
+              <div className="bg-gray-50 rounded-lg overflow-hidden">
+                <img
+                  src={getThumbnailUrl()}
+                  alt={`${sheet.title} ${sheet.youtube_url ? '유튜브 썸네일' : '앨범 커버'}`}
+                  className="w-full h-auto object-cover object-top"
+                  onError={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    img.src = generateDefaultThumbnail(400, 400);
+                  }}
+                />
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 bg-blue-400 rounded-full flex items-center justify-center">
+                      <Music className="w-4 h-4 text-blue-800" />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-blue-800 mb-1">
+                      {sheet.youtube_url ? '유튜브 썸네일' : '앨범 커버'}
+                    </h4>
+                    <p className="text-sm text-blue-700">
+                      {getThumbnailUrl() ? 
+                        (sheet.youtube_url ? 
+                          '위 이미지는 해당 곡의 유튜브 썸네일입니다.' :
+                          '위 이미지는 해당 곡의 앨범 커버입니다.'
+                        ) :
+                        '썸네일 정보가 없습니다.'
+                      } 
+                      실제 악보 미리보기는 아래에서 확인하실 수 있습니다.
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
             
             {/* 유튜브 링크 버튼 */}
             {sheet.youtube_url && (
@@ -363,10 +562,10 @@ export default function SheetDetailPage() {
                 </div>
               </div>
             )}
-          </div>
+            </div>
 
-          {/* Sheet Info */}
-          <div className="space-y-8">
+            {/* Sheet Info */}
+            <div className="space-y-8">
             <div>
               <div className="flex items-center space-x-3 mb-4">
                 <h1 className="text-3xl font-bold text-gray-900">{sheet.title}</h1>
@@ -383,27 +582,77 @@ export default function SheetDetailPage() {
                   <Music className="w-4 h-4" />
                   <span>{sheet.categories?.name}</span>
                 </span>
+                <span className="flex items-center space-x-1">
+                  <span>악기파트 : 드럼</span>
+                </span>
               </div>
             </div>
 
-            {/* Difficulty Badge */}
-            <div>
+            {/* Difficulty Badge & Additional Info */}
+            <div className="flex items-center space-x-4 mb-4">
               <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getDifficultyBadgeColor(sheet.difficulty)}`}>
-                {sheet.difficulty}
+                {getDifficultyDisplayText(sheet.difficulty)}
               </span>
+              {sheet.page_count && (
+                <span className="text-sm text-gray-600">
+                  <i className="ri-file-line mr-1"></i>
+                  {sheet.page_count}페이지
+                </span>
+              )}
+              {sheet.tempo && (
+                <span className="text-sm text-gray-600">
+                  <i className="ri-speed-line mr-1"></i>
+                  {sheet.tempo} BPM
+                </span>
+              )}
             </div>
+
+            {eventDiscount && (
+              <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
+                {eventIsActive ? (
+                  <p>
+                    100원 특가 이벤트 진행 중!{' '}
+                    <span className="font-semibold">
+                      {new Date(eventDiscount.event_start).toLocaleString('ko-KR')} ~ {new Date(eventDiscount.event_end).toLocaleString('ko-KR')}
+                    </span>
+                  </p>
+                ) : eventDiscount.status === 'scheduled' ? (
+                  <p>
+                    {new Date(eventDiscount.event_start).toLocaleString('ko-KR')}부터 100원 특가 이벤트가 시작됩니다.
+                  </p>
+                ) : (
+                  <p>이벤트가 종료되었습니다. 정상가로 구매하실 수 있습니다.</p>
+                )}
+              </div>
+            )}
 
             {/* Price */}
             <div className="bg-gray-50 rounded-lg p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center space-x-2 mb-2">
-                    <DollarSign className="w-5 h-5 text-gray-600" />
-                    <span className="text-sm font-medium text-gray-600">가격</span>
+                <div className="space-y-2">
+                  {eventDiscount && (
+                    <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600">
+                      <span>🔥</span>
+                      {eventIsActive ? '이벤트 할인악보' : eventDiscount.status === 'scheduled' ? '이벤트 예정' : '이벤트 종료'}
+                    </span>
+                  )}
+                  <div className="flex flex-col">
+                    {eventDiscount && eventIsActive && (
+                      <span className="text-sm text-gray-400 line-through">
+                        {formatCurrency(sheet.price)}
+                      </span>
+                    )}
+                    <span className={`text-3xl font-bold ${eventDiscount && eventIsActive ? 'text-red-500' : 'text-blue-600'}`}>
+                      {formatCurrency(displayPrice)}
+                    </span>
+                    {eventDiscount && !eventIsActive && (
+                      <span className="text-xs text-gray-500 mt-1">
+                        {eventDiscount.status === 'scheduled'
+                          ? `${new Date(eventDiscount.event_start).toLocaleString('ko-KR')}부터 100원으로 이벤트가 시작됩니다.`
+                          : '이벤트가 종료되어 정상가로 판매됩니다.'}
+                      </span>
+                    )}
                   </div>
-                  <span className="text-3xl font-bold text-blue-600">
-                    ₩{sheet.price.toLocaleString()}
-                  </span>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-500 mb-2">즉시 다운로드</p>
@@ -414,17 +663,51 @@ export default function SheetDetailPage() {
 
             {/* Action Buttons */}
             <div className="space-y-4">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleToggleFavorite}
+                  disabled={favoriteProcessing}
+                  className={`flex h-11 w-11 items-center justify-center rounded-full border transition-colors ${
+                    isFavoriteSheet
+                      ? 'border-red-200 bg-red-50 text-red-500'
+                      : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                  } ${favoriteProcessing ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  aria-label={isFavoriteSheet ? '찜 해제' : '찜하기'}
+                >
+                  <i className={`ri-heart-${isFavoriteSheet ? 'fill' : 'line'} text-xl`} />
+                </button>
+              </div>
               <button
                 onClick={handlePurchase}
-                disabled={purchasing}
-                className="w-full bg-blue-600 text-white py-4 px-6 rounded-lg hover:bg-blue-700 font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer"
+                disabled={purchasing || paymentProcessing}
+                className="w-full bg-blue-600 text-white py-4 px-6 rounded-lg hover:bg-blue-700 font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer transition-colors"
               >
-                {purchasing ? '처리 중...' : '구매하기'}
+                {paymentProcessing
+                  ? '결제 준비 중...'
+                  : purchasing
+                  ? '처리 중...'
+                  : eventDiscount && eventIsActive
+                  ? '100원 즉시 구매'
+                  : '바로구매'}
+              </button>
+              
+              <button
+                onClick={handleAddToCart}
+                disabled={!user || isInCart(sheet.id)}
+                className={`w-full py-3 px-6 rounded-lg font-medium flex items-center justify-center space-x-2 whitespace-nowrap cursor-pointer transition-colors ${
+                  isInCart(sheet.id) 
+                    ? 'bg-gray-400 text-white cursor-not-allowed' 
+                    : 'bg-gray-900 text-white hover:bg-gray-800'
+                }`}
+              >
+                <ShoppingCart className="w-5 h-5" />
+                <span>{isInCart(sheet.id) ? '장바구니에 담김' : '장바구니 담기'}</span>
               </button>
               
               <button
                 onClick={() => setShowPreviewModal(true)}
-                className="w-full bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 font-medium flex items-center justify-center space-x-2 whitespace-nowrap cursor-pointer"
+                className="w-full bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 font-medium flex items-center justify-center space-x-2 whitespace-nowrap cursor-pointer transition-colors"
               >
                 <Eye className="w-5 h-5" />
                 <span>악보 미리보기</span>
@@ -458,75 +741,76 @@ export default function SheetDetailPage() {
               </ul>
             </div>
 
-          </div>
-        </div>
-
-        {/* 유튜브 영상 섹션 (유튜브 URL이 있는 경우) */}
-        {sheet.youtube_url && (
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-8 mt-12">
-            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center space-x-2">
-              <svg className="w-6 h-6 text-red-600" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-              </svg>
-              <span>연주 영상</span>
-            </h3>
-            <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden">
-              <iframe
-                src={`https://www.youtube.com/embed/${extractVideoId(sheet.youtube_url)}`}
-                title={`${sheet.title} - ${sheet.artist} 연주 영상`}
-                className="w-full h-full"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              ></iframe>
             </div>
-            <div className="mt-4 flex items-center justify-between">
-              <p className="text-gray-600">이 악보의 연주 영상을 확인해보세요</p>
-              <a
-                href={sheet.youtube_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 whitespace-nowrap cursor-pointer flex items-center space-x-2"
-              >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          </div>
+
+          {/* 유튜브 영상 섹션 (유튜브 URL이 있는 경우) */}
+          {sheet.youtube_url && (
+            <div className="bg-white rounded-lg shadow-lg p-6 mb-8 mt-12">
+              <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center space-x-2">
+                <svg className="w-6 h-6 text-red-600" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                 </svg>
-                <span>유튜브에서 보기</span>
-              </a>
-            </div>
-          </div>
-        )}
-
-        {/* 악보 미리보기 섹션 */}
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-4">악보 미리보기</h3>
-          <div className="relative">
-            <div className="aspect-[3/4] bg-gray-50 rounded-lg overflow-hidden relative">
-              <img
-                src={getPreviewImageUrl(sheet)}
-                alt={`${sheet.title} 악보 미리보기`}
-                className="w-full h-full object-cover cursor-pointer"
-                onClick={() => setShowPreviewModal(true)}
-                onError={handlePreviewImageError}
-              />
-              
-              {/* 하단 흐림 효과 */}
-              <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-white/90 via-white/60 to-transparent"></div>
-              
-              {/* 미리보기 안내 */}
-              <div className="absolute bottom-4 left-4 right-4 text-center">
-                <p className="text-sm text-gray-700 font-medium bg-white/80 rounded px-3 py-2">
-                  전체 악보는 구매 후 확인 가능합니다
-                </p>
+                <span>연주 영상</span>
+              </h3>
+              <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden">
+                <iframe
+                  src={`https://www.youtube.com/embed/${extractVideoId(sheet.youtube_url)}`}
+                  title={`${sheet.title} - ${sheet.artist} 연주 영상`}
+                  className="w-full h-full"
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                ></iframe>
+              </div>
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-gray-600">이 악보의 연주 영상을 확인해보세요</p>
+                <a
+                  href={sheet.youtube_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 whitespace-nowrap cursor-pointer flex items-center space-x-2"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                  </svg>
+                  <span>유튜브에서 보기</span>
+                </a>
               </div>
             </div>
-            
-            <button
-              onClick={() => setShowPreviewModal(true)}
-              className="mt-4 w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap cursor-pointer"
-            >
-              미리보기 확대
-            </button>
+          )}
+
+          {/* 악보 미리보기 섹션 */}
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">악보 미리보기</h3>
+            <div className="relative">
+              <div className="aspect-[3/4] bg-gray-50 rounded-lg overflow-hidden relative">
+                <img
+                  src={getPreviewImageUrl(sheet)}
+                  alt={`${sheet.title} 악보 미리보기`}
+                  className="w-full h-full object-cover cursor-pointer"
+                  onClick={() => setShowPreviewModal(true)}
+                  onError={handlePreviewImageError}
+                />
+                
+                {/* 하단 흐림 효과 */}
+                <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-white/90 via-white/60 to-transparent"></div>
+                
+                {/* 미리보기 안내 */}
+                <div className="absolute bottom-4 left-4 right-4 text-center">
+                  <p className="text-sm text-gray-700 font-medium bg-white/80 rounded px-3 py-2">
+                    전체 악보는 구매 후 확인 가능합니다
+                  </p>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => setShowPreviewModal(true)}
+                className="mt-4 w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap cursor-pointer"
+              >
+                미리보기 확대
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -568,96 +852,16 @@ export default function SheetDetailPage() {
         </div>
       )}
 
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div>
-              <h4 className="text-xl font-bold mb-4" style={{ fontFamily: '"Pacifico", serif' }}>
-                카피드럼
-              </h4>
-              <p className="text-gray-400 mb-4">
-                전문 드러머를 위한 최고 품질의 드럼 악보를 제공합니다.
-              </p>
-            </div>
+      <div className="mt-16">
+        <Footer />
+      </div>
 
-            <div>
-              <h5 className="font-semibold mb-4">악보 카테고리</h5>
-              <ul className="space-y-2">
-                <li>
-                  <a href="/categories" className="text-gray-400 hover:text-white cursor-pointer">
-                    전체 카테고리
-                  </a>
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <h5 className="font-semibold mb-4">고객 지원</h5>
-              <ul className="space-y-2">
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white cursor-pointer">
-                    자주 묻는 질문
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white cursor-pointer">
-                    다운로드 가이드
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white cursor-pointer">
-                    환불 정책
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white cursor-pointer">
-                    문의하기
-                  </a>
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <h5 className="font-semibold mb-4">회사 정보</h5>
-              <ul className="space-y-2">
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white cursor-pointer">
-                    회사 소개
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white cursor-pointer">
-                    이용약관
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white cursor-pointer">
-                    개인정보처리방침
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white cursor-pointer">
-                    파트너십
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center">
-            <p className="text-gray-400">
-              © 2024 카피드럼. All rights reserved. |
-              <a
-                href="https://readdy.ai/?origin=logo"
-                className="text-gray-400 hover:text-white ml-1 cursor-pointer"
-              >
-                Website Builder
-              </a>
-            </p>
-          </div>
-        </div>
-      </footer>
+      <PaymentMethodSelector
+        open={showPaymentSelector}
+        amount={getSheetPrice()}
+        onClose={() => setShowPaymentSelector(false)}
+        onSelect={handlePaymentMethodSelect}
+      />
     </div>
   );
 }

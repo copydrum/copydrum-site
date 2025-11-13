@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
+import UserSidebar from '../../components/feature/UserSidebar';
+import MainHeader from '../../components/common/MainHeader';
 
 const CustomOrderPage = () => {
   const { user } = useAuthStore();
@@ -87,55 +89,24 @@ const CustomOrderPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <a href="/" className="text-2xl font-bold text-gray-900" style={{ fontFamily: '"Pacifico", serif' }}>
-                logo
-              </a>
-            </div>
-            <nav className="hidden md:flex space-x-8">
-              <a href="/" className="text-gray-700 hover:text-blue-600 font-bold whitespace-nowrap cursor-pointer transition-colors duration-200">
-                홈
-              </a>
-              <a href="/categories" className="text-gray-700 hover:text-blue-600 font-bold whitespace-nowrap cursor-pointer transition-colors duration-200">
-                악보 카테고리
-              </a>
-              <a href="/custom-order" className="text-blue-600 font-bold whitespace-nowrap cursor-pointer">
-                주문제작
-              </a>
-              <a href="/custom-orders" className="text-gray-700 hover:text-blue-600 font-bold whitespace-nowrap cursor-pointer transition-colors duration-200">
-                주문제작 신청내역
-              </a>
-              <a href="#" className="text-gray-700 hover:text-blue-600 font-bold whitespace-nowrap cursor-pointer transition-colors duration-200">
-                신규 악보
-              </a>
-              <a href="#" className="text-gray-700 hover:text-blue-600 font-bold whitespace-nowrap cursor-pointer transition-colors duration-200">
-                인기 악보
-              </a>
-              <a href="#" className="text-gray-700 hover:text-blue-600 font-bold whitespace-nowrap cursor-pointer transition-colors duration-200">
-                무료 샘플
-              </a>
-              <a href="#" className="text-gray-700 hover:text-blue-600 font-bold whitespace-nowrap cursor-pointer transition-colors duration-200">
-                고객지원
-              </a>
-            </nav>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-white">
+      <MainHeader user={user} />
 
-      {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 py-12">
+      {/* User Sidebar - 로그인 시 항상 표시 */}
+      <UserSidebar user={user} />
+
+      {/* Main Content - 로그인 시 사이드바 공간 확보 */}
+      <div className={user ? 'mr-64' : ''}>
+        {/* Main Content */}
+        <main className="max-w-4xl mx-auto px-4 py-12">
         {/* Hero Section */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">악보 주문제작</h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            원하시는 곡의 드럼 악보를 전문가가 직접 제작해드립니다. 
-            곡을 분석한 후 맞춤형 견적을 제공해드립니다.
-          </p>
+          <div className="text-xl text-gray-600 max-w-2xl mx-auto space-y-2">
+            <p>원하시는 곡이 있으신가요?</p>
+            <p>전문가가 직접 분석하고 정성껏 드럼 악보를 제작해드립니다.</p>
+            <p>곡의 난이도와 구성에 따라 맞춤 견적을 안내드립니다.</p>
+          </div>
         </div>
 
         {/* Pricing Info */}
@@ -238,7 +209,7 @@ const CustomOrderPage = () => {
 
               <div>
                 <label htmlFor="songUrl" className="block text-sm font-medium text-gray-700 mb-2">
-                  곡 URL (YouTube, Spotify 등)
+                  유튜브 URL
                 </label>
                 <input
                   type="url"
@@ -247,9 +218,9 @@ const CustomOrderPage = () => {
                   value={formData.songUrl}
                   onChange={handleInputChange}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                  placeholder="곡을 들을 수 있는 URL을 입력해주세요 (선택사항)"
+                  placeholder="정확한 악보 제작을 위해 유튜브 URL을 입력해주세요. (선택사항)"
                 />
-                <p className="text-xs text-gray-500 mt-1">정확한 분석을 위해 곡 URL을 제공해주시면 도움이 됩니다</p>
+                <p className="text-xs text-gray-500 mt-1">정확한 악보 제작을 위해 유튜브 URL을 입력해주세요. (선택사항)</p>
               </div>
             </div>
 
@@ -348,7 +319,7 @@ const CustomOrderPage = () => {
                 제작 기간은 얼마나 걸리나요?
               </h3>
               <p className="text-gray-600 ml-6">
-                일반적으로 입금 확인 후 7-14일 정도 소요됩니다. 
+                일반적으로 입금 확인 후 1-3일 정도 소요됩니다. 
                 곡의 난이도와 길이에 따라 기간이 달라질 수 있으며, 견적서에서 정확한 일정을 안내해드립니다.
               </p>
             </div>
@@ -365,50 +336,8 @@ const CustomOrderPage = () => {
             </div>
           </div>
         </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
-              <h3 className="text-lg font-semibold mb-4">악보요청</h3>
-              <p className="text-gray-400 text-sm">
-                전문적인 드럼 악보 제작 서비스를 제공합니다.
-              </p>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">서비스</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li><a href="/categories" className="hover:text-white cursor-pointer">악보 카테고리</a></li>
-                <li><a href="/custom-order" className="hover:text-white cursor-pointer">주문제작</a></li>
-                <li><a href="#" className="hover:text-white cursor-pointer">신규 악보</a></li>
-                <li><a href="#" className="hover:text-white cursor-pointer">인기 악보</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">고객지원</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li><a href="#" className="hover:text-white cursor-pointer">FAQ</a></li>
-                <li><a href="#" className="hover:text-white cursor-pointer">문의하기</a></li>
-                <li><a href="#" className="hover:text-white cursor-pointer">이용약관</a></li>
-                <li><a href="#" className="hover:text-white cursor-pointer">개인정보처리방침</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">연락처</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li>이메일: info@drumsheets.com</li>
-                <li>전화: 02-1234-5678</li>
-                <li>운영시간: 평일 9:00-18:00</li>
-              </ul>
-            </div>
-          </div>
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-sm text-gray-400">
-            <p>&copy; 2024 악보요청. All rights reserved. | <a href="https://readdy.ai/?origin=logo" className="hover:text-white cursor-pointer">Website Builder</a></p>
-          </div>
-        </div>
-      </footer>
+        </main>
+      </div>
     </div>
   );
 };

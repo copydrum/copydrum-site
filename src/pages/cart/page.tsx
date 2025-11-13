@@ -1,11 +1,34 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../hooks/useCart';
 import { useAuthStore } from '../../stores/authStore';
+import { processCashPurchase } from '../../lib/cashPurchases';
+import { splitPurchasedSheetIds } from '../../lib/purchaseCheck';
+import { PaymentMethodSelector } from '../../components/payments';
+import { startSheetPurchase } from '../../lib/payments';
+import type { VirtualAccountInfo } from '../../lib/payments';
+
+type PendingCartPurchase = {
+  targetItemIds: string[];
+  items: Array<{
+    sheetId: string;
+    sheetTitle: string;
+    price: number;
+  }>;
+  amount: number;
+  description: string;
+};
 
 export default function CartPage() {
   const { cartItems, loading, removeFromCart, removeSelectedItems, clearCart, getTotalPrice } = useCart();
   const { user } = useAuthStore();
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [processing, setProcessing] = useState(false);
+  const [showPaymentSelector, setShowPaymentSelector] = useState(false);
+  const [pendingPurchase, setPendingPurchase] = useState<PendingCartPurchase | null>(null);
+  const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const navigate = useNavigate();
 
   if (!user) {
     return (
@@ -67,13 +90,233 @@ export default function CartPage() {
     }
   };
 
+  const handlePurchase = async (itemIds: string[]) => {
+    if (processing) return;
+    if (!user) {
+      navigate('/auth/login');
+      return;
+    }
+
+    if (itemIds.length === 0) {
+      alert('구매할 상품을 선택해주세요.');
+      return;
+    }
+
+    let targetItemIds = [...itemIds];
+    const itemsToPurchase = cartItems.filter(item => targetItemIds.includes(item.id));
+    if (itemsToPurchase.length === 0) {
+      alert('선택한 상품 정보를 찾을 수 없습니다.');
+      return;
+    }
+
+    let filteredItems = itemsToPurchase;
+
+    try {
+      const sheetIds = itemsToPurchase.map(item => item.sheet_id);
+      const { purchasedSheetIds, notPurchasedSheetIds } = await splitPurchasedSheetIds(user.id, sheetIds);
+
+      if (purchasedSheetIds.length > 0) {
+        const duplicateItems = itemsToPurchase.filter(item => purchasedSheetIds.includes(item.sheet_id));
+
+        if (notPurchasedSheetIds.length === 0) {
+          const duplicateList =
+            duplicateItems.length > 0
+              ? duplicateItems.map(item => `- ${item.title}`).join('\n')
+              : purchasedSheetIds.map(id => `- ${id}`).join('\n');
+          alert(
+            ['이미 구매하신 악보만 선택되어 결제를 진행할 수 없습니다.', '', '중복된 악보:', duplicateList].join('\n'),
+          );
+          return;
+        }
+
+        filteredItems = itemsToPurchase.filter(item => notPurchasedSheetIds.includes(item.sheet_id));
+        targetItemIds = filteredItems.map(item => item.id);
+
+        const duplicateList =
+          duplicateItems.length > 0
+            ? duplicateItems.map(item => `- ${item.title}`).join('\n')
+            : purchasedSheetIds.map(id => `- ${id}`).join('\n');
+
+        alert(
+          [
+            '이미 구매하신 악보를 제외하고 결제를 진행합니다.',
+            '',
+            '제외된 악보:',
+            duplicateList,
+          ].join('\n'),
+        );
+      }
+    } catch (error) {
+      console.error('장바구니 구매 전 구매 이력 확인 오류:', error);
+      alert('구매 이력 확인 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
+    if (filteredItems.length === 0) {
+      alert('구매할 수 있는 신규 악보가 없습니다.');
+      return;
+    }
+
+    const totalPrice = filteredItems.reduce((total, item) => total + item.price, 0);
+    const description =
+      filteredItems.length === 1
+        ? `악보 구매: ${filteredItems[0].title}`
+        : `장바구니 상품 ${filteredItems.length}개 구매`;
+
+    const purchaseItems = filteredItems.map(item => ({
+      sheetId: item.sheet_id,
+      sheetTitle: item.title,
+      price: item.price,
+    }));
+
+    setPendingPurchase({
+      targetItemIds,
+      items: purchaseItems,
+      amount: totalPrice,
+      description,
+    });
+    setPaymentProcessing(false);
+    setBankTransferInfo(null);
+    setShowPaymentSelector(true);
+  };
+
+  const handlePurchaseSelected = async () => {
+    await handlePurchase(selectedItems);
+  };
+
+  const handlePurchaseAll = async () => {
+    const allItemIds = cartItems.map(item => item.id);
+    await handlePurchase(allItemIds);
+  };
+
+  const handlePaymentMethodSelect = async (method: 'cash' | 'card' | 'bank') => {
+    if (!user || !pendingPurchase) return;
+
+    setShowPaymentSelector(false);
+    setProcessing(true);
+    setPaymentProcessing(true);
+
+    try {
+      if (method === 'cash') {
+        const cashResult = await processCashPurchase({
+          userId: user.id,
+          totalPrice: pendingPurchase.amount,
+          description: pendingPurchase.description,
+          items: pendingPurchase.items,
+          sheetIdForTransaction:
+            pendingPurchase.items.length === 1 ? pendingPurchase.items[0].sheetId : null,
+        });
+
+        if (!cashResult.success) {
+          if (cashResult.reason === 'INSUFFICIENT_CREDIT') {
+            alert(
+              `보유 캐쉬가 부족합니다.\n현재 잔액: ${cashResult.currentCredits.toLocaleString(
+                'ko-KR',
+              )}P\n캐쉬를 충전한 뒤 다시 시도해주세요.`,
+            );
+          }
+          return;
+        }
+
+        const removed = await removeSelectedItems(pendingPurchase.targetItemIds);
+        if (!removed) {
+          console.warn('구매 후 장바구니 업데이트에 실패했습니다.');
+        }
+
+        setSelectedItems(prev =>
+          prev.filter(id => !pendingPurchase.targetItemIds.includes(id)),
+        );
+
+        alert('구매가 완료되었습니다. 마이페이지에서 콘텐츠를 확인하세요.');
+        navigate('/my-orders');
+        return;
+      }
+
+      const purchaseResult = await startSheetPurchase({
+        userId: user.id,
+        items: pendingPurchase.items,
+        amount: pendingPurchase.amount,
+        paymentMethod: method === 'card' ? 'card' : 'bank_transfer',
+        description: pendingPurchase.description,
+        buyerName: user.email ?? null,
+        buyerEmail: user.email ?? null,
+        returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
+      });
+
+      const removed = await removeSelectedItems(pendingPurchase.targetItemIds);
+      if (!removed) {
+        console.warn('결제 후 장바구니 업데이트에 실패했습니다.');
+      }
+
+      setSelectedItems(prev =>
+        prev.filter(id => !pendingPurchase.targetItemIds.includes(id)),
+      );
+
+      if (method === 'bank') {
+        setBankTransferInfo(purchaseResult.virtualAccountInfo ?? null);
+        alert('무통장입금 안내가 생성되었습니다.\n안내에 따라 입금 후 자동으로 구매가 완료됩니다.');
+      } else {
+        setBankTransferInfo(null);
+        alert('결제창이 열립니다. 결제를 완료해 주세요.');
+      }
+    } catch (error) {
+      console.error('장바구니 결제 처리 오류:', error);
+      alert(error instanceof Error ? error.message : '결제 처리 중 오류가 발생했습니다.');
+    } finally {
+      setProcessing(false);
+      setPaymentProcessing(false);
+      setPendingPurchase(null);
+    }
+  };
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('ko-KR').format(price);
   };
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-6xl mx-auto px-4">
+      <div className="max-w-6xl mx-auto px-4 space-y-6">
+        {bankTransferInfo ? (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-blue-900">무통장입금 안내</h3>
+              <button
+                type="button"
+                onClick={() => setBankTransferInfo(null)}
+                className="text-blue-600 hover:text-blue-800 text-xs"
+              >
+                닫기
+              </button>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div>
+                <span className="font-medium text-gray-900">은행</span> {bankTransferInfo.bankName}
+              </div>
+              <div>
+                <span className="font-medium text-gray-900">계좌번호</span> {bankTransferInfo.accountNumber}
+              </div>
+              <div>
+                <span className="font-medium text-gray-900">예금주</span> {bankTransferInfo.depositor}
+              </div>
+              <div>
+                <span className="font-medium text-gray-900">입금금액</span>{' '}
+                {new Intl.NumberFormat('ko-KR').format(bankTransferInfo.amount ?? 0)}원
+              </div>
+              {bankTransferInfo.expectedDepositor ? (
+                <div className="sm:col-span-2">
+                  <span className="font-medium text-gray-900">입금자명</span>{' '}
+                  <span className="text-blue-600 font-semibold">
+                    {bankTransferInfo.expectedDepositor}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+            {bankTransferInfo.message ? (
+              <p className="mt-3 text-xs text-gray-600">{bankTransferInfo.message}</p>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="bg-white rounded-lg shadow-sm">
           <div className="p-6 border-b border-gray-200">
             <h1 className="text-2xl font-bold text-gray-900">장바구니</h1>
@@ -87,6 +330,12 @@ export default function CartPage() {
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">장바구니가 비어있습니다</h3>
               <p className="text-gray-600">원하는 악보를 장바구니에 담아보세요.</p>
+              <button
+                onClick={() => navigate('/categories')}
+                className="mt-6 inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                악보 보러가기
+              </button>
             </div>
           ) : (
             <>
@@ -174,22 +423,43 @@ export default function CartPage() {
                 
                 <div className="flex space-x-3">
                   <button
-                    disabled={selectedItems.length === 0}
+                    onClick={handlePurchaseSelected}
+                    disabled={selectedItems.length === 0 || processing || paymentProcessing}
                     className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    선택상품 주문하기
+                    {processing || paymentProcessing ? '구매 처리 중...' : '선택상품 주문하기'}
                   </button>
                   <button
-                    disabled={cartItems.length === 0}
+                    onClick={handlePurchaseAll}
+                    disabled={cartItems.length === 0 || processing || paymentProcessing}
                     className="flex-1 bg-gray-800 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    전체상품 주문하기
+                    {processing || paymentProcessing ? '구매 처리 중...' : '전체상품 주문하기'}
+                  </button>
+                </div>
+                <div className="mt-4">
+                  <button
+                    onClick={() => navigate('/categories')}
+                    className="w-full py-3 px-6 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-100 transition-colors"
+                  >
+                    쇼핑 계속하기
                   </button>
                 </div>
               </div>
             </>
           )}
         </div>
+
+        <PaymentMethodSelector
+          open={showPaymentSelector}
+          amount={pendingPurchase?.amount ?? 0}
+          onClose={() => {
+            setShowPaymentSelector(false);
+            setPendingPurchase(null);
+            setPaymentProcessing(false);
+          }}
+          onSelect={handlePaymentMethodSelect}
+        />
       </div>
     </div>
   );

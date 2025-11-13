@@ -15,10 +15,17 @@ const ResetPasswordPage = lazy(() => import('../pages/auth/reset-password'));
 const AdminPage = lazy(() => import('../pages/admin/page'));
 const MyOrdersPage = lazy(() => import('../pages/my-orders/page'));
 const CustomOrdersPage = lazy(() => import('../pages/custom-orders/page'));
+const CustomOrderDetailPage = lazy(() => import('../pages/custom-order-detail/page'));
 const CustomerSupportPage = lazy(() => import('../pages/customer-support/page'));
+const GuidePage = lazy(() => import('../pages/guide/page'));
 const EventSalePage = lazy(() => import('../pages/event-sale/page'));
+const EventSaleDetailPage = lazy(() => import('../pages/event-sale/detail'));
 const CollectionsPage = lazy(() => import('../pages/collections/page'));
+const CollectionDetailPage = lazy(() => import('../pages/collections/detail'));
+const FreeSheetsPage = lazy(() => import('../pages/free-sheets/page'));
 const NotFoundPage = lazy(() => import('../pages/NotFound'));
+const CompanyAboutPage = lazy(() => import('../pages/company/about'));
+const PartnershipPage = lazy(() => import('../pages/company/partnership'));
 
 // 로딩 컴포넌트
 const LoadingSpinner = () => (
@@ -56,7 +63,7 @@ const routes: RouteObject[] = [
     ),
   },
   {
-    path: '/sheet/:id',
+    path: '/sheet-detail/:id',
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <SheetDetailPage />
@@ -88,7 +95,23 @@ const routes: RouteObject[] = [
     ),
   },
   {
+    path: '/auth/login',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <LoginPage />
+      </Suspense>
+    ),
+  },
+  {
     path: '/register',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <RegisterPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/auth/register',
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <RegisterPage />
@@ -104,7 +127,23 @@ const routes: RouteObject[] = [
     ),
   },
   {
+    path: '/auth/forgot-password',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <ForgotPasswordPage />
+      </Suspense>
+    ),
+  },
+  {
     path: '/reset-password',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <ResetPasswordPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/auth/reset-password',
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <ResetPasswordPage />
@@ -136,10 +175,26 @@ const routes: RouteObject[] = [
     ),
   },
   {
+    path: '/custom-order-detail/:id',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <CustomOrderDetailPage />
+      </Suspense>
+    ),
+  },
+  {
     path: '/customer-support',
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <CustomerSupportPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/guide',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <GuidePage />
       </Suspense>
     ),
   },
@@ -152,10 +207,50 @@ const routes: RouteObject[] = [
     ),
   },
   {
+    path: '/event-sale/:eventId',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <EventSaleDetailPage />
+      </Suspense>
+    ),
+  },
+  {
     path: '/collections',
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <CollectionsPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/collections/:collectionId',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <CollectionDetailPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/free-sheets',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <FreeSheetsPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/company/about',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <CompanyAboutPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/company/partnership',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <PartnershipPage />
       </Suspense>
     ),
   },

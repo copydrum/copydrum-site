@@ -1,8 +1,42 @@
-
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { User } from '@supabase/supabase-js';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from '../../lib/supabase';
+import { deleteEventDiscountById, fetchEventDiscountList, upsertEventDiscountSheet } from '../../lib/eventDiscounts';
+import type { EventDiscountSheet, EventDiscountStatus } from '../../lib/eventDiscounts';
+import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import { useAuthStore } from '../../stores/authStore';
+import { searchTrackAndGetCoverWithAlbum } from '../../lib/spotify';
+import { pdfjsLib } from '../../lib/pdfClient';
+import {
+  createDefaultSiteSettings,
+  fetchSettings,
+  updateSettings,
+} from '../../lib/settings';
+import type { SiteSettingKey, SiteSettingRow, SiteSettings } from '../../lib/settings';
+import CustomOrderDetail from '../../components/admin/CustomOrderDetail';
+import {
+  getDashboardAnalytics,
+  type DashboardAnalyticsPeriod,
+  type DashboardAnalyticsResult,
+} from '../../lib/dashboardAnalytics';
+import { fetchAnalyticsData, type AnalyticsPeriod, type AnalyticsData } from '../../lib/analytics';
+import type { VirtualAccountInfo } from '../../lib/payments';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
 
 // 공통 로그인 경로 상수
 const LOGIN_PATH = '/login';
@@ -16,6 +50,7 @@ interface Profile {
   is_admin: boolean;
   created_at: string;
   updated_at: string;
+  credits?: number | null;
 }
 
 // 기존 코드
@@ -37,28 +72,593 @@ interface Category {
   created_at: string;
 }
 
+type OrderStatus =
+  | 'pending'
+  | 'awaiting_deposit'
+  | 'payment_confirmed'
+  | 'completed'
+  | 'cancelled'
+  | 'refunded';
+
+type OrderSortKey = 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc' | 'status';
+
+interface OrderItemSheet {
+  id: string;
+  title: string | null;
+  artist: string | null;
+  price: number | null;
+  thumbnail_url: string | null;
+  pdf_url: string | null;
+  preview_image_url: string | null;
+}
+
+interface OrderItem {
+  id: string;
+  sheet_id: string | null;
+  drum_sheet_id?: string | null;
+  sheet_title?: string | null;
+  price: number | null;
+  created_at: string | null;
+  drum_sheets?: OrderItemSheet | null;
+}
+
 interface Order {
   id: string;
+  order_number?: string | null;
   user_id: string;
   total_amount: number;
-  status: string;
+  status: OrderStatus;
+  raw_status?: string | null;
+  payment_method: string | null;
+  payment_status?: string | null;
+  transaction_id?: string | null;
+  depositor_name?: string | null;
+  payment_confirmed_at?: string | null;
+  virtual_account_info?: VirtualAccountInfo | null;
+  metadata?: Record<string, any> | null;
   created_at: string;
+  updated_at: string;
   profiles?: Profile;
+  order_items?: OrderItem[];
 }
+
+interface CopyrightReportRow {
+  songId: string;
+  title: string;
+  artist: string;
+  albumName: string | null;
+  categoryName: string | null;
+  purchaseCount: number;
+  unitAmount: number;
+  revenue: number;
+}
+
+interface DirectSaleRow {
+  orderId: string;
+  orderNumber: string | null;
+  orderedAt: string;
+  paymentMethod: string | null;
+  paymentMethodLabel: string;
+  totalAmount: number;
+  itemCount: number;
+  customerEmail: string | null;
+}
+
+interface CashChargeRow {
+  id: string;
+  userId: string;
+  userEmail: string | null;
+  chargedAt: string;
+  amount: number;
+  bonusAmount: number;
+  totalCredit: number;
+  description: string | null;
+  paymentLabel: string;
+}
+
+type CopyrightQuickRangeKey = 'this-month' | 'last-month' | 'last-3-months' | 'this-year';
+type CopyrightRangeState = CopyrightQuickRangeKey | 'custom';
+
+const formatDateToYMD = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getRangeForQuickKey = (key: CopyrightQuickRangeKey) => {
+  const now = new Date();
+  const start = new Date(now);
+  const end = new Date(now);
+
+  switch (key) {
+    case 'this-month': {
+      start.setDate(1);
+      return { start: formatDateToYMD(start), end: formatDateToYMD(end) };
+    }
+    case 'last-month': {
+      start.setMonth(start.getMonth() - 1);
+      start.setDate(1);
+      end.setMonth(end.getMonth() - 1);
+      end.setMonth(end.getMonth() + 1, 0);
+      return { start: formatDateToYMD(start), end: formatDateToYMD(end) };
+    }
+    case 'last-3-months': {
+      start.setMonth(start.getMonth() - 2);
+      start.setDate(1);
+      return { start: formatDateToYMD(start), end: formatDateToYMD(end) };
+    }
+    case 'this-year': {
+      start.setMonth(0, 1);
+      return { start: formatDateToYMD(start), end: formatDateToYMD(end) };
+    }
+    default:
+      return { start: formatDateToYMD(start), end: formatDateToYMD(end) };
+  }
+};
+
+const COPYRIGHT_QUICK_RANGES: Array<{ key: CopyrightQuickRangeKey; label: string }> = [
+  { key: 'this-month', label: '이번 달' },
+  { key: 'last-month', label: '지난 달' },
+  { key: 'last-3-months', label: '최근 3개월' },
+  { key: 'this-year', label: '올해' },
+];
+
+const ORDER_STATUS_META: Record<OrderStatus, { label: string; className: string; description: string }> = {
+  pending: {
+    label: '결제 대기',
+    className: 'bg-yellow-100 text-yellow-800',
+    description: '결제 확인을 기다리고 있습니다.',
+  },
+  awaiting_deposit: {
+    label: '입금 대기',
+    className: 'bg-amber-100 text-amber-700',
+    description: '무통장입금 확인을 기다리고 있습니다.',
+  },
+  payment_confirmed: {
+    label: '입금 확인',
+    className: 'bg-emerald-100 text-emerald-700',
+    description: '입금이 확인되어 다운로드 준비가 완료되었습니다.',
+  },
+  completed: {
+    label: '다운로드 가능',
+    className: 'bg-blue-100 text-blue-700',
+    description: '고객이 악보를 다운로드할 수 있습니다.',
+  },
+  cancelled: {
+    label: '취소됨',
+    className: 'bg-gray-100 text-gray-700',
+    description: '주문이 취소되었습니다.',
+  },
+  refunded: {
+    label: '환불됨',
+    className: 'bg-purple-100 text-purple-700',
+    description: '주문 금액이 환불 처리되었습니다.',
+  },
+};
+
+const ORDER_STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
+  { value: 'pending', label: ORDER_STATUS_META.pending.label },
+  { value: 'awaiting_deposit', label: ORDER_STATUS_META.awaiting_deposit.label },
+  { value: 'payment_confirmed', label: ORDER_STATUS_META.payment_confirmed.label },
+  { value: 'completed', label: ORDER_STATUS_META.completed.label },
+  { value: 'cancelled', label: ORDER_STATUS_META.cancelled.label },
+  { value: 'refunded', label: ORDER_STATUS_META.refunded.label },
+];
+
+const ORDER_SORT_OPTIONS: Array<{ value: OrderSortKey; label: string }> = [
+  { value: 'date_desc', label: '주문일 최신순' },
+  { value: 'date_asc', label: '주문일 오래된순' },
+  { value: 'amount_desc', label: '금액 높은순' },
+  { value: 'amount_asc', label: '금액 낮은순' },
+  { value: 'status', label: '상태 (다운로드 가능 우선)' },
+];
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  card: '카드 결제',
+  bank_transfer: '무통장입금',
+  virtual_account: '가상계좌',
+  kakaopay: '카카오페이',
+  toss: '토스페이',
+  payco: '페이코',
+  naverpay: '네이버페이',
+  cash: '보유 캐시',
+};
+
+const ORDER_STATUS_FALLBACK_MAP: Record<string, OrderStatus> = {
+  in_progress: 'payment_confirmed',
+  processing: 'payment_confirmed',
+  ready: 'payment_confirmed',
+};
+
+const REFUNDABLE_STATUSES: OrderStatus[] = ['payment_confirmed', 'completed'];
+const CANCELLABLE_STATUSES: OrderStatus[] = ['pending', 'awaiting_deposit', 'payment_confirmed', 'completed'];
+const KOREAN_PAYMENT_METHODS = ['card', 'bank_transfer', 'kakaopay'] as const;
+
+const normalizeOrderStatus = (status: string | null | undefined): OrderStatus => {
+  if (!status) return 'pending';
+  const normalized = status.toLowerCase().replace(/[\s-]/g, '_');
+  if ((Object.keys(ORDER_STATUS_META) as OrderStatus[]).includes(normalized as OrderStatus)) {
+    return normalized as OrderStatus;
+  }
+  if (normalized in ORDER_STATUS_FALLBACK_MAP) {
+    return ORDER_STATUS_FALLBACK_MAP[normalized];
+  }
+  return 'pending';
+};
+
+const normalizePaymentMethodKey = (method: string) =>
+  method.toLowerCase().replace(/\s+/g, '_').replace(/-+/g, '_');
+
+const getPaymentMethodLabel = (method: string | null | undefined) => {
+  if (!method) return '미등록';
+  const key = normalizePaymentMethodKey(method);
+  return PAYMENT_METHOD_LABELS[key] ?? method;
+};
+
+const getOrderStatusMetaSafe = (status: string | null | undefined) => {
+  if (!status) {
+    return {
+      label: '미정',
+      className: 'bg-gray-100 text-gray-600',
+      description: '상태 정보가 없습니다.',
+    };
+  }
+
+  const normalized = normalizeOrderStatus(status);
+  return (
+    ORDER_STATUS_META[normalized] ?? {
+      label: status,
+      className: 'bg-gray-100 text-gray-600',
+      description: '상태 정보가 없습니다.',
+    }
+  );
+};
+
+type CashTransactionType = 'charge' | 'use' | 'admin_add' | 'admin_deduct';
+
+interface CashTransactionRecord {
+  id: string;
+  user_id: string;
+  transaction_type: CashTransactionType;
+  amount: number;
+  bonus_amount: number;
+  balance_after: number;
+  description: string | null;
+  sheet_id?: string | null;
+  order_id?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  sheet?: {
+    id: string;
+    title: string | null;
+  } | null;
+}
+
+interface CashStats {
+  totalMembers: number;
+  totalBalance: number;
+  monthlyCharged: number;
+  monthlyUsed: number;
+}
+
+const CASH_TRANSACTION_TYPE_META: Record<CashTransactionType, { label: string; className: string }> = {
+  charge: { label: '충전', className: 'bg-emerald-100 text-emerald-700' },
+  use: { label: '사용', className: 'bg-blue-100 text-blue-700' },
+  admin_add: { label: '관리자 추가', className: 'bg-purple-100 text-purple-700' },
+  admin_deduct: { label: '관리자 차감', className: 'bg-rose-100 text-rose-700' },
+};
+
+type CustomOrderStatus = 'pending' | 'quoted' | 'payment_confirmed' | 'in_progress' | 'completed' | 'cancelled';
 
 interface CustomOrder {
   id: string;
   user_id: string;
   song_title: string;
   artist: string;
-  reference_url?: string;
-  difficulty_preference: string;
-  additional_notes?: string;
-  status: string;
-  estimated_price?: number;
+  song_url: string | null;
+  requirements: string | null;
+  status: CustomOrderStatus;
+  estimated_price: number | null;
+  completed_pdf_url: string | null;
+  completed_pdf_filename: string | null;
+  download_count: number | null;
+  max_download_count: number | null;
+  download_expires_at: string | null;
   created_at: string;
+  updated_at: string;
   profiles?: Profile;
 }
+
+const CUSTOM_ORDER_STATUS_META: Record<CustomOrderStatus, { label: string; className: string; description: string }> = {
+  pending: {
+    label: '견적중',
+    className: 'bg-amber-100 text-amber-700',
+    description: '요청 확인 후 견적을 검토하고 있습니다.',
+  },
+  quoted: {
+    label: '결제대기',
+    className: 'bg-sky-100 text-sky-700',
+    description: '견적이 전달되었으며 입금을 기다리고 있습니다.',
+  },
+  payment_confirmed: {
+    label: '입금확인',
+    className: 'bg-emerald-100 text-emerald-700',
+    description: '입금이 확인되어 제작 준비 중입니다.',
+  },
+  in_progress: {
+    label: '작업중',
+    className: 'bg-indigo-100 text-indigo-700',
+    description: '악보 제작이 진행 중입니다.',
+  },
+  completed: {
+    label: '작업완료',
+    className: 'bg-purple-100 text-purple-700',
+    description: '악보 제작이 완료되었습니다.',
+  },
+  cancelled: {
+    label: '취소됨',
+    className: 'bg-red-100 text-red-700',
+    description: '주문이 취소되었습니다.',
+  },
+};
+
+type SiteSettingsMeta = {
+  updatedAt: string;
+  updatedBy: string | null;
+};
+
+const SETTINGS_TABS: SiteSettingKey[] = ['general', 'payment', 'event', 'system', 'notification'];
+
+const SETTINGS_TAB_CONFIG: Record<SiteSettingKey, { label: string; description: string; icon: string }> = {
+  general: {
+    label: '기본 정보',
+    description: '사이트 기본 정보와 연락처를 관리합니다.',
+    icon: 'ri-home-gear-line',
+  },
+  payment: {
+    label: '결제 정보',
+    description: '입금 계좌 및 결제 안내를 설정합니다.',
+    icon: 'ri-bank-card-line',
+  },
+  event: {
+    label: '이벤트 기본값',
+    description: '이벤트 할인에 사용할 기본값을 지정합니다.',
+    icon: 'ri-discount-percent-line',
+  },
+  system: {
+    label: '시스템 설정',
+    description: '유지보수 모드 및 시스템 정책을 제어합니다.',
+    icon: 'ri-settings-5-line',
+  },
+  notification: {
+    label: '알림 설정',
+    description: '각종 관리자 알림 수신 여부를 제어합니다.',
+    icon: 'ri-notification-3-line',
+  },
+};
+
+const createDefaultSettingsMeta = (): Record<SiteSettingKey, SiteSettingsMeta> => ({
+  general: { updatedAt: '', updatedBy: null },
+  payment: { updatedAt: '', updatedBy: null },
+  event: { updatedAt: '', updatedBy: null },
+  system: { updatedAt: '', updatedBy: null },
+  notification: { updatedAt: '', updatedBy: null },
+});
+
+const formatSettingsTimestamp = (value: string) => {
+  if (!value) {
+    return '미저장';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '미저장';
+  }
+
+  return date.toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const buildSettingsMeta = (rows: SiteSettingRow[]): Record<SiteSettingKey, SiteSettingsMeta> => {
+  const meta = createDefaultSettingsMeta();
+
+  rows.forEach((row) => {
+    if (!row) {
+      return;
+    }
+
+    meta[row.key] = {
+      updatedAt: row.updated_at ?? '',
+      updatedBy: row.updated_by ?? null,
+    };
+  });
+
+  return meta;
+};
+
+interface CustomerInquiry {
+  id: string;
+  user_id: string | null;
+  name: string;
+  email: string;
+  category: string;
+  title: string;
+  content: string;
+  status: string;
+  admin_reply: string | null;
+  replied_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+const getInquiryStatusLabel = (status: string) => {
+  switch (status) {
+    case 'pending':
+      return '대기중';
+    case 'in_progress':
+      return '처리중';
+    case 'answered':
+      return '답변 완료';
+    case 'resolved':
+    case 'completed':
+      return '처리 완료';
+    case 'closed':
+      return '종료';
+    default:
+      return status;
+  }
+};
+
+const getInquiryStatusBadgeClass = (status: string) => {
+  switch (status) {
+    case 'pending':
+      return 'bg-amber-100 text-amber-700';
+    case 'in_progress':
+      return 'bg-blue-100 text-blue-700';
+    case 'answered':
+      return 'bg-purple-100 text-purple-700';
+    case 'resolved':
+    case 'completed':
+      return 'bg-emerald-100 text-emerald-700';
+    case 'closed':
+      return 'bg-gray-200 text-gray-700';
+    default:
+      return 'bg-gray-100 text-gray-600';
+  }
+};
+
+interface Collection {
+  id: string;
+  title: string;
+  description?: string;
+  thumbnail_url?: string;
+  original_price: number;
+  sale_price: number;
+  discount_percentage: number;
+  is_active: boolean;
+  category_id?: string;
+  category_ids?: string[]; // 여러 카테고리 선택을 위한 배열
+  created_at: string;
+  updated_at: string;
+}
+
+interface CollectionSheet {
+  id: string;
+  collection_id: string;
+  drum_sheet_id: string;
+  drum_sheets?: DrumSheet;
+}
+
+interface EventSheetCandidate {
+  id: string;
+  title: string;
+  artist: string;
+  price: number;
+  thumbnail_url?: string | null;
+  category_id?: string | null;
+}
+
+interface EventFormState {
+  event_start: string;
+  event_end: string;
+  discount_price: number;
+  original_price: number;
+  is_active: boolean;
+}
+
+const DEFAULT_EVENT_PRICE = 100;
+
+const EVENT_STATUS_META: Record<EventDiscountStatus, { label: string; className: string }> = {
+  active: { label: '진행 중', className: 'bg-green-100 text-green-700' },
+  scheduled: { label: '예정', className: 'bg-blue-100 text-blue-700' },
+  ended: { label: '종료', className: 'bg-gray-200 text-gray-700' },
+  disabled: { label: '비활성', className: 'bg-gray-300 text-gray-700' },
+};
+
+const toDatetimeLocalString = (value: string | Date | null | undefined) => {
+  if (!value) return '';
+  const date = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60000);
+  return local.toISOString().slice(0, 16);
+};
+
+const datetimeLocalToIsoString = (value: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  return date.toISOString();
+};
+
+const calculateDiscountPercent = (original: number, discount: number) => {
+  if (!original || original <= 0) return 0;
+  const percent = (1 - discount / original) * 100;
+  return Math.round(percent * 10) / 10;
+};
+
+const formatCurrency = (value: number | null | undefined) => {
+  const amount = value ?? 0;
+  return `₩${amount.toLocaleString()}`;
+};
+
+const extractPaymentLabelFromDescription = (value: string | null | undefined) => {
+  if (!value) return '미확인';
+  const match = value.match(/\(([^)]+)\)/);
+  if (match?.[1]) {
+    return match[1].trim();
+  }
+  return value;
+};
+
+const formatDateTime = (value: string | null | undefined) => {
+  if (!value) return '-';
+  return new Date(value).toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const formatDate = (value: string | null | undefined) => {
+  if (!value) return '-';
+  return new Date(value).toLocaleDateString('ko-KR');
+};
+
+const formatPercentChange = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return '0%';
+  }
+  const formatted = value.toFixed(1);
+  return `${value > 0 ? '+' : ''}${formatted}%`;
+};
+
+const getChangeBadgeClassName = (value: number) =>
+  value >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600';
+
+const createDefaultEventForm = (): EventFormState => {
+  const start = new Date();
+  const end = new Date(start.getTime() + 3 * 24 * 60 * 60 * 1000);
+  return {
+    event_start: toDatetimeLocalString(start),
+    event_end: toDatetimeLocalString(end),
+    discount_price: DEFAULT_EVENT_PRICE,
+    original_price: 0,
+    is_active: true,
+  };
+};
 
 const AdminPage: React.FC = () => {
   const { user, setUser } = useAuthStore();
@@ -75,10 +675,18 @@ const AdminPage: React.FC = () => {
     totalRevenue: 0,
     monthlyGrowth: 0
   });
+  const [dashboardAnalyticsPeriod, setDashboardAnalyticsPeriod] =
+    useState<DashboardAnalyticsPeriod>('daily');
+  const [dashboardAnalyticsData, setDashboardAnalyticsData] =
+    useState<DashboardAnalyticsResult | null>(null);
+  const [dashboardAnalyticsLoading, setDashboardAnalyticsLoading] = useState(false);
+  const [dashboardAnalyticsError, setDashboardAnalyticsError] = useState<string | null>(null);
 
   const [members, setMembers] = useState<Profile[]>([]);
   const [memberSearchTerm, setMemberSearchTerm] = useState('');
   const [isAddingMember, setIsAddingMember] = useState(false);
+  const [memberCurrentPage, setMemberCurrentPage] = useState(1);
+  const [memberItemsPerPage] = useState(20);
   const [newMember, setNewMember] = useState({
     email: '',
     name: '',
@@ -87,6 +695,29 @@ const AdminPage: React.FC = () => {
     is_admin: false
   });
 
+  const [cashMembers, setCashMembers] = useState<Profile[]>([]);
+  const [cashStats, setCashStats] = useState<CashStats>({
+    totalMembers: 0,
+    totalBalance: 0,
+    monthlyCharged: 0,
+    monthlyUsed: 0,
+  });
+  const [cashLoading, setCashLoading] = useState(false);
+  const [cashSearchTerm, setCashSearchTerm] = useState('');
+  const [cashCurrentPage, setCashCurrentPage] = useState(1);
+  const [cashItemsPerPage] = useState(20);
+  const [showCashAdjustModal, setShowCashAdjustModal] = useState(false);
+  const [selectedCashMember, setSelectedCashMember] = useState<Profile | null>(null);
+  const [cashAdjustType, setCashAdjustType] = useState<'admin_add' | 'admin_deduct'>('admin_add');
+  const [cashAdjustAmount, setCashAdjustAmount] = useState<number>(0);
+  const [cashAdjustReason, setCashAdjustReason] = useState('');
+  const [showCashHistoryModal, setShowCashHistoryModal] = useState(false);
+  const [cashHistory, setCashHistory] = useState<CashTransactionRecord[]>([]);
+  const [cashHistoryLoading, setCashHistoryLoading] = useState(false);
+  const [cashHistoryPage, setCashHistoryPage] = useState(1);
+  const cashHistoryPageSize = 20;
+  const [cashHistoryTotal, setCashHistoryTotal] = useState(0);
+
   const [showMemberBulkModal, setShowMemberBulkModal] = useState(false);
   const [memberCsvFile, setMemberCsvFile] = useState<File | null>(null);
   const [memberCsvData, setMemberCsvData] = useState<any[]>([]);
@@ -94,17 +725,57 @@ const AdminPage: React.FC = () => {
 
   const [sheets, setSheets] = useState<DrumSheet[]>([]);
   const [sheetSearchTerm, setSheetSearchTerm] = useState('');
+  const [sheetCategoryFilter, setSheetCategoryFilter] = useState<string>('all');
   const [isAddingSheet, setIsAddingSheet] = useState(false);
+  const [sheetCurrentPage, setSheetCurrentPage] = useState(1);
+  const [sheetItemsPerPage] = useState(20);
+  const [showSheetBulkModal, setShowSheetBulkModal] = useState(false);
+  const [sheetCsvFile, setSheetCsvFile] = useState<File | null>(null);
+  const [sheetCsvData, setSheetCsvData] = useState<any[]>([]);
+  const [isSheetCsvProcessing, setIsSheetCsvProcessing] = useState(false);
   const [newSheet, setNewSheet] = useState({
     title: '',
     artist: '',
     difficulty: 'beginner',
     price: 0,
-    category_id: ''
+    category_id: '',
+    thumbnail_url: '',
+    album_name: '',
+    page_count: 0,
+    tempo: 0,
+    pdf_file: null as File | null,
+    preview_image_url: '',
+    pdf_url: '',
+    youtube_url: ''
+  });
+  const [isLoadingSpotify, setIsLoadingSpotify] = useState(false);
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [editingSheet, setEditingSheet] = useState<DrumSheet | null>(null);
+  const [editingSheetData, setEditingSheetData] = useState({
+    title: '',
+    artist: '',
+    difficulty: 'beginner',
+    price: 0,
+    category_id: '',
+    thumbnail_url: '',
+    album_name: '',
+    page_count: 0,
+    tempo: 0,
+    youtube_url: '',
+    is_active: true
+  });
+  const [selectedSheetIds, setSelectedSheetIds] = useState<string[]>([]);
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [bulkEditData, setBulkEditData] = useState({
+    category_id: '',
+    difficulty: '',
+    price: '',
+    is_active: null as boolean | null
   });
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [newCategory, setNewCategory] = useState({
     name: '',
     description: ''
@@ -112,14 +783,257 @@ const AdminPage: React.FC = () => {
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | OrderStatus>('all');
+  const [orderPaymentFilter, setOrderPaymentFilter] = useState<'all' | string>('all');
+  const [orderStartDate, setOrderStartDate] = useState('');
+  const [orderEndDate, setOrderEndDate] = useState('');
+  const [orderSortKey, setOrderSortKey] = useState<OrderSortKey>('date_desc');
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isOrderDetailModalOpen, setIsOrderDetailModalOpen] = useState(false);
+  const [orderActionLoading, setOrderActionLoading] = useState<'delete' | 'refund' | 'confirm' | null>(null);
+  const [expandedOrderIds, setExpandedOrderIds] = useState<string[]>([]);
+  const isOrderExpanded = useCallback(
+    (orderId: string) => expandedOrderIds.includes(orderId),
+    [expandedOrderIds],
+  );
+  const toggleOrderExpanded = useCallback((orderId: string) => {
+    setExpandedOrderIds((prev) =>
+      prev.includes(orderId) ? prev.filter((id) => id !== orderId) : [...prev, orderId],
+    );
+  }, []);
 
   const [customOrders, setCustomOrders] = useState<CustomOrder[]>([]);
   const [customOrderSearchTerm, setCustomOrderSearchTerm] = useState('');
+  const [customOrderStatusFilter, setCustomOrderStatusFilter] = useState<'all' | CustomOrderStatus>('all');
+  const [selectedCustomOrderId, setSelectedCustomOrderId] = useState<string | null>(null);
+  const [isCustomOrderModalOpen, setIsCustomOrderModalOpen] = useState(false);
+
+  const [customerInquiries, setCustomerInquiries] = useState<CustomerInquiry[]>([]);
+  const [isLoadingInquiries, setIsLoadingInquiries] = useState(false);
+  const [inquirySearchTerm, setInquirySearchTerm] = useState('');
+  const [inquiryStatusFilter, setInquiryStatusFilter] = useState('all');
+  const [inquiryReplyDrafts, setInquiryReplyDrafts] = useState<Record<string, string>>({});
+  const [inquiryReplySubmitting, setInquiryReplySubmitting] = useState<string | null>(null);
+
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [isAddingCollection, setIsAddingCollection] = useState(false);
+  const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
+  const [newCollection, setNewCollection] = useState({
+    title: '',
+    description: '',
+    thumbnail_url: '',
+    original_price: 0,
+    sale_price: 0,
+    discount_percentage: 0,
+    is_active: true,
+    category_id: '',
+    category_ids: [] as string[]
+  });
+  const [editingCollectionData, setEditingCollectionData] = useState({
+    title: '',
+    description: '',
+    thumbnail_url: '',
+    original_price: 0,
+    sale_price: 0,
+    discount_percentage: 0,
+    is_active: true,
+    category_id: '',
+    category_ids: [] as string[]
+  });
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
+  const [collectionSheets, setCollectionSheets] = useState<CollectionSheet[]>([]);
+  const [availableSheets, setAvailableSheets] = useState<DrumSheet[]>([]);
+  const [showCollectionSheetsModal, setShowCollectionSheetsModal] = useState(false);
+  const [selectedSheetsForNewCollection, setSelectedSheetsForNewCollection] = useState<DrumSheet[]>([]);
+  const [collectionSheetSearchTerm, setCollectionSheetSearchTerm] = useState('');
+  const [collectionArtistSearchTerm, setCollectionArtistSearchTerm] = useState('');
+  const [isAddingCollectionLoading, setIsAddingCollectionLoading] = useState(false);
+
+  const [copyrightStartDate, setCopyrightStartDate] = useState<string>(
+    () => getRangeForQuickKey('this-month').start,
+  );
+  const [copyrightEndDate, setCopyrightEndDate] = useState<string>(
+    () => getRangeForQuickKey('this-month').end,
+  );
+  const [copyrightQuickRange, setCopyrightQuickRange] = useState<CopyrightRangeState>('this-month');
+  const [copyrightReportData, setCopyrightReportData] = useState<CopyrightReportRow[]>([]);
+  const [copyrightReportLoading, setCopyrightReportLoading] = useState(false);
+  const [copyrightReportError, setCopyrightReportError] = useState<string | null>(null);
+  const [directSalesData, setDirectSalesData] = useState<DirectSaleRow[]>([]);
+  const [cashChargeData, setCashChargeData] = useState<CashChargeRow[]>([]);
+
+  const [eventDiscounts, setEventDiscounts] = useState<EventDiscountSheet[]>([]);
+  const [isLoadingEventDiscounts, setIsLoadingEventDiscounts] = useState(false);
+  const [eventSearchTerm, setEventSearchTerm] = useState('');
+  const [eventSearchResults, setEventSearchResults] = useState<EventSheetCandidate[]>([]);
+  const [isEventSearchLoading, setIsEventSearchLoading] = useState(false);
+  const [selectedEventSheet, setSelectedEventSheet] = useState<EventSheetCandidate | null>(null);
+  const [eventForm, setEventForm] = useState<EventFormState>(() => createDefaultEventForm());
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [isSavingEventDiscount, setIsSavingEventDiscount] = useState(false);
+  const [updatingEventId, setUpdatingEventId] = useState<string | null>(null);
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
+
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<AnalyticsPeriod>('30d');
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [analyticsExporting, setAnalyticsExporting] = useState(false);
+  const analyticsLoadedRef = useRef(false);
+  const copyrightInitialFetchRef = useRef(false);
+
+  const loadAnalyticsData = useCallback(
+    async (periodValue: AnalyticsPeriod) => {
+      setAnalyticsLoading(true);
+      setAnalyticsError(null);
+      try {
+        const data = await fetchAnalyticsData(periodValue);
+        setAnalyticsData(data);
+        analyticsLoadedRef.current = true;
+      } catch (error: unknown) {
+        console.error('분석 데이터 로드 오류:', error);
+        const message =
+          error instanceof Error ? error.message : '분석 데이터를 불러오지 못했습니다.';
+        setAnalyticsError(message);
+      } finally {
+        setAnalyticsLoading(false);
+      }
+    },
+    [],
+  );
+
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>(() => createDefaultSiteSettings());
+  const [settingsMeta, setSettingsMeta] = useState<Record<SiteSettingKey, SiteSettingsMeta>>(
+    () => createDefaultSettingsMeta()
+  );
+  const [activeSettingsTab, setActiveSettingsTab] = useState<SiteSettingKey>('general');
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  const loadSiteSettings = async () => {
+    if (!isAdmin) {
+      return;
+    }
+
+    setIsLoadingSettings(true);
+    setSettingsError(null);
+
+    try {
+      const { settings, rows } = await fetchSettings();
+      setSiteSettings(settings);
+      setSettingsMeta(buildSettingsMeta(rows));
+    } catch (error) {
+      console.error('사이트 설정 불러오기 오류:', error);
+      const message =
+        error instanceof Error ? error.message : '사이트 설정을 불러오지 못했습니다.';
+      setSettingsError(message);
+    } finally {
+      setIsLoadingSettings(false);
+    }
+  };
+
+  const handleSaveSettings = async (key: SiteSettingKey) => {
+    setIsSavingSettings(true);
+
+    try {
+      const payload = {
+        [key]: siteSettings[key],
+      } as Partial<{ [K in SiteSettingKey]: SiteSettings[K] }>;
+
+      const { settings, rows } = await updateSettings(payload, {
+        updatedBy: user?.email ?? user?.id ?? null,
+      });
+
+      setSiteSettings(settings);
+      setSettingsMeta(buildSettingsMeta(rows));
+    } catch (error) {
+      console.error('사이트 설정 저장 오류:', error);
+      const message =
+        error instanceof Error ? error.message : '사이트 설정을 저장하지 못했습니다.';
+      alert(message);
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const updateGeneralSetting = <K extends keyof SiteSettings['general']>(
+    key: K,
+    value: SiteSettings['general'][K],
+  ) => {
+    setSiteSettings((prev) => ({
+      ...prev,
+      general: {
+        ...prev.general,
+        [key]: value,
+      },
+    }));
+  };
+
+  const updatePaymentSetting = <K extends keyof SiteSettings['payment']>(
+    key: K,
+    value: SiteSettings['payment'][K],
+  ) => {
+    setSiteSettings((prev) => ({
+      ...prev,
+      payment: {
+        ...prev.payment,
+        [key]: value,
+      },
+    }));
+  };
+
+  const updateEventSetting = <K extends keyof SiteSettings['event']>(
+    key: K,
+    value: SiteSettings['event'][K],
+  ) => {
+    setSiteSettings((prev) => ({
+      ...prev,
+      event: {
+        ...prev.event,
+        [key]: value,
+      },
+    }));
+  };
+
+  const updateSystemSetting = <K extends keyof SiteSettings['system']>(
+    key: K,
+    value: SiteSettings['system'][K],
+  ) => {
+    setSiteSettings((prev) => ({
+      ...prev,
+      system: {
+        ...prev.system,
+        [key]: value,
+      },
+    }));
+  };
+
+  const updateNotificationSetting = <K extends keyof SiteSettings['notification']>(
+    key: K,
+    value: SiteSettings['notification'][K],
+  ) => {
+    setSiteSettings((prev) => ({
+      ...prev,
+      notification: {
+        ...prev.notification,
+        [key]: value,
+      },
+    }));
+  };
+
+  // 관리자 이메일 목록
+  const ADMIN_EMAILS = ['copydrum@hanmail.net'];
 
   // 관리자 권한 확인 함수 추가
   const checkAdminStatus = async (currentUser: User) => {
     try {
-      // 프로필 조회
+      const userEmail = currentUser.email || '';
+      
+      // 1. 먼저 이메일로 관리자 여부 확인 (빠른 체크)
+      const isAdminEmail = ADMIN_EMAILS.includes(userEmail);
+      
+      // 2. 프로필 조회 시도
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('is_admin')
@@ -127,33 +1041,69 @@ const AdminPage: React.FC = () => {
         .single();
 
       if (error) {
+        console.log('프로필 조회 오류:', error);
+        
         if (error.code === 'PGRST116') {
           // 프로필이 없으면 생성
+          const isAdmin = isAdminEmail; // 이메일로 관리자 여부 결정
+          
           const { error: insertError } = await supabase
             .from('profiles')
             .insert([{
               id: currentUser.id,
-              email: currentUser.email || '',
-              name: currentUser.user_metadata?.name || currentUser.email?.split('@')[0] || '',
-              is_admin: false
+              email: userEmail,
+              name: currentUser.user_metadata?.name || userEmail.split('@')[0] || '',
+              is_admin: isAdmin
             }]);
 
           if (insertError) {
             console.error('프로필 생성 오류:', insertError);
+            // 프로필 생성 실패해도 이메일로 관리자 체크
+            if (isAdminEmail) {
+              setIsAdmin(true);
+              setAuthChecked(true);
+              await loadDashboardData();
+              return;
+            }
             window.location.href = LOGIN_PATH;
             return;
           }
 
+          // 관리자로 생성된 경우
+          if (isAdmin) {
+            setIsAdmin(true);
+            setAuthChecked(true);
+            await loadDashboardData();
+            return;
+          }
+          
           // 일반 사용자로 설정
           setIsAdmin(false);
           setAuthChecked(true);
           window.location.href = '/';
           return;
         }
-        throw error;
+        
+        // 프로필 조회 실패 시 이메일로 체크
+        console.log('프로필 조회 실패, 이메일로 관리자 체크:', userEmail);
+        if (isAdminEmail) {
+          setIsAdmin(true);
+          setAuthChecked(true);
+          await loadDashboardData();
+          return;
+        }
+        
+        // 프로필 조회 실패하고 관리자 이메일도 아니면 로그인으로
+        console.error('프로필 조회 오류:', error);
+        window.location.href = LOGIN_PATH;
+        return;
       }
 
-      if (profile?.is_admin) {
+      // 프로필이 있는 경우
+      const isAdminFromProfile = profile?.is_admin || false;
+      const isAdmin = isAdminFromProfile || isAdminEmail; // 프로필 또는 이메일로 관리자 확인
+
+      if (isAdmin) {
         setIsAdmin(true);
         setAuthChecked(true);
         // 관리자인 경우 대시보드 데이터 로드
@@ -165,6 +1115,14 @@ const AdminPage: React.FC = () => {
       }
     } catch (error) {
       console.error('관리자 권한 확인 오류:', error);
+      // 에러 발생 시에도 이메일로 체크
+      const userEmail = currentUser.email || '';
+      if (ADMIN_EMAILS.includes(userEmail)) {
+        setIsAdmin(true);
+        setAuthChecked(true);
+        await loadDashboardData();
+        return;
+      }
       window.location.href = LOGIN_PATH;
     }
   };
@@ -188,12 +1146,12 @@ const AdminPage: React.FC = () => {
       }
 
       // 2. 세션이 없으면 상태 변화 대기 (탭 복귀·리다이렉트 지연 대응)
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, s) => {
-        if (s?.user) {
-          setUser(s.user);
-          await checkAdminStatus(s.user);
-            subscription.unsubscribe();
-        } else if (event === 'SIGNED_OUT' || !s) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
+        if (session?.user) {
+          setUser(session.user);
+          await checkAdminStatus(session.user);
+          subscription.unsubscribe();
+        } else if (event === 'SIGNED_OUT' || !session) {
           window.location.href = LOGIN_PATH;
         }
       });
@@ -216,6 +1174,19 @@ const AdminPage: React.FC = () => {
     checkAuth();
   }, []);
 
+  useEffect(() => {
+    setExpandedOrderIds((prev) => prev.filter((id) => orders.some((order) => order.id === id)));
+  }, [orders]);
+
+  useEffect(() => {
+    if (activeMenu !== 'analytics' || !isAdmin) {
+      return;
+    }
+    void loadAnalyticsData(analyticsPeriod);
+  }, [activeMenu, analyticsPeriod, isAdmin, loadAnalyticsData]);
+
+  // loadCopyrightReport 함수는 아래에서 정의되므로, useEffect는 함수 정의 이후로 이동됨
+
   // 기존 코드: loadDashboardData, loadMembers, loadSheets, loadCategories, loadOrders, loadCustomOrders
   const loadDashboardData = async () => {
     setLoading(true);
@@ -237,7 +1208,11 @@ const AdminPage: React.FC = () => {
         .select('total_amount')
         .eq('status', 'completed');
 
-      const totalRevenue = revenueData?.reduce((sum, order) => sum + order.total_amount, 0) || 0;
+      const totalRevenue =
+        revenueData?.reduce(
+          (sum: number, order: { total_amount: number | null }) => sum + (order.total_amount ?? 0),
+          0
+        ) ?? 0;
 
       setDashboardStats({
         totalUsers: userCount || 0,
@@ -256,27 +1231,370 @@ const AdminPage: React.FC = () => {
 
   const loadMembers = async () => {
     try {
+      // 먼저 총 개수 확인
+      const { count: totalCount, error: countError } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true });
+
+      if (countError) {
+        console.error('회원 개수 확인 오류:', countError);
+        throw countError;
+      }
+
+      console.log(`📊 총 회원 개수: ${totalCount}명`);
+
+      let allMembers: Profile[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      const totalPages = Math.ceil((totalCount || 0) / pageSize);
+
+      console.log(`회원 데이터 로드 시작... (총 ${totalPages}페이지 예상)`);
+
+      // 1000개씩 페이지네이션하여 모든 데이터 가져오기
+      for (let page = 0; page < totalPages; page++) {
+        const to = from + pageSize - 1;
+        console.log(`[${page + 1}/${totalPages}] 회원 데이터 로드 중: ${from} ~ ${to}`);
+        
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
-        .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .range(from, to)
+          .limit(pageSize);
 
-      if (error) throw error;
-      setMembers(data || []);
+        if (error) {
+          console.error(`[${page + 1}/${totalPages}] 회원 데이터 로드 오류:`, error);
+          throw error;
+        }
+
+        if (data && data.length > 0) {
+          allMembers = [...allMembers, ...data];
+          console.log(`✅ [${page + 1}/${totalPages}] 현재까지 로드된 회원 수: ${allMembers.length}명 (이번 페이지: ${data.length}명)`);
+          from += pageSize;
+        } else {
+          console.log(`⚠️ [${page + 1}/${totalPages}] 데이터가 없습니다.`);
+          break;
+        }
+      }
+
+      setMembers(allMembers);
+      console.log(`🎉 최종 로드 완료: 총 ${allMembers.length}명의 회원을 로드했습니다. (예상: ${totalCount}명)`);
+      
+      if (allMembers.length !== totalCount) {
+        console.warn(`⚠️ 경고: 로드된 회원 수(${allMembers.length})와 총 개수(${totalCount})가 일치하지 않습니다.`);
+      }
     } catch (error) {
       console.error('회원 목록 로드 오류:', error);
     }
   };
 
+  const loadCashOverview = async () => {
+    setCashLoading(true);
+    try {
+      const { count: totalCount, error: countError } = await supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true });
+
+      if (countError) {
+        throw countError;
+      }
+
+      const totalMembersCount = totalCount ?? 0;
+      const pageSize = 1000;
+      const totalPages = totalMembersCount > 0 ? Math.ceil(totalMembersCount / pageSize) : 0;
+      let allProfiles: Profile[] = [];
+
+      for (let page = 0; page < totalPages; page++) {
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, email, name, kakao_id, google_id, is_admin, credits, created_at, updated_at')
+          .order('created_at', { ascending: false })
+          .range(from, to);
+
+        if (error) {
+          throw error;
+        }
+
+        if (!data?.length) {
+          break;
+        }
+
+        allProfiles = [...allProfiles, ...data];
+
+        if (data.length < pageSize) {
+          break;
+        }
+      }
+
+      const memberList: Profile[] = allProfiles.map((profile) => ({
+        ...profile,
+        credits: profile.credits ?? 0,
+      }));
+
+      setCashMembers(memberList);
+      setCashCurrentPage(1);
+
+      const totalBalance = memberList.reduce((sum, profile) => sum + (profile.credits ?? 0), 0);
+      const now = new Date();
+      const startOfMonthIso = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+      const { data: transactionData, error: transactionError } = await supabase
+        .from('cash_transactions')
+        .select('transaction_type, amount, bonus_amount')
+        .gte('created_at', startOfMonthIso);
+
+      if (transactionError) {
+        throw transactionError;
+      }
+
+      let monthlyCharged = 0;
+      let monthlyUsed = 0;
+
+      (transactionData ?? []).forEach((transaction) => {
+        const amount = transaction.amount ?? 0;
+        const bonus = transaction.bonus_amount ?? 0;
+        if (transaction.transaction_type === 'charge' || transaction.transaction_type === 'admin_add') {
+          monthlyCharged += amount + bonus;
+        }
+        if (transaction.transaction_type === 'use' || transaction.transaction_type === 'admin_deduct') {
+          monthlyUsed += Math.abs(amount);
+        }
+      });
+
+      setCashStats({
+        totalMembers: totalMembersCount,
+        totalBalance,
+        monthlyCharged,
+        monthlyUsed,
+      });
+    } catch (error) {
+      console.error('적립금 데이터 로드 오류:', error);
+      alert('적립금 데이터를 불러오는 중 문제가 발생했습니다.');
+    } finally {
+      setCashLoading(false);
+    }
+  };
+
+  const handleOpenCashAdjustModal = (member: Profile) => {
+    setSelectedCashMember(member);
+    setCashAdjustType('admin_add');
+    setCashAdjustAmount(0);
+    setCashAdjustReason('');
+    setShowCashAdjustModal(true);
+  };
+
+  const handleCloseCashAdjustModal = () => {
+    setShowCashAdjustModal(false);
+    setCashAdjustAmount(0);
+    setCashAdjustReason('');
+    setSelectedCashMember(null);
+  };
+
+  const handleSubmitCashAdjust = async () => {
+    if (!selectedCashMember) {
+      return;
+    }
+
+    if (cashAdjustAmount <= 0 || Number.isNaN(cashAdjustAmount)) {
+      alert('1원 이상의 금액을 입력하세요.');
+      return;
+    }
+
+    const baseAmount = Math.abs(Math.floor(cashAdjustAmount));
+    const diff = cashAdjustType === 'admin_deduct' ? -baseAmount : baseAmount;
+    const currentCredits = selectedCashMember.credits ?? 0;
+    const newBalance = currentCredits + diff;
+
+    if (newBalance < 0) {
+      alert('차감 후 잔액이 0 미만이 될 수 없습니다.');
+      return;
+    }
+
+    try {
+      const description =
+        cashAdjustReason.trim() ||
+        (cashAdjustType === 'admin_add' ? '관리자 캐쉬 추가' : '관리자 캐쉬 차감');
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ credits: newBalance })
+        .eq('id', selectedCashMember.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      const { error: insertError } = await supabase
+        .from('cash_transactions')
+        .insert([
+          {
+            user_id: selectedCashMember.id,
+            transaction_type: cashAdjustType,
+            amount: diff,
+            bonus_amount: 0,
+            balance_after: newBalance,
+            description,
+            created_by: user?.id ?? null,
+          },
+        ]);
+
+      if (insertError) {
+        throw insertError;
+      }
+
+      alert('캐쉬가 업데이트되었습니다.');
+      handleCloseCashAdjustModal();
+      await loadCashOverview();
+    } catch (error) {
+      console.error('캐쉬 수정 오류:', error);
+      alert('캐쉬 수정 중 오류가 발생했습니다.');
+    }
+  };
+
+  const fetchCashHistory = async (memberId: string, page = 1) => {
+    setCashHistoryLoading(true);
+    try {
+      const from = (page - 1) * cashHistoryPageSize;
+      const to = from + cashHistoryPageSize - 1;
+
+      const { data, error, count } = await supabase
+        .from('cash_transactions')
+        .select(
+          `
+            id,
+            user_id,
+            transaction_type,
+            amount,
+            bonus_amount,
+            balance_after,
+            description,
+            sheet_id,
+            order_id,
+            created_by,
+            created_at,
+            sheet:drum_sheets (id, title)
+          `,
+          { count: 'exact' }
+        )
+        .eq('user_id', memberId)
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (error) {
+        throw error;
+      }
+
+      setCashHistory((data as CashTransactionRecord[]) ?? []);
+      setCashHistoryTotal(count ?? 0);
+      setCashHistoryPage(page);
+    } catch (error) {
+      console.error('캐쉬 내역 로드 오류:', error);
+      alert('캐쉬 내역을 불러오는 중 오류가 발생했습니다.');
+    } finally {
+      setCashHistoryLoading(false);
+    }
+  };
+
+  const handleOpenCashHistoryModal = async (member: Profile) => {
+    setSelectedCashMember(member);
+    setShowCashHistoryModal(true);
+    await fetchCashHistory(member.id, 1);
+  };
+
+  const handleChangeCashHistoryPage = async (page: number) => {
+    if (!selectedCashMember) {
+      return;
+    }
+    await fetchCashHistory(selectedCashMember.id, page);
+  };
+
+  const handleCloseCashHistoryModal = () => {
+    setShowCashHistoryModal(false);
+    setCashHistory([]);
+    setCashHistoryPage(1);
+    setCashHistoryTotal(0);
+    setSelectedCashMember(null);
+  };
+
   const loadSheets = async () => {
     try {
-      const { data, error } = await supabase
+      // 먼저 총 개수 확인
+      const { count: totalCount, error: countError } = await supabase
         .from('drum_sheets')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*', { count: 'exact', head: true });
 
-      if (error) throw error;
-      setSheets(data || []);
+      if (countError) {
+        console.error('악보 개수 확인 오류:', countError);
+        throw countError;
+      }
+
+      console.log(`📊 총 악보 개수: ${totalCount}개`);
+
+      let allSheets: DrumSheet[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      const totalPages = Math.ceil((totalCount || 0) / pageSize);
+
+      console.log(`악보 데이터 로드 시작... (총 ${totalPages}페이지 예상)`);
+
+      // 1000개씩 페이지네이션하여 모든 데이터 가져오기
+      for (let page = 0; page < totalPages; page++) {
+        const to = from + pageSize - 1;
+        console.log(`[${page + 1}/${totalPages}] 악보 데이터 로드 중: ${from} ~ ${to}`);
+        
+        const { data, error } = await supabase
+          .from('drum_sheets')
+          .select('id, title, artist, difficulty, price, category_id, created_at, is_active, thumbnail_url, album_name, page_count, tempo, youtube_url, categories (id, name)')
+          .order('created_at', { ascending: false })
+          .range(from, to)
+          .limit(pageSize);
+
+        if (error) {
+          console.error(`[${page + 1}/${totalPages}] 악보 데이터 로드 오류:`, error);
+          throw error;
+        }
+
+        if (data && data.length > 0) {
+          // 난이도 필드 확인용 디버깅 (첫 3개 악보)
+          if (page === 0 && data.length > 0) {
+            console.log('🔍 악보 난이도 확인 (처음 3개):');
+            data.slice(0, 3).forEach((sheet: any, index: number) => {
+              console.log(`  [${index + 1}] ID: ${sheet.id}, 제목: ${sheet.title}, 난이도: "${sheet.difficulty}" (타입: ${typeof sheet.difficulty})`);
+            });
+          }
+          allSheets = [...allSheets, ...data];
+          console.log(`✅ [${page + 1}/${totalPages}] 현재까지 로드된 악보 수: ${allSheets.length}개 (이번 페이지: ${data.length}개)`);
+          from += pageSize;
+        } else {
+          console.log(`⚠️ [${page + 1}/${totalPages}] 데이터가 없습니다.`);
+          break;
+        }
+      }
+
+      // 난이도 필드 통계 확인
+      const difficultyStats: { [key: string]: number } = {};
+      allSheets.forEach((sheet: any) => {
+        const diff = sheet.difficulty;
+        const key = diff ? String(diff) : 'null/undefined';
+        difficultyStats[key] = (difficultyStats[key] || 0) + 1;
+      });
+      console.log('📊 난이도 필드 통계:', difficultyStats);
+      
+      // 난이도가 없는 악보 샘플 출력
+      const sheetsWithoutDifficulty = allSheets.filter((sheet: any) => !sheet.difficulty).slice(0, 5);
+      if (sheetsWithoutDifficulty.length > 0) {
+        console.warn(`⚠️ 난이도가 없는 악보 (최대 5개):`, sheetsWithoutDifficulty.map((s: any) => ({ id: s.id, title: s.title })));
+      }
+      
+      setSheets(allSheets);
+      console.log(`🎉 최종 로드 완료: 총 ${allSheets.length}개의 악보를 로드했습니다. (예상: ${totalCount}개)`);
+      
+      if (allSheets.length !== totalCount) {
+        console.warn(`⚠️ 경고: 로드된 악보 수(${allSheets.length})와 총 개수(${totalCount})가 일치하지 않습니다.`);
+      }
     } catch (error) {
       console.error('악보 목록 로드 오류:', error);
     }
@@ -300,20 +1618,745 @@ const AdminPage: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select(`
-          *,
+        .select(
+          `
+          id,
+          order_number,
+          user_id,
+          total_amount,
+          status,
+          payment_method,
+          payment_status,
+          transaction_id,
+          depositor_name,
+          payment_confirmed_at,
+          virtual_account_info,
+          metadata,
+          created_at,
+          updated_at,
           profiles (
             id,
             email,
             name
+          ),
+          order_items (
+            id,
+            drum_sheet_id,
+            sheet_title,
+            price,
+            created_at,
+            drum_sheets (
+              id,
+              title,
+              artist,
+              price,
+              thumbnail_url,
+              pdf_url,
+              preview_image_url
+            )
           )
-        `)
+        `
+        )
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setOrders(data || []);
+
+      const normalizedOrders: Order[] =
+        data?.map((order: any) => ({
+          ...order,
+          order_number: order.order_number ?? null,
+          status: normalizeOrderStatus(order.status),
+          raw_status: order.status ?? null,
+          payment_method: order.payment_method ?? null,
+          payment_status: order.payment_status ?? null,
+          transaction_id: order.transaction_id ?? null,
+          depositor_name: order.depositor_name ?? null,
+          payment_confirmed_at: order.payment_confirmed_at ?? null,
+          virtual_account_info: (order.virtual_account_info ?? null) as VirtualAccountInfo | null,
+          metadata: order.metadata ?? null,
+          order_items: Array.isArray(order.order_items)
+            ? order.order_items.map((item: any) => ({
+                ...item,
+                sheet_id: item.drum_sheet_id ?? item.sheet_id ?? null,
+                drum_sheets: item.drum_sheets ?? null,
+              }))
+            : [],
+        })) ?? [];
+
+      setOrders(normalizedOrders);
+
+      if (selectedOrder) {
+        const updatedSelected = normalizedOrders.find((item) => item.id === selectedOrder.id);
+        if (updatedSelected) {
+          setSelectedOrder(updatedSelected);
+        }
+      }
     } catch (error) {
       console.error('주문 목록 로드 오류:', error);
+    }
+  };
+
+  const handleOpenOrderDetail = (order: Order) => {
+    setSelectedOrder(order);
+    setIsOrderDetailModalOpen(true);
+  };
+
+  const handleCloseOrderDetail = () => {
+    setIsOrderDetailModalOpen(false);
+    setSelectedOrder(null);
+    setOrderActionLoading(null);
+  };
+
+  const handleDeleteOrderWithoutRefund = async () => {
+    if (!selectedOrder) {
+      return;
+    }
+
+    if (orderActionLoading) {
+      return;
+    }
+
+    const {
+      data: latestOrder,
+      error: latestOrderError,
+    } = await supabase
+      .from('orders')
+      .select('status,order_number')
+      .eq('id', selectedOrder.id)
+      .single();
+
+    if (latestOrderError) {
+      alert('최신 주문 정보를 가져오지 못했습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
+    const latestStatus = (latestOrder?.status ?? '').toLowerCase() as OrderStatus | '';
+    if (latestStatus === 'refunded') {
+      alert('이미 환불 완료된 주문입니다.');
+      return;
+    }
+
+    if (latestStatus === 'cancelled') {
+      alert('이미 취소된 주문입니다.');
+      return;
+    }
+
+    if (latestStatus && !CANCELLABLE_STATUSES.includes(latestStatus as OrderStatus)) {
+      alert('이 주문은 현재 상태에서 취소할 수 없습니다.');
+      return;
+    }
+
+    const displayNumber =
+      latestOrder?.order_number ??
+      selectedOrder.order_number ??
+      selectedOrder.id.slice(0, 8).toUpperCase();
+
+    const confirmed = window.confirm(
+      `이 주문을 환불 없이 취소하시겠습니까?\n주문 번호: ${displayNumber}\n취소 시 다운로드 권한이 즉시 제거됩니다.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setOrderActionLoading('delete');
+    try {
+      const { data: cancelResult, error: cancelError } = await supabase.functions.invoke('admin-cancel-order', {
+        body: {
+          orderId: selectedOrder.id,
+          doRefund: false,
+        },
+      });
+
+    if (cancelError) {
+      throw cancelError;
+      }
+
+      await loadOrders();
+    alert(cancelResult?.status === 'cancelled' ? '주문이 환불 없이 취소되었습니다.' : '주문 처리가 완료되었습니다.');
+      handleCloseOrderDetail();
+    } catch (error: any) {
+      console.error('주문 취소 오류:', error);
+      alert(error?.message || '주문 취소 중 오류가 발생했습니다.');
+    } finally {
+      setOrderActionLoading(null);
+    }
+  };
+
+  const handleRefundOrder = async () => {
+    if (!selectedOrder) {
+      return;
+    }
+
+    if (orderActionLoading) {
+      return;
+    }
+
+    const {
+      data: latestOrder,
+      error: latestOrderError,
+    } = await supabase
+      .from('orders')
+      .select('status,total_amount,order_number')
+      .eq('id', selectedOrder.id)
+      .single();
+
+    if (latestOrderError) {
+      alert('최신 주문 정보를 가져오지 못했습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
+    const latestStatus = (latestOrder?.status ?? '').toLowerCase() as OrderStatus | '';
+    if (latestStatus === 'refunded') {
+      alert('이미 환불 처리된 주문입니다.');
+      return;
+    }
+
+    if (latestStatus && !REFUNDABLE_STATUSES.includes(latestStatus as OrderStatus)) {
+      alert('이 주문은 환불 가능한 상태가 아닙니다.');
+      return;
+    }
+
+    const refundAmount = Math.max(0, latestOrder?.total_amount ?? selectedOrder.total_amount ?? 0);
+    const displayNumber =
+      latestOrder?.order_number ??
+      selectedOrder.order_number ??
+      selectedOrder.id.slice(0, 8).toUpperCase();
+
+    if (refundAmount === 0) {
+      const confirmedZero = window.confirm(
+        `환불 가능한 금액이 없습니다. 주문 상태만 '환불 완료'로 변경하시겠습니까?`,
+      );
+      if (!confirmedZero) {
+        return;
+      }
+    }
+
+    const confirmed = window.confirm(
+      `이 주문을 환불 처리하고 상태를 '환불 완료'로 변경하시겠습니까?\n환불 금액: ${formatCurrency(refundAmount)}P`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setOrderActionLoading('refund');
+    try {
+      const { data: refundResult, error: refundError } = await supabase.functions.invoke('admin-cancel-order', {
+        body: {
+          orderId: selectedOrder.id,
+          doRefund: true,
+        },
+      });
+
+    if (refundError) {
+      throw refundError;
+      }
+
+      await loadOrders();
+    alert(refundResult?.status === 'refunded' ? '환불 처리가 완료되었습니다.' : '주문 처리가 완료되었습니다.');
+      handleCloseOrderDetail();
+    } catch (error: any) {
+      console.error('주문 환불 오류:', error);
+      alert(error?.message || '주문 환불 처리 중 오류가 발생했습니다.');
+    } finally {
+      setOrderActionLoading(null);
+    }
+  };
+
+  const handleConfirmBankDeposit = async () => {
+    if (!selectedOrder) {
+      return;
+    }
+
+    if (orderActionLoading) {
+      return;
+    }
+
+    const paymentKey = selectedOrder.payment_method
+      ? normalizePaymentMethodKey(selectedOrder.payment_method)
+      : '';
+    const isBankTransfer = ['bank_transfer', 'virtual_account'].includes(paymentKey);
+
+    if (!isBankTransfer) {
+      alert('무통장입금 주문이 아닙니다.');
+      return;
+    }
+
+    const normalizedStatus = (selectedOrder.status ?? '').toLowerCase();
+    if (normalizedStatus !== 'awaiting_deposit' && normalizedStatus !== 'pending') {
+      alert('입금 대기 상태의 주문만 수동 확인할 수 있습니다.');
+      return;
+    }
+
+    const confirmed = window.confirm('입금을 확인하고 주문을 완료 상태로 전환하시겠습니까?');
+    if (!confirmed) {
+      return;
+    }
+
+    setOrderActionLoading('confirm');
+
+    try {
+      const nowIso = new Date().toISOString();
+      const manualTransactionId =
+        selectedOrder.transaction_id && selectedOrder.transaction_id.trim().length > 0
+          ? selectedOrder.transaction_id
+          : `manual-${Date.now()}`;
+
+      const isCashCharge =
+        (selectedOrder.metadata?.type === 'cash_charge' ||
+          selectedOrder.metadata?.purpose === 'cash_charge') &&
+        (selectedOrder.order_items?.length ?? 0) === 0;
+
+      if (isCashCharge) {
+        const chargeAmount = Math.max(0, selectedOrder.total_amount ?? 0);
+        const bonusAmount = Number(selectedOrder.metadata?.bonusAmount ?? 0);
+
+        const {
+          data: profile,
+          error: profileError,
+        } = await supabase.from('profiles').select('credits').eq('id', selectedOrder.user_id).single();
+
+        if (profileError) {
+          throw profileError;
+        }
+
+        const currentCredits = profile?.credits ?? 0;
+        const newCredits = currentCredits + chargeAmount + bonusAmount;
+
+        const { error: updateProfileError } = await supabase
+          .from('profiles')
+          .update({ credits: newCredits })
+          .eq('id', selectedOrder.user_id);
+
+        if (updateProfileError) {
+          throw updateProfileError;
+        }
+
+        const { error: cashTxError } = await supabase.from('cash_transactions').insert([
+          {
+            user_id: selectedOrder.user_id,
+            transaction_type: 'charge',
+            amount: chargeAmount,
+            bonus_amount: bonusAmount,
+            balance_after: newCredits,
+            description: '무통장입금 수동 확인 (관리자)',
+            created_by: user?.id ?? selectedOrder.user_id,
+            order_id: selectedOrder.id,
+          },
+        ]);
+
+        if (cashTxError) {
+          throw cashTxError;
+        }
+
+        await loadCashOverview();
+      }
+
+      const { error: orderUpdateError } = await supabase
+        .from('orders')
+        .update({
+          status: 'completed',
+          payment_status: 'paid',
+          payment_confirmed_at: nowIso,
+          transaction_id: manualTransactionId,
+        })
+        .eq('id', selectedOrder.id);
+
+      if (orderUpdateError) {
+        throw orderUpdateError;
+      }
+
+      const { error: paymentLogError } = await supabase
+        .from('payment_transactions')
+        .update({
+          status: 'paid',
+          pg_transaction_id: manualTransactionId,
+          updated_at: nowIso,
+        })
+        .eq('order_id', selectedOrder.id);
+
+      if (paymentLogError) {
+        console.warn('결제 로그 업데이트 실패:', paymentLogError);
+      }
+
+      await loadOrders();
+      alert('입금 확인 처리가 완료되었습니다.');
+      handleCloseOrderDetail();
+    } catch (error: any) {
+      console.error('입금 확인 처리 오류:', error);
+      alert(error?.message ?? '입금 확인 처리 중 오류가 발생했습니다.');
+    } finally {
+      setOrderActionLoading(null);
+    }
+  };
+
+  const clearOrderFilters = () => {
+    setOrderStatusFilter('all');
+    setOrderPaymentFilter('all');
+    setOrderStartDate('');
+    setOrderEndDate('');
+    setOrderSortKey('date_desc');
+  };
+
+  const handleExportOrders = () => {
+    if (sortedOrders.length === 0) {
+      alert('내보낼 주문이 없습니다. 검색/필터 조건을 확인해주세요.');
+      return;
+    }
+
+    const headers = ['주문ID', '주문일시', '고객명', '이메일', '결제수단', '상태', '총금액', '구매악보수'];
+    const rows = sortedOrders.map((order) => {
+      const paymentLabel = getPaymentMethodLabel(order.payment_method);
+      const statusLabel = getOrderStatusMetaSafe(order.status).label;
+      const itemCount = order.order_items?.length ?? 0;
+
+      return [
+        order.id,
+        formatDateTime(order.created_at),
+        order.profiles?.name ?? '이름 미확인',
+        order.profiles?.email ?? '',
+        paymentLabel,
+        statusLabel,
+        order.total_amount,
+        itemCount,
+      ];
+    });
+
+    const escapeCsv = (value: unknown) => {
+      if (value === null || value === undefined) {
+        return '';
+      }
+      const stringValue = String(value);
+      if (/[",\n]/.test(stringValue)) {
+        return `"${stringValue.replace(/"/g, '""')}"`;
+      }
+      return stringValue;
+    };
+
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => escapeCsv(cell)).join(','))
+      .join('\r\n');
+
+    const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `orders_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const loadCopyrightReport = useCallback(
+    async (rangeOverride?: { start: string; end: string }) => {
+      const appliedStart = rangeOverride?.start ?? copyrightStartDate;
+      const appliedEnd = rangeOverride?.end ?? copyrightEndDate;
+
+      if (!appliedStart || !appliedEnd) {
+        setCopyrightReportError('조회 기간을 선택해주세요.');
+        return;
+      }
+
+      const startDateObj = new Date(`${appliedStart}T00:00:00`);
+      const endDateObj = new Date(`${appliedEnd}T00:00:00`);
+      if (Number.isNaN(startDateObj.getTime()) || Number.isNaN(endDateObj.getTime())) {
+        setCopyrightReportError('유효한 날짜를 선택해주세요.');
+        return;
+      }
+
+      if (startDateObj > endDateObj) {
+        setCopyrightReportError('조회 시작일이 종료일보다 늦습니다.');
+        return;
+      }
+
+      setCopyrightReportLoading(true);
+      setCopyrightReportError(null);
+      setDirectSalesData([]);
+      setCashChargeData([]);
+
+      try {
+        const startTimestamp = `${appliedStart}T00:00:00`;
+        const endTimestamp = `${appliedEnd}T23:59:59.999`;
+
+        const { data, error } = await supabase
+          .from('orders')
+          .select(
+            `
+            id,
+            order_number,
+            created_at,
+            status,
+            payment_method,
+            total_amount,
+            profiles:profiles!orders_user_id_fkey (
+              id,
+              email
+            ),
+            order_items (
+              id,
+              drum_sheet_id,
+              sheet_title,
+              price,
+              created_at,
+              drum_sheets (
+                id,
+                title,
+                artist,
+                price,
+                album_name
+              )
+            )
+          `,
+          )
+          .eq('status', 'completed')
+          .in('payment_method', [...KOREAN_PAYMENT_METHODS])
+          .gte('created_at', startTimestamp)
+          .lte('created_at', endTimestamp)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          throw error;
+        }
+
+        const aggregatedMap = new Map<string, CopyrightReportRow>();
+        const sheetIds = new Set<string>();
+
+        (data ?? []).forEach((order: any) => {
+          const items = Array.isArray(order.order_items) ? order.order_items : [];
+          items.forEach((item: any) => {
+            const sheet = item.drum_sheets ?? null;
+            const sheetId = sheet?.id ?? item.drum_sheet_id ?? null;
+            if (!sheetId) {
+              return;
+            }
+
+            sheetIds.add(sheetId);
+
+            const resolvedTitle = sheet?.title ?? item.sheet_title ?? '';
+            const resolvedArtist = sheet?.artist ?? '';
+            const resolvedAlbum = (sheet?.album_name ?? null) as string | null;
+
+            const resolvedAmount = Number(
+              typeof item.price === 'number' ? item.price : sheet?.price ?? 0,
+            );
+            const normalizedAmount = Number.isFinite(resolvedAmount) ? resolvedAmount : 0;
+
+            const existing = aggregatedMap.get(sheetId);
+            if (existing) {
+              existing.purchaseCount += 1;
+              existing.revenue += normalizedAmount;
+              if (!existing.albumName && resolvedAlbum) {
+                existing.albumName = resolvedAlbum;
+              }
+            } else {
+              aggregatedMap.set(sheetId, {
+                songId: sheetId,
+                title: resolvedTitle,
+                artist: resolvedArtist,
+                albumName: resolvedAlbum,
+                categoryName: null,
+                purchaseCount: 1,
+                unitAmount: normalizedAmount,
+                revenue: normalizedAmount,
+              });
+            }
+          });
+        });
+
+        const directSalesRows: DirectSaleRow[] = (data ?? []).map((order: any) => {
+          const orderItems = Array.isArray(order.order_items) ? order.order_items : [];
+          const paymentMethod: string | null = order.payment_method ?? null;
+          const paymentMethodLabel = getPaymentMethodLabel(paymentMethod);
+
+          return {
+            orderId: order.id,
+            orderNumber: order.order_number ?? null,
+            orderedAt: order.created_at,
+            paymentMethod,
+            paymentMethodLabel,
+            totalAmount: Number(order.total_amount ?? 0),
+            itemCount: orderItems.length,
+            customerEmail: order.profiles?.email ?? null,
+          };
+        });
+
+        setDirectSalesData(directSalesRows);
+
+        const { data: cashData, error: cashError } = await supabase
+          .from('cash_transactions')
+          .select(
+            `
+            id,
+            user_id,
+            amount,
+            bonus_amount,
+            balance_after,
+            description,
+            created_at,
+            profiles:profiles!cash_transactions_user_id_fkey (
+              email
+            )
+          `,
+          )
+          .eq('transaction_type', 'charge')
+          .gte('created_at', startTimestamp)
+          .lte('created_at', endTimestamp)
+          .order('created_at', { ascending: false });
+
+        if (cashError) {
+          throw cashError;
+        }
+
+        const cashRows: CashChargeRow[] = (cashData ?? []).map((transaction: any) => {
+          const amount = Number(transaction.amount ?? 0);
+          const bonusAmount = Number(transaction.bonus_amount ?? 0);
+          const totalCredit = amount + bonusAmount;
+
+          return {
+            id: transaction.id,
+            userId: transaction.user_id,
+            userEmail: transaction.profiles?.email ?? null,
+            chargedAt: transaction.created_at,
+            amount,
+            bonusAmount,
+            totalCredit,
+            description: transaction.description ?? null,
+            paymentLabel: extractPaymentLabelFromDescription(transaction.description),
+          };
+        });
+
+        setCashChargeData(cashRows);
+
+        // 카테고리 정보 별도 조회
+        if (sheetIds.size > 0) {
+          const { data: categoryData, error: categoryError } = await supabase
+            .from('drum_sheet_categories')
+            .select(
+              `
+              sheet_id,
+              category:categories (
+                name
+              )
+            `,
+            )
+            .in('sheet_id', Array.from(sheetIds));
+
+          if (!categoryError && categoryData) {
+            const categoryMap = new Map<string, string>();
+            categoryData.forEach((row: any) => {
+              if (row.sheet_id && row.category?.name) {
+                const existingCategory = categoryMap.get(row.sheet_id);
+                if (!existingCategory) {
+                  categoryMap.set(row.sheet_id, row.category.name);
+                }
+              }
+            });
+
+            // 카테고리 정보 적용
+            aggregatedMap.forEach((row) => {
+              const categoryName = categoryMap.get(row.songId);
+              if (categoryName) {
+                row.categoryName = categoryName;
+              }
+            });
+          }
+        }
+
+        const rows = Array.from(aggregatedMap.values()).map((row) => ({
+          ...row,
+          unitAmount:
+            row.purchaseCount > 0 ? Number(row.revenue / row.purchaseCount) : row.unitAmount,
+        }));
+
+        rows.sort((a, b) => {
+          if (b.revenue !== a.revenue) {
+            return b.revenue - a.revenue;
+          }
+          if (b.purchaseCount !== a.purchaseCount) {
+            return b.purchaseCount - a.purchaseCount;
+          }
+          return a.title.localeCompare(b.title, 'ko');
+        });
+
+        setCopyrightReportData(rows);
+      } catch (error: unknown) {
+        console.error('저작권 보고 데이터 로드 오류:', error);
+        const message =
+          error instanceof Error ? error.message : '데이터를 불러오는 중 문제가 발생했습니다.';
+        setCopyrightReportError(message);
+      } finally {
+        setCopyrightReportLoading(false);
+      }
+    },
+    [copyrightStartDate, copyrightEndDate],
+  );
+
+  useEffect(() => {
+    if (activeMenu !== 'copyright-report') {
+      copyrightInitialFetchRef.current = false;
+      return;
+    }
+    if (!copyrightInitialFetchRef.current) {
+      copyrightInitialFetchRef.current = true;
+      void loadCopyrightReport();
+    }
+  }, [activeMenu, loadCopyrightReport]);
+
+  const handleSelectCopyrightQuickRange = (key: CopyrightQuickRangeKey) => {
+    const range = getRangeForQuickKey(key);
+    setCopyrightQuickRange(key);
+    setCopyrightStartDate(range.start);
+    setCopyrightEndDate(range.end);
+    void loadCopyrightReport(range);
+  };
+
+  const handleCopyrightStartDateChange = (value: string) => {
+    setCopyrightStartDate(value);
+    setCopyrightQuickRange('custom');
+  };
+
+  const handleCopyrightEndDateChange = (value: string) => {
+    setCopyrightEndDate(value);
+    setCopyrightQuickRange('custom');
+  };
+
+  const handleCopyrightSearch = () => {
+    void loadCopyrightReport();
+  };
+
+  const handleCopyrightExport = async () => {
+    if (copyrightReportData.length === 0) {
+      alert('다운로드할 데이터가 없습니다. 먼저 조회를 실행해주세요.');
+      return;
+    }
+
+    try {
+      const XLSX = await import('xlsx');
+      const worksheetData = [
+        ['SONG ID', '앨범명', '작품명', '가수명', '구매 수', '', '장르 카테고리', '매출액'],
+        ...copyrightReportData.map((row) => [
+          row.songId,
+          row.albumName ?? '',
+          row.title,
+          row.artist,
+          row.purchaseCount,
+          '',
+          row.categoryName ?? '',
+          Math.round(row.revenue),
+        ]),
+      ];
+
+      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, '저작권보고');
+
+      const startToken = copyrightStartDate.replace(/-/g, '');
+      const endToken = copyrightEndDate.replace(/-/g, '');
+      const fileName = `저작권보고_${startToken}_${endToken}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+    } catch (error) {
+      console.error('저작권 보고 엑셀 생성 오류:', error);
+      alert('엑셀 파일 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     }
   };
 
@@ -335,6 +2378,901 @@ const AdminPage: React.FC = () => {
       setCustomOrders(data || []);
     } catch (error) {
       console.error('맞춤 제작 주문 목록 로드 오류:', error);
+    }
+  };
+
+  const loadCustomerInquiries = async () => {
+    setIsLoadingInquiries(true);
+    try {
+      const { data, error } = await supabase
+        .from('customer_inquiries')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      setCustomerInquiries(data ?? []);
+    } catch (error) {
+      console.error('고객 문의 로드 오류:', error);
+    } finally {
+      setIsLoadingInquiries(false);
+    }
+  };
+
+  useEffect(() => {
+    setInquiryReplyDrafts((prev) => {
+      const next: Record<string, string> = {};
+      customerInquiries.forEach((inquiry) => {
+        next[inquiry.id] = Object.prototype.hasOwnProperty.call(prev, inquiry.id)
+          ? prev[inquiry.id]
+          : inquiry.admin_reply ?? '';
+      });
+      return next;
+    });
+  }, [customerInquiries]);
+
+  const handleInquiryReplyDraftChange = (inquiryId: string, value: string) => {
+    setInquiryReplyDrafts((prev) => ({
+      ...prev,
+      [inquiryId]: value,
+    }));
+  };
+
+  const handleInquiryReplyReset = (inquiry: CustomerInquiry) => {
+    setInquiryReplyDrafts((prev) => ({
+      ...prev,
+      [inquiry.id]: inquiry.admin_reply ?? '',
+    }));
+  };
+
+  const handleInquiryReplySubmit = async (inquiry: CustomerInquiry) => {
+    const draftValue = inquiryReplyDrafts[inquiry.id] ?? '';
+    if (draftValue === (inquiry.admin_reply ?? '')) {
+      alert('변경된 내용이 없습니다.');
+      return;
+    }
+
+    const draft = draftValue.trim();
+    const isClearing = draft.length === 0;
+
+    if (isClearing) {
+      const confirmed = window.confirm('답변을 비우면 문의 상태가 대기중으로 변경됩니다. 계속하시겠습니까?');
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setInquiryReplySubmitting(inquiry.id);
+    try {
+      const updatePayload = {
+        admin_reply: isClearing ? null : draft,
+        status: isClearing ? 'pending' : 'answered',
+        replied_at: isClearing ? null : new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase.from('customer_inquiries').update(updatePayload).eq('id', inquiry.id);
+      if (error) {
+        throw error;
+      }
+
+      await loadCustomerInquiries();
+      setInquiryReplyDrafts((prev) => ({
+        ...prev,
+        [inquiry.id]: isClearing ? '' : draft,
+      }));
+      alert(isClearing ? '답변이 삭제되었습니다.' : '답변이 저장되었습니다.');
+    } catch (error) {
+      console.error('문의 답변 저장 실패:', error);
+      alert('답변 저장 중 오류가 발생했습니다. 다시 시도해주세요.');
+    } finally {
+      setInquiryReplySubmitting(null);
+    }
+  };
+
+  const loadEventDiscounts = async (withLoader = true) => {
+    if (withLoader) {
+      setIsLoadingEventDiscounts(true);
+    }
+    try {
+      const data = await fetchEventDiscountList();
+      setEventDiscounts(data);
+    } catch (error) {
+      console.error('이벤트 할인 악보 로드 오류:', error);
+    } finally {
+      if (withLoader) {
+        setIsLoadingEventDiscounts(false);
+      }
+    }
+  };
+
+  const handleAnalyticsRefresh = () => {
+    void loadAnalyticsData(analyticsPeriod);
+  };
+
+  const handleDirectSalesExport = async () => {
+    if (directSalesData.length === 0) {
+      alert('다운로드할 데이터가 없습니다. 먼저 조회를 실행해주세요.');
+      return;
+    }
+
+    try {
+      const XLSX = await import('xlsx');
+      const worksheetData = [
+        ['주문번호', '주문일시', '결제수단', '주문금액', '악보 수량', '고객 이메일'],
+        ...directSalesData.map((order) => [
+          order.orderNumber ?? order.orderId,
+          formatDateTime(order.orderedAt),
+          order.paymentMethodLabel,
+          order.totalAmount,
+          order.itemCount,
+          order.customerEmail ?? '',
+        ]),
+      ];
+
+      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, '직접결제매출');
+
+      const startToken = copyrightStartDate.replace(/-/g, '');
+      const endToken = copyrightEndDate.replace(/-/g, '');
+      const fileName = `직접결제매출_${startToken}_${endToken}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+    } catch (error) {
+      console.error('직접 결제 매출 엑셀 생성 오류:', error);
+      alert('직접 결제 매출 데이터를 내보내는 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleCashChargeExport = async () => {
+    if (cashChargeData.length === 0) {
+      alert('다운로드할 데이터가 없습니다. 먼저 조회를 실행해주세요.');
+      return;
+    }
+
+    try {
+      const XLSX = await import('xlsx');
+      const worksheetData = [
+        ['충전일시', '고객 이메일', '충전 금액(유상)', '보너스 금액', '총 지급 캐시', '결제수단'],
+        ...cashChargeData.map((transaction) => [
+          formatDateTime(transaction.chargedAt),
+          transaction.userEmail ?? '',
+          transaction.amount,
+          transaction.bonusAmount,
+          transaction.totalCredit,
+          transaction.paymentLabel,
+        ]),
+      ];
+
+      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, '캐시충전');
+
+      const startToken = copyrightStartDate.replace(/-/g, '');
+      const endToken = copyrightEndDate.replace(/-/g, '');
+      const fileName = `캐시충전_${startToken}_${endToken}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+    } catch (error) {
+      console.error('캐시 충전 엑셀 생성 오류:', error);
+      alert('캐시 충전 데이터를 내보내는 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleIntegratedCopyrightExport = async () => {
+    const hasAnyData =
+      copyrightReportData.length > 0 ||
+      directSalesData.length > 0 ||
+      cashChargeData.length > 0;
+
+    if (!hasAnyData) {
+      alert('다운로드할 데이터가 없습니다. 먼저 조회를 실행해주세요.');
+      return;
+    }
+
+    try {
+      const XLSX = await import('xlsx');
+      const workbook = XLSX.utils.book_new();
+
+      const purchaseSheetData = [
+        ['SONG ID', '앨범명', '작품명', '가수명', '구매 수', '', '장르 카테고리', '매출액'],
+        ...copyrightReportData.map((row) => [
+          row.songId,
+          row.albumName ?? '',
+          row.title,
+          row.artist,
+          row.purchaseCount,
+          '',
+          row.categoryName ?? '',
+          Math.round(row.revenue),
+        ]),
+      ];
+      const purchaseSheet = XLSX.utils.aoa_to_sheet(purchaseSheetData);
+      XLSX.utils.book_append_sheet(workbook, purchaseSheet, '곡당_구매수');
+
+      const directSheetData = [
+        ['주문번호', '주문일시', '결제수단', '주문금액', '악보 수량', '고객 이메일'],
+        ...directSalesData.map((order) => [
+          order.orderNumber ?? order.orderId,
+          formatDateTime(order.orderedAt),
+          order.paymentMethodLabel,
+          order.totalAmount,
+          order.itemCount,
+          order.customerEmail ?? '',
+        ]),
+      ];
+      const directSheet = XLSX.utils.aoa_to_sheet(directSheetData);
+      XLSX.utils.book_append_sheet(workbook, directSheet, '직접결제_매출');
+
+      const cashSheetData = [
+        ['충전일시', '고객 이메일', '충전 금액(유상)', '보너스 금액', '총 지급 캐시', '결제수단'],
+        ...cashChargeData.map((transaction) => [
+          formatDateTime(transaction.chargedAt),
+          transaction.userEmail ?? '',
+          transaction.amount,
+          transaction.bonusAmount,
+          transaction.totalCredit,
+          transaction.paymentLabel,
+        ]),
+      ];
+      const cashSheet = XLSX.utils.aoa_to_sheet(cashSheetData);
+      XLSX.utils.book_append_sheet(workbook, cashSheet, '캐시충전_유상');
+
+      const totalPurchases = copyrightReportData.reduce(
+        (sum, row) => sum + row.purchaseCount,
+        0,
+      );
+      const totalDirectSalesAmount = directSalesData.reduce(
+        (sum, order) => sum + (Number.isFinite(order.totalAmount) ? order.totalAmount : 0),
+        0,
+      );
+      const totalCashChargeAmount = cashChargeData.reduce(
+        (sum, transaction) => sum + (Number.isFinite(transaction.amount) ? transaction.amount : 0),
+        0,
+      );
+      const totalCashBonusAmount = cashChargeData.reduce(
+        (sum, transaction) => sum + (Number.isFinite(transaction.bonusAmount) ? transaction.bonusAmount : 0),
+        0,
+      );
+      const summarySheetData = [
+        ['항목', '값', '비고'],
+        ['총 구매 수', totalPurchases, '해당 기간 내 판매된 악보의 구매 건수'],
+        ['직접 결제 매출', totalDirectSalesAmount, '카드/무통장/카카오페이 결제 금액 합계'],
+        ['캐시 충전 금액(유상)', totalCashChargeAmount, '실제 결제된 캐시 충전 금액'],
+        ['캐시 보너스 지급', totalCashBonusAmount, '충전 시 추가 지급된 보너스 캐시'],
+      ];
+      const summarySheet = XLSX.utils.aoa_to_sheet(summarySheetData);
+      XLSX.utils.book_append_sheet(workbook, summarySheet, '요약통계');
+
+      const startToken = copyrightStartDate.replace(/-/g, '');
+      const endToken = copyrightEndDate.replace(/-/g, '');
+      const fileName = `저작권보고_통합_${startToken}_${endToken}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+    } catch (error) {
+      console.error('저작권 보고 통합 엑셀 생성 오류:', error);
+      alert('통합 데이터를 내보내는 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleAnalyticsExport = useCallback(async () => {
+    if (!analyticsData) return;
+    setAnalyticsExporting(true);
+    try {
+      const XLSX = await import('xlsx');
+      const workbook = XLSX.utils.book_new();
+
+      const summarySheet = XLSX.utils.json_to_sheet([
+        {
+          지표: '총 매출',
+          값: analyticsData.summary.totalRevenue,
+          '증감률(%)':
+            analyticsData.summary.revenueGrowth != null
+              ? Number(analyticsData.summary.revenueGrowth.toFixed(2))
+              : '',
+        },
+        {
+          지표: '총 주문 수',
+          값: analyticsData.summary.totalOrders,
+          '증감률(%)':
+            analyticsData.summary.orderGrowth != null
+              ? Number(analyticsData.summary.orderGrowth.toFixed(2))
+              : '',
+        },
+        {
+          지표: '총 회원 수',
+          값: analyticsData.summary.totalCustomers,
+          '증감률(%)':
+            analyticsData.summary.customerGrowth != null
+              ? Number(analyticsData.summary.customerGrowth.toFixed(2))
+              : '',
+        },
+        {
+          지표: '평균 주문 금액',
+          값: analyticsData.summary.averageOrderValue,
+          '증감률(%)':
+            analyticsData.summary.averageOrderGrowth != null
+              ? Number(analyticsData.summary.averageOrderGrowth.toFixed(2))
+              : '',
+        },
+      ]);
+
+      XLSX.utils.book_append_sheet(workbook, summarySheet, '요약');
+
+      const revenueRows = analyticsData.revenueTrend.map((point) => ({
+        구간: point.label,
+        매출: point.revenue,
+        주문수: point.orders,
+        타임스탬프: new Date(point.timestamp).toISOString(),
+      }));
+      const revenueSheet = XLSX.utils.json_to_sheet(revenueRows);
+      XLSX.utils.book_append_sheet(workbook, revenueSheet, '매출_주문_추이');
+
+      const popularRows = analyticsData.popularSheets.map((sheet, index) => ({
+        순위: index + 1,
+        악보ID: sheet.sheetId,
+        제목: sheet.title,
+        아티스트: sheet.artist,
+        주문수: sheet.orders,
+        매출: sheet.revenue,
+      }));
+      const popularSheet = XLSX.utils.json_to_sheet(popularRows);
+      XLSX.utils.book_append_sheet(workbook, popularSheet, '인기_악보_TOP10');
+
+      const categoryRows = analyticsData.categoryBreakdown.map((category) => ({
+        카테고리ID: category.categoryId ?? '',
+        카테고리명: category.categoryName,
+        주문수: category.orders,
+        매출: category.revenue,
+      }));
+      const categorySheet = XLSX.utils.json_to_sheet(categoryRows);
+      XLSX.utils.book_append_sheet(workbook, categorySheet, '카테고리별_판매');
+
+      const customOrderStatusRows = analyticsData.customOrder.statusDistribution.map((item) => ({
+        상태: item.status,
+        건수: item.count,
+      }));
+      const customOrderMetricsSheet = XLSX.utils.json_to_sheet([
+        { 항목: '총 요청 수', 값: analyticsData.customOrder.metrics.totalCount },
+        { 항목: '진행 중', 값: analyticsData.customOrder.metrics.activeCount },
+        { 항목: '평균 견적 금액', 값: analyticsData.customOrder.metrics.averageEstimatedPrice },
+      ]);
+      XLSX.utils.book_append_sheet(workbook, customOrderMetricsSheet, '커스텀주문_요약');
+      const customOrderStatusSheet = XLSX.utils.json_to_sheet(customOrderStatusRows);
+      XLSX.utils.book_append_sheet(workbook, customOrderStatusSheet, '커스텀주문_상태');
+
+      const newUsersRows = analyticsData.newUsersTrend.map((point) => ({
+        구간: point.label,
+        신규회원수: point.count,
+        타임스탬프: new Date(point.timestamp).toISOString(),
+      }));
+      const newUsersSheet = XLSX.utils.json_to_sheet(newUsersRows);
+      XLSX.utils.book_append_sheet(workbook, newUsersSheet, '신규회원_추이');
+
+      const fileName = `copydrum-analytics-${analyticsData.period}-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+    } catch (error) {
+      console.error('분석 데이터 내보내기 오류:', error);
+      alert('데이터 내보내기에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setAnalyticsExporting(false);
+    }
+  }, [analyticsData]);
+
+  const handleAnalyticsPeriodChange = (value: AnalyticsPeriod) => {
+    if (value === analyticsPeriod) return;
+    setAnalyticsPeriod(value);
+  };
+
+  const searchEventCandidateSheets = async () => {
+    const keyword = eventSearchTerm.trim();
+    if (!keyword) {
+      alert('검색어를 입력해주세요.');
+      return;
+    }
+    setIsEventSearchLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('drum_sheets')
+        .select('id, title, artist, price, thumbnail_url, category_id')
+        .or(`title.ilike.%${keyword}%,artist.ilike.%${keyword}%`)
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (error) throw error;
+
+      const normalized = (data || []).map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        artist: item.artist,
+        price: item.price ?? 0,
+        thumbnail_url: item.thumbnail_url,
+        category_id: item.category_id,
+      })) as EventSheetCandidate[];
+
+      setEventSearchResults(normalized);
+    } catch (error) {
+      console.error('이벤트 할인 악보 검색 오류:', error);
+      alert('악보 검색 중 오류가 발생했습니다.');
+    } finally {
+      setIsEventSearchLoading(false);
+    }
+  };
+
+  const resetEventFormState = () => {
+    setSelectedEventSheet(null);
+    setEventForm(createDefaultEventForm());
+    setEditingEventId(null);
+    setEventSearchResults([]);
+  };
+
+  const updateEventForm = <K extends keyof EventFormState>(key: K, value: EventFormState[K]) => {
+    setEventForm((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const clearSelectedEventSheet = () => {
+    setSelectedEventSheet(null);
+    setEditingEventId(null);
+    setEventForm(createDefaultEventForm());
+  };
+
+  const handleSelectEventCandidate = (sheet: EventSheetCandidate) => {
+    setSelectedEventSheet(sheet);
+    const existing = eventDiscounts.find((item) => item.sheet_id === sheet.id);
+
+    if (existing) {
+      setEditingEventId(existing.id);
+      setEventForm({
+        event_start: toDatetimeLocalString(existing.event_start),
+        event_end: toDatetimeLocalString(existing.event_end),
+        discount_price: existing.discount_price ?? DEFAULT_EVENT_PRICE,
+        original_price: existing.original_price ?? sheet.price ?? 0,
+        is_active: existing.is_active,
+      });
+    } else {
+      const defaultForm = createDefaultEventForm();
+      setEditingEventId(null);
+      setEventForm({
+        ...defaultForm,
+        original_price: sheet.price ?? 0,
+      });
+    }
+  };
+
+  const handleEditEventDiscount = (event: EventDiscountSheet) => {
+    setEditingEventId(event.id);
+    setSelectedEventSheet({
+      id: event.sheet_id,
+      title: event.title || '',
+      artist: event.artist || '',
+      price: event.original_price ?? DEFAULT_EVENT_PRICE,
+      thumbnail_url: event.thumbnail_url ?? undefined,
+      category_id: event.category_id ?? undefined,
+    });
+    setEventForm({
+      event_start: toDatetimeLocalString(event.event_start),
+      event_end: toDatetimeLocalString(event.event_end),
+      discount_price: event.discount_price ?? DEFAULT_EVENT_PRICE,
+      original_price: event.original_price ?? DEFAULT_EVENT_PRICE,
+      is_active: event.is_active,
+    });
+  };
+
+  const handleDeleteEventDiscount = async (eventId: string) => {
+    if (!window.confirm('해당 이벤트 할인 악보를 삭제하시겠습니까?')) {
+      return;
+    }
+    setDeletingEventId(eventId);
+    try {
+      await deleteEventDiscountById(eventId);
+      await loadEventDiscounts();
+      if (editingEventId === eventId) {
+        resetEventFormState();
+      }
+      alert('이벤트 할인 악보가 삭제되었습니다.');
+    } catch (error) {
+      console.error('이벤트 할인 악보 삭제 오류:', error);
+      alert('이벤트 할인 악보 삭제 중 오류가 발생했습니다.');
+    } finally {
+      setDeletingEventId(null);
+    }
+  };
+
+  const handleToggleEventDiscount = async (event: EventDiscountSheet) => {
+    setUpdatingEventId(event.id);
+    try {
+      await upsertEventDiscountSheet({
+        id: event.id,
+        sheet_id: event.sheet_id,
+        discount_price: event.discount_price ?? DEFAULT_EVENT_PRICE,
+        original_price: event.original_price ?? DEFAULT_EVENT_PRICE,
+        event_start: event.event_start,
+        event_end: event.event_end,
+        is_active: !event.is_active,
+      });
+      await loadEventDiscounts(false);
+      if (editingEventId === event.id) {
+        setEventForm((prev) => ({
+          ...prev,
+          is_active: !event.is_active,
+        }));
+      }
+    } catch (error) {
+      console.error('이벤트 할인 악보 상태 변경 오류:', error);
+      alert('이벤트 상태 변경 중 오류가 발생했습니다.');
+    } finally {
+      setUpdatingEventId(null);
+    }
+  };
+
+  const handleSaveEventDiscount = async () => {
+    if (!selectedEventSheet) {
+      alert('이벤트로 등록할 악보를 먼저 선택해주세요.');
+      return;
+    }
+
+    const { event_start, event_end, original_price, is_active } = eventForm;
+
+    if (!event_start || !event_end) {
+      alert('이벤트 시작 시간과 종료 시간을 모두 입력해주세요.');
+      return;
+    }
+
+    const startIso = datetimeLocalToIsoString(event_start);
+    const endIso = datetimeLocalToIsoString(event_end);
+
+    if (!startIso || !endIso) {
+      alert('이벤트 기간 값이 올바르지 않습니다.');
+      return;
+    }
+
+    if (new Date(startIso) >= new Date(endIso)) {
+      alert('이벤트 종료 시간은 시작 시간보다 늦어야 합니다.');
+      return;
+    }
+
+    if (!original_price || original_price <= DEFAULT_EVENT_PRICE) {
+      if (!window.confirm('정가가 100원 이하입니다. 그래도 이벤트를 등록하시겠습니까?')) {
+        return;
+      }
+    }
+
+    setIsSavingEventDiscount(true);
+    try {
+      await upsertEventDiscountSheet({
+        id: editingEventId ?? undefined,
+        sheet_id: selectedEventSheet.id,
+        original_price: original_price,
+        discount_price: DEFAULT_EVENT_PRICE,
+        event_start: startIso,
+        event_end: endIso,
+        is_active,
+      });
+
+      await loadEventDiscounts();
+      alert(editingEventId ? '이벤트 할인 악보가 수정되었습니다.' : '이벤트 할인 악보가 등록되었습니다.');
+      resetEventFormState();
+      setEventSearchTerm('');
+    } catch (error) {
+      console.error('이벤트 할인 악보 저장 오류:', error);
+      alert('이벤트 할인 악보 저장 중 오류가 발생했습니다.');
+    } finally {
+      setIsSavingEventDiscount(false);
+    }
+  };
+
+  const loadCollections = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('collections')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      const normalized = (data || []).map((collection: any) => ({
+        ...collection,
+        category_ids: collection.category_ids || (collection.category_id ? [collection.category_id] : [])
+      }));
+      setCollections(normalized);
+    } catch (error) {
+      console.error('모음집 목록 로드 오류:', error);
+    }
+  };
+
+  const loadCollectionSheets = async (collectionId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('collection_sheets')
+        .select(`
+          *,
+          drum_sheets (
+            id,
+            title,
+            artist,
+            thumbnail_url
+          )
+        `)
+        .eq('collection_id', collectionId);
+
+      if (error) throw error;
+      setCollectionSheets(data || []);
+    } catch (error) {
+      console.error('모음집 악보 목록 로드 오류:', error);
+    }
+  };
+
+  // 선택한 악보들의 가격 합산
+  const calculateTotalPrice = (selectedSheets: DrumSheet[]): number => {
+    return selectedSheets.reduce((total, sheet) => total + (sheet.price || 0), 0);
+  };
+
+  // 할인가 변경 시 할인율 자동 계산
+  const calculateDiscountPercentage = (originalPrice: number, salePrice: number): number => {
+    if (originalPrice <= 0 || salePrice <= 0 || salePrice >= originalPrice) return 0;
+    return Math.round(((originalPrice - salePrice) / originalPrice) * 100);
+  };
+
+  // 악보 검색 필터링 (성능 최적화: useMemo 사용)
+  const filteredSheetsForCollection = React.useMemo(() => {
+    const searchLower = collectionSheetSearchTerm.toLowerCase();
+    const artistLower = collectionArtistSearchTerm.toLowerCase();
+    const selectedIds = new Set(selectedSheetsForNewCollection.map(s => s.id));
+    
+    return sheets.filter(sheet => {
+      const matchesSearch = !collectionSheetSearchTerm || 
+        sheet.title.toLowerCase().includes(searchLower) ||
+        sheet.artist.toLowerCase().includes(searchLower);
+      const matchesArtist = !collectionArtistSearchTerm || 
+        sheet.artist.toLowerCase().includes(artistLower);
+      const notSelected = !selectedIds.has(sheet.id);
+      return matchesSearch && matchesArtist && notSelected;
+    });
+  }, [sheets, collectionSheetSearchTerm, collectionArtistSearchTerm, selectedSheetsForNewCollection]);
+
+  // 아티스트별 악보 그룹화
+  const sheetsByArtist = filteredSheetsForCollection.reduce((acc, sheet) => {
+    const artist = sheet.artist || '알 수 없음';
+    if (!acc[artist]) acc[artist] = [];
+    acc[artist].push(sheet);
+    return acc;
+  }, {} as Record<string, DrumSheet[]>);
+
+  const handleAddSheetToNewCollection = (sheet: DrumSheet) => {
+    if (!selectedSheetsForNewCollection.some(s => s.id === sheet.id)) {
+      const updated = [...selectedSheetsForNewCollection, sheet];
+      setSelectedSheetsForNewCollection(updated);
+      const totalPrice = calculateTotalPrice(updated);
+      setNewCollection({ ...newCollection, original_price: totalPrice });
+    }
+  };
+
+  const handleRemoveSheetFromNewCollection = (sheetId: string) => {
+    const updated = selectedSheetsForNewCollection.filter(s => s.id !== sheetId);
+    setSelectedSheetsForNewCollection(updated);
+    const totalPrice = calculateTotalPrice(updated);
+    setNewCollection({ ...newCollection, original_price: totalPrice });
+  };
+
+  const handleSelectArtistSheets = (artist: string) => {
+    const artistSheets = sheetsByArtist[artist] || [];
+    const newSheets = artistSheets.filter(sheet => 
+      !selectedSheetsForNewCollection.some(s => s.id === sheet.id)
+    );
+    const updated = [...selectedSheetsForNewCollection, ...newSheets];
+    setSelectedSheetsForNewCollection(updated);
+    const totalPrice = calculateTotalPrice(updated);
+    setNewCollection({ ...newCollection, original_price: totalPrice });
+  };
+
+  const handleAddCollection = async () => {
+    if (!newCollection.title) {
+      alert('제목은 필수입니다.');
+      return;
+    }
+
+    if (selectedSheetsForNewCollection.length === 0) {
+      alert('최소 1개 이상의 악보를 선택해주세요.');
+      return;
+    }
+
+    setIsAddingCollectionLoading(true);
+
+    try {
+      const discount = calculateDiscountPercentage(newCollection.original_price, newCollection.sale_price);
+
+      // category_ids 처리: 빈 배열이면 null, 있으면 배열로
+      const categoryIds = newCollection.category_ids && newCollection.category_ids.length > 0 
+        ? newCollection.category_ids 
+        : null;
+      
+      // category_id는 첫 번째 선택된 카테고리 또는 null
+      const categoryId = categoryIds && categoryIds.length > 0 ? categoryIds[0] : null;
+
+      const insertData: any = {
+        title: newCollection.title,
+        description: newCollection.description || null,
+        thumbnail_url: newCollection.thumbnail_url || null,
+        original_price: newCollection.original_price,
+        sale_price: newCollection.sale_price,
+        discount_percentage: discount,
+        is_active: newCollection.is_active,
+        category_id: categoryId,
+        category_ids: categoryIds
+      };
+
+      // 모음집 생성
+      const { data: collectionData, error: collectionError } = await supabase
+        .from('collections')
+        .insert([insertData])
+        .select()
+        .single();
+
+      if (collectionError) throw collectionError;
+
+      // 선택한 악보들을 모음집에 추가 (배치 처리로 성능 최적화)
+      if (selectedSheetsForNewCollection.length > 0) {
+        const collectionSheetInserts = selectedSheetsForNewCollection.map(sheet => ({
+          collection_id: collectionData.id,
+          drum_sheet_id: sheet.id
+        }));
+
+        // 100개씩 나눠서 배치 처리 (대량 데이터 처리 시 성능 향상)
+        const batchSize = 100;
+        for (let i = 0; i < collectionSheetInserts.length; i += batchSize) {
+          const batch = collectionSheetInserts.slice(i, i + batchSize);
+          const { error: sheetsError } = await supabase
+            .from('collection_sheets')
+            .insert(batch);
+
+          if (sheetsError) throw sheetsError;
+        }
+      }
+
+      alert('모음집이 추가되었습니다.');
+      setIsAddingCollection(false);
+      setNewCollection({
+        title: '',
+        description: '',
+        thumbnail_url: '',
+        original_price: 0,
+        sale_price: 0,
+        discount_percentage: 0,
+        is_active: true,
+        category_id: '',
+        category_ids: []
+      });
+      setSelectedSheetsForNewCollection([]);
+      setCollectionSheetSearchTerm('');
+      setCollectionArtistSearchTerm('');
+      loadCollections();
+    } catch (error) {
+      console.error('모음집 추가 오류:', error);
+      alert('모음집 추가에 실패했습니다.');
+    } finally {
+      setIsAddingCollectionLoading(false);
+    }
+  };
+
+  const handleUpdateCollection = async () => {
+    if (!editingCollection) return;
+    if (!editingCollectionData.title) {
+      alert('제목은 필수입니다.');
+      return;
+    }
+
+    try {
+      const discount = editingCollectionData.original_price > 0 && editingCollectionData.sale_price > 0
+        ? Math.round(((editingCollectionData.original_price - editingCollectionData.sale_price) / editingCollectionData.original_price) * 100)
+        : 0;
+
+      // category_ids 처리: 빈 배열이면 null, 있으면 배열로
+      const categoryIds = editingCollectionData.category_ids && editingCollectionData.category_ids.length > 0 
+        ? editingCollectionData.category_ids 
+        : null;
+      
+      // category_id는 첫 번째 선택된 카테고리 또는 null
+      const categoryId = categoryIds && categoryIds.length > 0 ? categoryIds[0] : null;
+
+      const updateData: any = {
+        title: editingCollectionData.title,
+        description: editingCollectionData.description || null,
+        thumbnail_url: editingCollectionData.thumbnail_url || null,
+        original_price: editingCollectionData.original_price,
+        sale_price: editingCollectionData.sale_price,
+        discount_percentage: discount,
+        is_active: editingCollectionData.is_active,
+        category_id: categoryId,
+        category_ids: categoryIds
+      };
+
+      const { error } = await supabase
+        .from('collections')
+        .update(updateData)
+        .eq('id', editingCollection.id);
+
+      if (error) {
+        console.error('모음집 수정 오류 상세:', error);
+        throw error;
+      }
+
+      alert('모음집이 수정되었습니다.');
+      setEditingCollection(null);
+      loadCollections();
+    } catch (error: any) {
+      console.error('모음집 수정 오류:', error);
+      alert(`모음집 수정에 실패했습니다: ${error.message || '알 수 없는 오류'}`);
+    }
+  };
+
+  const handleDeleteCollection = async (id: string) => {
+    if (!confirm('정말 이 모음집을 삭제하시겠습니까?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('collections')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      alert('모음집이 삭제되었습니다.');
+      loadCollections();
+    } catch (error) {
+      console.error('모음집 삭제 오류:', error);
+      alert('모음집 삭제에 실패했습니다.');
+    }
+  };
+
+  const handleAddSheetToCollection = async (sheetId: string) => {
+    if (!selectedCollectionId) return;
+
+    try {
+      const { error } = await supabase
+        .from('collection_sheets')
+        .insert([{
+          collection_id: selectedCollectionId,
+          drum_sheet_id: sheetId
+        }]);
+
+      if (error) throw error;
+
+      alert('악보가 모음집에 추가되었습니다.');
+      if (selectedCollectionId) {
+        loadCollectionSheets(selectedCollectionId);
+      }
+    } catch (error: any) {
+      if (error.code === '23505') {
+        alert('이미 모음집에 포함된 악보입니다.');
+      } else {
+        console.error('악보 추가 오류:', error);
+        alert('악보 추가에 실패했습니다.');
+      }
+    }
+  };
+
+  const handleRemoveSheetFromCollection = async (collectionSheetId: string) => {
+    if (!confirm('이 악보를 모음집에서 제거하시겠습니까?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('collection_sheets')
+        .delete()
+        .eq('id', collectionSheetId);
+
+      if (error) throw error;
+
+      alert('악보가 모음집에서 제거되었습니다.');
+      if (selectedCollectionId) {
+        loadCollectionSheets(selectedCollectionId);
+      }
+    } catch (error) {
+      console.error('악보 제거 오류:', error);
+      alert('악보 제거에 실패했습니다.');
     }
   };
 
@@ -566,6 +3504,174 @@ const AdminPage: React.FC = () => {
     reader.readAsText(file, 'UTF-8');
   };
 
+  const fetchSpotifyInfo = async (title: string, artist: string) => {
+    if (!title || !artist) return;
+
+    setIsLoadingSpotify(true);
+    try {
+      const result = await searchTrackAndGetCoverWithAlbum(artist, title);
+      if (result) {
+        setNewSheet(prev => ({
+          ...prev,
+          thumbnail_url: result.albumCoverUrl || '',
+          album_name: result.albumName || ''
+        }));
+
+        // 장르가 있으면 카테고리 자동 선택 (선택사항)
+        if (result.genre) {
+          const matchingCategory = categories.find(cat =>
+            cat.name.toLowerCase().includes(result.genre!.toLowerCase())
+          );
+          if (matchingCategory && !newSheet.category_id) {
+            setNewSheet(prev => ({
+              ...prev,
+              category_id: matchingCategory.id
+            }));
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Spotify 정보 가져오기 오류:', error);
+    } finally {
+      setIsLoadingSpotify(false);
+    }
+  };
+
+  // 유튜브 URL에서 영상 ID 추출
+  const extractVideoId = (url: string): string | null => {
+    if (!url) return null;
+    
+    // 다양한 유튜브 URL 형식 지원
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([^&\n?#]+)/,
+      /youtube\.com\/watch\?.*v=([^&\n?#]+)/
+    ];
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+
+    return null;
+  };
+
+  // 유튜브 썸네일 가져오기
+  const fetchYoutubeThumbnail = async (youtubeUrl: string, isEditing: boolean = false) => {
+    const videoId = extractVideoId(youtubeUrl);
+    if (!videoId) {
+      alert('유효한 유튜브 URL이 아닙니다.');
+      return;
+    }
+
+    // 먼저 maxresdefault.jpg 시도
+    const maxResUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+    
+    try {
+      // 이미지 존재 여부 확인
+      const response = await fetch(maxResUrl, { method: 'HEAD' });
+      
+      if (response.ok) {
+        if (isEditing) {
+          setEditingSheetData(prev => ({ ...prev, thumbnail_url: maxResUrl }));
+        } else {
+          setNewSheet(prev => ({ ...prev, thumbnail_url: maxResUrl }));
+        }
+        return;
+      }
+    } catch (error) {
+      console.log('maxresdefault.jpg 로드 실패, 0.jpg로 폴백');
+    }
+
+    // 폴백: 0.jpg 사용
+    const fallbackUrl = `https://img.youtube.com/vi/${videoId}/0.jpg`;
+    if (isEditing) {
+      setEditingSheetData(prev => ({ ...prev, thumbnail_url: fallbackUrl }));
+    } else {
+      setNewSheet(prev => ({ ...prev, thumbnail_url: fallbackUrl }));
+    }
+  };
+
+  // PDF 페이지수 추출
+  const extractPdfPageCount = async (file: File): Promise<number> => {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      return pdf.numPages;
+    } catch (error) {
+      console.error('PDF 페이지수 추출 오류:', error);
+      return 0;
+    }
+  };
+
+  // PDF 파일 업로드 및 미리보기 생성
+  const handlePdfUpload = async (file: File) => {
+    setIsUploadingPdf(true);
+    try {
+      // 1. 페이지수 추출
+      const pageCount = await extractPdfPageCount(file);
+      setNewSheet(prev => ({ ...prev, page_count: pageCount }));
+
+      // 2. PDF 파일을 Supabase Storage에 업로드
+      const fileName = `${Date.now()}_${file.name}`;
+      const filePath = `pdfs/${fileName}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('drum-sheets')
+        .upload(filePath, file, {
+          contentType: 'application/pdf',
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      // 3. 업로드된 PDF의 공개 URL 가져오기
+      const { data: urlData } = supabase.storage
+        .from('drum-sheets')
+        .getPublicUrl(filePath);
+
+      const pdfUrl = urlData.publicUrl;
+
+      // 4. 미리보기 이미지 생성 (Supabase Edge Function 호출)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('로그인이 필요합니다.');
+      }
+
+      const previewResponse = await fetch(
+        `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/pdf-to-image-mosaic`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ pdfUrl })
+        }
+      );
+
+      if (previewResponse.ok) {
+        const previewData = await previewResponse.json();
+        if (previewData.imageUrl) {
+          setNewSheet(prev => ({ ...prev, preview_image_url: previewData.imageUrl }));
+        }
+      }
+
+      // PDF URL을 상태에 저장 (나중에 DB에 저장할 때 사용)
+      setNewSheet(prev => ({ ...prev, pdf_url: pdfUrl }));
+
+      alert(`PDF 업로드 완료! 페이지수: ${pageCount}페이지`);
+    } catch (error) {
+      console.error('PDF 업로드 오류:', error);
+      alert('PDF 업로드 중 오류가 발생했습니다.');
+    } finally {
+      setIsUploadingPdf(false);
+    }
+  };
+
   const handleAddSheet = async () => {
     if (!newSheet.title || !newSheet.artist || !newSheet.category_id) {
       alert('제목, 아티스트, 카테고리는 필수입니다.');
@@ -573,16 +3679,41 @@ const AdminPage: React.FC = () => {
     }
 
     try {
+      const insertData: any = {
+        title: newSheet.title,
+        artist: newSheet.artist,
+        difficulty: newSheet.difficulty,
+        price: newSheet.price,
+        category_id: newSheet.category_id,
+        is_active: true
+      };
+
+      // 썸네일과 앨범명이 있으면 추가
+      if (newSheet.thumbnail_url) {
+        insertData.thumbnail_url = newSheet.thumbnail_url;
+      }
+      if (newSheet.album_name) {
+        insertData.album_name = newSheet.album_name;
+      }
+      if (newSheet.page_count > 0) {
+        insertData.page_count = newSheet.page_count;
+      }
+      if (newSheet.tempo > 0) {
+        insertData.tempo = newSheet.tempo;
+      }
+      if (newSheet.pdf_url) {
+        insertData.pdf_url = newSheet.pdf_url;
+      }
+      if (newSheet.preview_image_url) {
+        insertData.preview_image_url = newSheet.preview_image_url;
+      }
+      if (newSheet.youtube_url) {
+        insertData.youtube_url = newSheet.youtube_url;
+      }
+
       const { error } = await supabase
         .from('drum_sheets')
-        .insert([{
-          title: newSheet.title,
-          artist: newSheet.artist,
-          difficulty: newSheet.difficulty,
-          price: newSheet.price,
-          category_id: newSheet.category_id,
-          is_active: true
-        }]);
+        .insert([insertData]);
 
       if (error) throw error;
 
@@ -593,13 +3724,165 @@ const AdminPage: React.FC = () => {
         artist: '',
         difficulty: 'beginner',
         price: 0,
-        category_id: ''
+        category_id: '',
+        thumbnail_url: '',
+        album_name: '',
+        page_count: 0,
+        tempo: 0,
+        pdf_file: null,
+        preview_image_url: '',
+        pdf_url: '',
+        youtube_url: ''
       });
       loadSheets();
     } catch (error) {
       console.error('악보 추가 오류:', error);
       alert('악보 추가 중 오류가 발생했습니다.');
     }
+  };
+
+  const startBulkAddSheets = () => {
+    setShowSheetBulkModal(true);
+  };
+
+  const downloadSheetCsvSample = () => {
+    const categoryId = categories.length > 0 ? categories[0].id : '';
+    const csvContent = `title,artist,difficulty,price,category_id,is_active
+곡 제목 1,아티스트 1,beginner,10000,${categoryId},true
+곡 제목 2,아티스트 2,intermediate,15000,${categoryId},true
+곡 제목 3,아티스트 3,advanced,20000,${categoryId},true`;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'sheet_sample.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const processSheetCsvData = async () => {
+    if (sheetCsvData.length === 0) {
+      alert('처리할 데이터가 없습니다.');
+      return;
+    }
+
+    setIsSheetCsvProcessing(true);
+
+    try {
+      const parsed = [];
+      const norm = (s: any) => (s ?? '').toString().trim();
+      const num = (s: any) => {
+        const n = parseFloat(norm(s));
+        return isNaN(n) ? 0 : n;
+      };
+
+      for (const row of sheetCsvData) {
+        const title = norm(row.title || row.Title || row.곡제목 || '');
+        const artist = norm(row.artist || row.Artist || row.아티스트 || '');
+        const difficulty = norm(row.difficulty || row.Difficulty || row.난이도 || 'beginner');
+        const price = num(row.price || row.Price || row.가격 || 0);
+        const categoryId = norm(row.category_id || row.categoryId || row.Category_ID || row.카테고리ID || '');
+        const isActive = norm(row.is_active || row.isActive || row.Is_Active || row.활성 || 'true').toLowerCase() === 'true';
+
+        if (!title || !artist) continue;
+
+        const validDifficulty = ['beginner', 'intermediate', 'advanced'].includes(difficulty.toLowerCase())
+          ? difficulty.toLowerCase()
+          : 'beginner';
+
+        parsed.push({
+          title,
+          artist,
+          difficulty: validDifficulty,
+          price: Math.max(0, price),
+          category_id: categoryId || null,
+          is_active: isActive
+        });
+      }
+
+      if (parsed.length === 0) {
+        alert('유효한 데이터가 없습니다.');
+        setIsSheetCsvProcessing(false);
+        return;
+      }
+
+      // 배치로 삽입 (100개씩)
+      const batchSize = 100;
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (let i = 0; i < parsed.length; i += batchSize) {
+        const batch = parsed.slice(i, i + batchSize);
+        const { error } = await supabase
+          .from('drum_sheets')
+          .insert(batch);
+
+        if (error) {
+          console.error(`배치 ${Math.floor(i / batchSize) + 1} 오류:`, error);
+          errorCount += batch.length;
+        } else {
+          successCount += batch.length;
+        }
+      }
+
+      alert(`CSV 처리가 완료되었습니다.\n성공: ${successCount}개\n실패: ${errorCount}개`);
+
+      setShowSheetBulkModal(false);
+      setSheetCsvFile(null);
+      setSheetCsvData([]);
+
+      await loadSheets();
+    } catch (error) {
+      console.error('CSV 처리 오류:', error);
+      alert(`CSV 처리 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+    } finally {
+      setIsSheetCsvProcessing(false);
+    }
+  };
+
+  const handleSheetCsvUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setSheetCsvFile(file);
+
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      if (!text) {
+        alert('CSV 파일에 데이터가 없습니다.');
+        return;
+      }
+
+      const lines = text.split('\n').filter(line => line.trim());
+      if (lines.length < 2) {
+        alert('CSV 파일 형식이 올바르지 않습니다.');
+        return;
+      }
+
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const data = lines.slice(1).map((line, index) => {
+        const values = line.split(',').map(v => v.trim());
+        const row: any = {};
+        headers.forEach((header, idx) => {
+          row[header] = values[idx] || '';
+        });
+        return row;
+      }).filter(item => item.title || item.artist);
+
+      console.log('CSV 파일 내용:', data);
+      setSheetCsvData(data);
+    };
+
+    reader.onerror = (error) => {
+      console.error('파일 읽기 오류:', error);
+      alert('파일을 읽는 중 오류가 발생했습니다.');
+    };
+
+    reader.readAsText(file, 'UTF-8');
   };
 
   const handleAddCategory = async () => {
@@ -631,16 +3914,88 @@ const AdminPage: React.FC = () => {
     }
   };
 
+  const handleUpdateCategory = async () => {
+    if (!editingCategory || !editingCategory.name) {
+      alert('카테고리 이름은 필수입니다.');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .update({
+          name: editingCategory.name,
+          description: editingCategory.description || ''
+        })
+        .eq('id', editingCategory.id);
+
+      if (error) throw error;
+
+      alert('카테고리가 수정되었습니다.');
+      setEditingCategory(null);
+      loadCategories();
+    } catch (error) {
+      console.error('카테고리 수정 오류:', error);
+      alert('카테고리 수정 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId: string) => {
+    if (!confirm('정말 이 카테고리를 삭제하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', categoryId);
+
+      if (error) throw error;
+
+      alert('카테고리가 삭제되었습니다.');
+      loadCategories();
+    } catch (error) {
+      console.error('카테고리 삭제 오류:', error);
+      alert('카테고리 삭제 중 오류가 발생했습니다.');
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     window.location.href = '/';
   };
+
+  const loadDashboardAnalytics = useCallback(
+    async (period: DashboardAnalyticsPeriod) => {
+      if (!isAdmin) return;
+
+      setDashboardAnalyticsLoading(true);
+      setDashboardAnalyticsError(null);
+
+      try {
+        const result = await getDashboardAnalytics(period);
+        setDashboardAnalyticsData(result);
+      } catch (error) {
+        console.error('대시보드 통계 로드 실패:', error);
+        setDashboardAnalyticsError(
+          error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+        );
+      } finally {
+        setDashboardAnalyticsLoading(false);
+      }
+    },
+    [isAdmin]
+  );
 
   // 메뉴별 데이터 로드
   useEffect(() => {
     if (!isAdmin) return;
     
     switch (activeMenu) {
+      case 'dashboard':
+        loadCustomOrders();
+        break;
       case 'member-list':
         loadMembers();
         break;
@@ -651,14 +4006,39 @@ const AdminPage: React.FC = () => {
       case 'categories':
         loadCategories();
         break;
+      case 'collections':
+        loadCollections();
+        loadSheets();
+        loadCategories();
+        break;
       case 'orders':
         loadOrders();
         break;
       case 'custom-orders':
         loadCustomOrders();
         break;
+      case 'inquiries':
+        loadCustomerInquiries();
+        break;
+      case 'points':
+        loadCashOverview();
+        break;
+      case 'event-discounts':
+        loadEventDiscounts();
+        break;
+      case 'settings':
+        loadSiteSettings();
+        break;
     }
   }, [activeMenu, isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin || activeMenu !== 'dashboard') {
+      return;
+    }
+
+    void loadDashboardAnalytics(dashboardAnalyticsPeriod);
+  }, [isAdmin, activeMenu, dashboardAnalyticsPeriod, loadDashboardAnalytics]);
 
   // 필터링된 데이터
   const filteredMembers = members.filter(member =>
@@ -666,132 +4046,1257 @@ const AdminPage: React.FC = () => {
     member.name.toLowerCase().includes(memberSearchTerm.toLowerCase())
   );
 
-  const filteredSheets = sheets.filter(sheet =>
-    sheet.title.toLowerCase().includes(sheetSearchTerm.toLowerCase()) ||
-    sheet.artist.toLowerCase().includes(sheetSearchTerm.toLowerCase())
-  );
+  const renderInquiryManagement = () => {
+    const statusOptions = ['all', ...Array.from(new Set(customerInquiries.map((inquiry) => inquiry.status)))];
+    const keyword = inquirySearchTerm.trim().toLowerCase();
+    const filtered = customerInquiries.filter((inquiry) => {
+      const matchesSearch =
+        !keyword ||
+        inquiry.name.toLowerCase().includes(keyword) ||
+        inquiry.email.toLowerCase().includes(keyword) ||
+        inquiry.title.toLowerCase().includes(keyword) ||
+        inquiry.content.toLowerCase().includes(keyword) ||
+        inquiry.category.toLowerCase().includes(keyword) ||
+        (inquiry.admin_reply ? inquiry.admin_reply.toLowerCase().includes(keyword) : false);
 
-  const filteredOrders = orders.filter(order =>
-    order.profiles?.email.toLowerCase().includes(orderSearchTerm.toLowerCase()) ||
-    order.profiles?.name.toLowerCase().includes(orderSearchTerm.toLowerCase())
-  );
+      const matchesStatus = inquiryStatusFilter === 'all' || inquiry.status === inquiryStatusFilter;
 
-  const filteredCustomOrders = customOrders.filter(order =>
-    order.song_title.toLowerCase().includes(customOrderSearchTerm.toLowerCase()) ||
-    order.artist.toLowerCase().includes(customOrderSearchTerm.toLowerCase()) ||
-    order.profiles?.email.toLowerCase().includes(customOrderSearchTerm.toLowerCase())
-  );
+      return matchesSearch && matchesStatus;
+    });
+
+    const totalCount = customerInquiries.length;
+    const pendingCount = customerInquiries.filter((inquiry) => inquiry.status === 'pending').length;
+
+    return (
+      <div className="space-y-6">
+        <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">1:1 문의 관리</h2>
+              <p className="text-sm text-gray-500">고객 문의를 확인하고 빠르게 대응하세요.</p>
+            </div>
+            <div className="flex flex-col items-start gap-2 text-sm text-gray-500 sm:flex-row sm:items-center">
+              <span>총 {totalCount.toLocaleString('ko-KR')}건 · 대기 {pendingCount.toLocaleString('ko-KR')}건</span>
+              <button
+                type="button"
+                onClick={loadCustomerInquiries}
+                className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <i className="ri-refresh-line mr-2"></i>
+                새로고침
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-gray-100 p-6 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {statusOptions.map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setInquiryStatusFilter(status)}
+                  className={`rounded-full px-4 py-2 text-sm font-medium ${
+                    inquiryStatusFilter === status
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {status === 'all' ? '전체' : getInquiryStatusLabel(status)}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative w-full md:w-72">
+              <i className="ri-search-line pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              <input
+                type="search"
+                value={inquirySearchTerm}
+                onChange={(event) => setInquirySearchTerm(event.target.value)}
+                placeholder="이름, 이메일, 제목, 내용 검색"
+                className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="divide-y divide-gray-100">
+            {isLoadingInquiries ? (
+              <div className="p-10 text-center text-sm text-gray-500">문의 내역을 불러오는 중입니다...</div>
+            ) : filtered.length === 0 ? (
+              <div className="p-10 text-center text-sm text-gray-500">표시할 문의가 없습니다.</div>
+            ) : (
+              filtered.map((inquiry) => {
+                const draftValue = inquiryReplyDrafts[inquiry.id] ?? '';
+                const originalReply = inquiry.admin_reply ?? '';
+                const hasChanged = draftValue !== originalReply;
+                const isSubmitting = inquiryReplySubmitting === inquiry.id;
+
+                return (
+                  <div key={inquiry.id} className="p-6 space-y-5">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                            {inquiry.category}
+                          </span>
+                          <h3 className="text-lg font-semibold text-gray-900">{inquiry.title}</h3>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {inquiry.name} · {inquiry.email}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-start gap-2 text-sm text-gray-500 md:items-end">
+                        <span>{formatDateTime(inquiry.created_at)}</span>
+                        <span
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${getInquiryStatusBadgeClass(
+                            inquiry.status
+                          )}`}
+                        >
+                          {getInquiryStatusLabel(inquiry.status)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="whitespace-pre-wrap rounded-lg bg-gray-50 p-5 text-sm leading-relaxed text-gray-700">
+                      {inquiry.content}
+                    </div>
+
+                    <div className="space-y-3 rounded-lg border border-gray-100 bg-gray-50 p-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-700">관리자 답변</span>
+                          {inquiry.replied_at ? (
+                            <span className="text-xs text-gray-500">
+                              마지막 업데이트 {formatDateTime(inquiry.replied_at)}
+                            </span>
+                          ) : null}
+                        </div>
+                        <span className="text-xs text-gray-400">문의 접수 {formatDateTime(inquiry.created_at)}</span>
+                      </div>
+
+                      <textarea
+                        rows={5}
+                        maxLength={1000}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        placeholder="고객에게 전달할 답변을 입력하세요."
+                        value={draftValue}
+                        onChange={(event) => handleInquiryReplyDraftChange(inquiry.id, event.target.value)}
+                      />
+
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <span className="text-xs text-gray-500">
+                          답변을 저장하면 고객 마이페이지에서 즉시 확인할 수 있습니다.
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleInquiryReplyReset(inquiry)}
+                            disabled={!hasChanged || isSubmitting}
+                            className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            초기화
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleInquiryReplySubmit(inquiry)}
+                            disabled={!hasChanged || isSubmitting}
+                            className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                          >
+                            {isSubmitting ? '저장 중...' : inquiry.admin_reply ? '답변 업데이트' : '답변 저장'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // 회원 페이지네이션 계산
+  const memberTotalPages = Math.ceil(filteredMembers.length / memberItemsPerPage);
+  const memberStartIndex = (memberCurrentPage - 1) * memberItemsPerPage;
+  const memberEndIndex = memberStartIndex + memberItemsPerPage;
+  const paginatedMembers = filteredMembers.slice(memberStartIndex, memberEndIndex);
+
+  // 검색어 변경 시 첫 페이지로 리셋
+  useEffect(() => {
+    setMemberCurrentPage(1);
+  }, [memberSearchTerm]);
+
+  const filteredCashMembers = React.useMemo(() => {
+    const keyword = cashSearchTerm.trim().toLowerCase();
+    if (!keyword) {
+      return cashMembers;
+    }
+    return cashMembers.filter((member) => {
+      const email = member.email?.toLowerCase() ?? '';
+      const name = member.name?.toLowerCase() ?? '';
+      return email.includes(keyword) || name.includes(keyword);
+    });
+  }, [cashMembers, cashSearchTerm]);
+
+  const cashTotalPages = Math.max(1, Math.ceil(filteredCashMembers.length / cashItemsPerPage));
+  const cashStartIndex = (cashCurrentPage - 1) * cashItemsPerPage;
+  const cashEndIndex = cashStartIndex + cashItemsPerPage;
+  const paginatedCashMembers = filteredCashMembers.slice(cashStartIndex, cashEndIndex);
+
+  useEffect(() => {
+    setCashCurrentPage(1);
+  }, [cashSearchTerm]);
+
+  const filteredSheets = sheets.filter(sheet => {
+    // 검색어 필터
+    const matchesSearch = sheet.title.toLowerCase().includes(sheetSearchTerm.toLowerCase()) ||
+      sheet.artist.toLowerCase().includes(sheetSearchTerm.toLowerCase());
+    
+    // 카테고리 필터
+    const matchesCategory = sheetCategoryFilter === 'all' || sheet.category_id === sheetCategoryFilter;
+    
+    return matchesSearch && matchesCategory;
+  });
+
+  // 페이지네이션 계산
+  const sheetTotalPages = Math.ceil(filteredSheets.length / sheetItemsPerPage);
+  const sheetStartIndex = (sheetCurrentPage - 1) * sheetItemsPerPage;
+  const sheetEndIndex = sheetStartIndex + sheetItemsPerPage;
+  const paginatedSheets = filteredSheets.slice(sheetStartIndex, sheetEndIndex);
+
+  // 검색어 또는 카테고리 변경 시 첫 페이지로 리셋
+  useEffect(() => {
+    setSheetCurrentPage(1);
+  }, [sheetSearchTerm, sheetCategoryFilter]);
+
+  const orderPaymentOptions = React.useMemo(() => {
+    const unique = new Set<string>();
+    orders.forEach((order) => {
+      if (order.payment_method) {
+        unique.add(normalizePaymentMethodKey(order.payment_method));
+      }
+    });
+    return Array.from(unique).sort();
+  }, [orders]);
+
+  const normalizedOrderSearch = orderSearchTerm.trim().toLowerCase();
+  const filterStartDate = orderStartDate ? new Date(`${orderStartDate}T00:00:00`) : null;
+  const filterEndDate = orderEndDate ? new Date(`${orderEndDate}T23:59:59.999`) : null;
+
+  const filteredOrders = orders.filter((order) => {
+    const statusMeta = getOrderStatusMetaSafe(order.status);
+    const paymentLabel = getPaymentMethodLabel(order.payment_method);
+    const searchableFields = [
+      order.id,
+      order.order_number ?? '',
+      order.profiles?.name ?? '',
+      order.profiles?.email ?? '',
+      paymentLabel,
+      statusMeta.label,
+    ]
+      .join(' ')
+      .toLowerCase();
+
+    const matchesSearch = normalizedOrderSearch ? searchableFields.includes(normalizedOrderSearch) : true;
+    const matchesStatus = orderStatusFilter === 'all' ? true : order.status === orderStatusFilter;
+
+    const paymentKey = order.payment_method ? normalizePaymentMethodKey(order.payment_method) : '';
+    const matchesPayment = orderPaymentFilter === 'all' ? true : paymentKey === orderPaymentFilter;
+
+    const createdAt = order.created_at ? new Date(order.created_at) : null;
+    const matchesStart = filterStartDate
+      ? createdAt
+        ? createdAt >= filterStartDate
+        : false
+      : true;
+    const matchesEnd = filterEndDate
+      ? createdAt
+        ? createdAt <= filterEndDate
+        : false
+      : true;
+
+    return matchesSearch && matchesStatus && matchesPayment && matchesStart && matchesEnd;
+  });
+
+  const statusPriority: Record<OrderStatus, number> = {
+    completed: 0,
+    payment_confirmed: 1,
+    awaiting_deposit: 2,
+    pending: 3,
+    refunded: 4,
+    cancelled: 5,
+  };
+
+  const sortedOrders = [...filteredOrders].sort((a, b) => {
+    switch (orderSortKey) {
+      case 'date_asc':
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      case 'amount_desc':
+        return b.total_amount - a.total_amount;
+      case 'amount_asc':
+        return a.total_amount - b.total_amount;
+      case 'status': {
+        const priorityDiff = statusPriority[a.status] - statusPriority[b.status];
+        if (priorityDiff !== 0) {
+          return priorityDiff;
+        }
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+      case 'date_desc':
+      default:
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+  });
+
+  const totalOrderCount = orders.length;
+  const filteredOrderCount = filteredOrders.length;
+
+  const filteredCustomOrders = customOrders.filter((order) => {
+    const keyword = customOrderSearchTerm.toLowerCase();
+    const matchesSearch =
+      order.song_title.toLowerCase().includes(keyword) ||
+      order.artist.toLowerCase().includes(keyword) ||
+      (order.profiles?.email?.toLowerCase().includes(keyword) ?? false) ||
+      (order.profiles?.name?.toLowerCase().includes(keyword) ?? false);
+
+    const matchesStatus =
+      customOrderStatusFilter === 'all' || order.status === customOrderStatusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
+
+  const activeCustomOrderCount = customOrders.filter(
+    (order) => order.status !== 'completed' && order.status !== 'cancelled'
+  ).length;
+  const pendingCustomOrderCount = customOrders.filter((order) =>
+    ['pending', 'quoted'].includes(order.status)
+  ).length;
+  const totalInquiryCount = customerInquiries.length;
+  const pendingInquiryCount = customerInquiries.filter((inquiry) => inquiry.status === 'pending').length;
 
   // 렌더링 함수들
-  const renderDashboard = () => (
-    <div className="space-y-6">
-      {/* 통계 카드 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center justify-between">
+  const renderDashboard = () => {
+    const periodOptions: Array<{ value: DashboardAnalyticsPeriod; label: string }> = [
+      { value: 'daily', label: '일별' },
+      { value: 'weekly', label: '주간별' },
+      { value: 'monthly', label: '월간별' },
+    ];
+    type AnalyticsCard = {
+      title: string;
+      value: number;
+      change: number;
+      icon: string;
+      iconClassName: string;
+      description: string;
+      formatter?: (value: number) => string;
+    };
+    const metrics = dashboardAnalyticsData?.metrics;
+    const cards: AnalyticsCard[] = [
+      {
+        title: '방문자 수',
+        value: metrics?.totalVisitors ?? 0,
+        change: metrics?.visitorsChangePct ?? 0,
+        icon: 'ri-group-line',
+        iconClassName: 'bg-blue-100 text-blue-600',
+        description: '전 기간 대비 증감률',
+        formatter: (value) => `${value.toLocaleString('ko-KR')}명`,
+      },
+      {
+        title: '매출',
+        value: metrics?.totalRevenue ?? 0,
+        change: metrics?.revenueChangePct ?? 0,
+        icon: 'ri-money-dollar-circle-line',
+        iconClassName: 'bg-purple-100 text-purple-600',
+        description: '전 기간 대비 증감률',
+        formatter: (value) => formatCurrency(value),
+      },
+      {
+        title: '신규 가입자',
+        value: metrics?.totalNewUsers ?? 0,
+        change: metrics?.newUsersChangePct ?? 0,
+        icon: 'ri-user-add-line',
+        iconClassName: 'bg-emerald-100 text-emerald-600',
+        description: '전 기간 대비 증감률',
+        formatter: (value) => `${value.toLocaleString('ko-KR')}명`,
+      },
+    ];
+    const hasAnalytics = Boolean(dashboardAnalyticsData);
+    const chartData = dashboardAnalyticsData?.series ?? [];
+    const isInitialLoading = dashboardAnalyticsLoading && !hasAnalytics;
+    const isUpdating = dashboardAnalyticsLoading && hasAnalytics;
+    const tooltipFormatter = (value: number | string, name: string) => {
+      const numericValue = typeof value === 'number' ? value : Number(value);
+      if (name === '매출') {
+        return [`₩${numericValue.toLocaleString('ko-KR')}`, name];
+      }
+      return [`${numericValue.toLocaleString('ko-KR')}명`, name];
+    };
+
+    return (
+      <div className="space-y-6">
+        <section className="space-y-6 rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">총 회원 수</p>
-              <p className="text-2xl font-bold text-gray-900">{dashboardStats.totalUsers.toLocaleString()}</p>
+              <h2 className="text-2xl font-bold text-gray-900">방문 · 매출 · 가입 지표</h2>
+              <p className="text-sm text-gray-500">일별, 주간별, 월간별 추이를 한눈에 확인하세요.</p>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <i className="ri-user-line w-6 h-6 text-blue-600"></i>
+            <div className="flex flex-wrap items-center gap-2">
+              {periodOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setDashboardAnalyticsPeriod(option.value)}
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                    dashboardAnalyticsPeriod === option.value
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  void loadDashboardAnalytics(dashboardAnalyticsPeriod);
+                }}
+                className="inline-flex items-center gap-2 rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
+              >
+                <i className="ri-refresh-line"></i>
+                새로고침
+              </button>
             </div>
+          </div>
+          {dashboardAnalyticsError ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span>데이터를 불러오는 중 오류가 발생했습니다: {dashboardAnalyticsError}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void loadDashboardAnalytics(dashboardAnalyticsPeriod);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-lg border border-rose-300 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"
+                >
+                  <i className="ri-refresh-line"></i>
+                  다시 시도
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div>
+                {isInitialLoading ? (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    {Array.from({ length: 3 }).map((_, index) => (
+                      <div
+                        key={`analytics-skeleton-${index}`}
+                        className="h-28 animate-pulse rounded-xl border border-gray-100 bg-gray-50"
+                      />
+                    ))}
+                  </div>
+                ) : !hasAnalytics ? (
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-6 text-sm text-gray-500">
+                    데이터를 불러오는 중입니다...
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    {cards.map((card) => {
+                      const displayValue = card.formatter
+                        ? card.formatter(card.value)
+                        : card.value.toLocaleString('ko-KR');
+                      return (
+                        <div key={card.title} className="rounded-xl border border-gray-100 p-5 shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-gray-600">{card.title}</p>
+                              <p className="mt-2 text-2xl font-bold text-gray-900">{displayValue}</p>
+                            </div>
+                            <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${card.iconClassName}`}>
+                              <i className={`${card.icon} text-xl`}></i>
+                            </div>
+                          </div>
+                          <div className="mt-4 flex items-center gap-2 text-xs">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-1 font-semibold ${getChangeBadgeClassName(
+                                card.change
+                              )}`}
+                            >
+                              {formatPercentChange(card.change)}
+                            </span>
+                            <span className="text-gray-400">{card.description}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                {/* 방문자 차트 */}
+                <div className="relative">
+                  <div className="h-80 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">방문자</h3>
+                    {isInitialLoading ? (
+                      <div className="flex h-full items-center justify-center">
+                        <div className="h-24 w-full max-w-md animate-pulse rounded-xl bg-gray-100" />
+                      </div>
+                    ) : !hasAnalytics ? (
+                      <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                        데이터를 불러오는 중입니다...
+                      </div>
+                    ) : chartData.length === 0 ? (
+                      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 text-sm text-gray-500">
+                        선택한 기간의 데이터가 없습니다.
+                      </div>
+                    ) : (
+                      <div className="relative h-64">
+                        {isUpdating && (
+                          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/70 text-sm text-gray-600">
+                            <span className="inline-flex items-center gap-2">
+                              <i className="ri-loader-4-line animate-spin"></i>
+                              데이터를 갱신하는 중입니다...
+                            </span>
+                          </div>
+                        )}
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={chartData} margin={{ top: 12, right: 24, left: 16, bottom: 8 }}>
+                            <defs>
+                              <linearGradient id="colorPageViews" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                            <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                            <YAxis
+                              allowDecimals={false}
+                              tick={{ fontSize: 12 }}
+                              tickFormatter={(value) => Number(value).toLocaleString('ko-KR')}
+                            />
+                            <Tooltip 
+                              formatter={(value: number) => [`${value.toLocaleString('ko-KR')}`, '']}
+                              labelFormatter={(label) => `일자: ${label}`}
+                            />
+                            <Legend />
+                            <Area
+                              type="monotone"
+                              dataKey="pageViews"
+                              name="페이지뷰"
+                              stroke="#3b82f6"
+                              strokeWidth={2}
+                              fillOpacity={1}
+                              fill="url(#colorPageViews)"
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="visitors"
+                              name="방문자"
+                              stroke="#2563eb"
+                              strokeWidth={2}
+                              dot={{ fill: '#2563eb', r: 3 }}
+                              activeDot={{ r: 5 }}
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 기간별 분석 테이블 */}
+                <div className="relative">
+                  <div className="h-80 rounded-xl border border-gray-100 bg-white p-4 shadow-sm overflow-hidden">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">기간별 분석</h3>
+                    {isInitialLoading ? (
+                      <div className="flex h-full items-center justify-center">
+                        <div className="h-24 w-full max-w-md animate-pulse rounded-xl bg-gray-100" />
+                      </div>
+                    ) : !hasAnalytics ? (
+                      <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                        데이터를 불러오는 중입니다...
+                      </div>
+                    ) : chartData.length === 0 ? (
+                      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 text-sm text-gray-500">
+                        선택한 기간의 데이터가 없습니다.
+                      </div>
+                    ) : (
+                      <div className="overflow-auto h-64">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">일자</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">주문수</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">매출액</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">방문자</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">가입</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">문의</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {chartData.slice().reverse().map((data, index) => (
+                              <tr key={index} className="hover:bg-gray-50">
+                                <td className="px-3 py-2 whitespace-nowrap text-gray-900">{data.label}</td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">{data.orderCount}</td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">{data.revenue.toLocaleString()}원</td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">{data.visitors}</td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">{data.newUsers}</td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">{data.inquiryCount}</td>
+                              </tr>
+                            ))}
+                            {/* 기간별 합계 */}
+                            {dashboardAnalyticsPeriod === 'daily' || dashboardAnalyticsPeriod === 'weekly' ? (
+                              <tr className="bg-blue-50 font-semibold">
+                                <td className="px-3 py-2 whitespace-nowrap text-gray-900">
+                                  {dashboardAnalyticsPeriod === 'daily' ? '최근 7일 합계' : '최근 7일 합계'}
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">
+                                  {chartData.reduce((sum, d) => sum + d.orderCount, 0)}건
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">
+                                  {chartData.reduce((sum, d) => sum + d.revenue, 0).toLocaleString()}원
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">
+                                  {chartData.reduce((sum, d) => sum + d.visitors, 0)}명
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">
+                                  {chartData.reduce((sum, d) => sum + d.newUsers, 0)}명
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">
+                                  {chartData.reduce((sum, d) => sum + d.inquiryCount, 0)}건
+                                </td>
+                              </tr>
+                            ) : (
+                              <tr className="bg-gray-50 font-semibold">
+                                <td className="px-3 py-2 whitespace-nowrap text-gray-900">전체 합계</td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">
+                                  {chartData.reduce((sum, d) => sum + d.orderCount, 0)}건
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">
+                                  {chartData.reduce((sum, d) => sum + d.revenue, 0).toLocaleString()}원
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">
+                                  {chartData.reduce((sum, d) => sum + d.visitors, 0)}명
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">
+                                  {chartData.reduce((sum, d) => sum + d.newUsers, 0)}명
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">
+                                  {chartData.reduce((sum, d) => sum + d.inquiryCount, 0)}건
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="bg-white rounded-xl border border-blue-100 shadow-sm p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-semibold text-blue-600">맞춤 제작 진행</p>
+                <h3 className="mt-2 text-3xl font-bold text-gray-900">
+                  {activeCustomOrderCount.toLocaleString('ko-KR')}건
+                </h3>
+                <p className="mt-1 text-xs text-gray-500">
+                  신규 확인 필요 {pendingCustomOrderCount.toLocaleString('ko-KR')}건 포함
+                </p>
+              </div>
+              <div className="rounded-full bg-blue-100 p-3 text-blue-600">
+                <i className="ri-draft-line text-xl"></i>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveMenu('custom-orders')}
+              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              주문 제작 관리로 가기
+              <i className="ri-arrow-right-line"></i>
+            </button>
+          </div>
+
+          <div className="bg-white rounded-xl border border-purple-100 shadow-sm p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-semibold text-purple-600">1:1 문의</p>
+                <h3 className="mt-2 text-3xl font-bold text-gray-900">
+                  {totalInquiryCount.toLocaleString('ko-KR')}건
+                </h3>
+                <p className="mt-1 text-xs text-gray-500">
+                  미처리 문의 {pendingInquiryCount.toLocaleString('ko-KR')}건
+                </p>
+              </div>
+              <div className="rounded-full bg-purple-100 p-3 text-purple-600">
+                <i className="ri-customer-service-2-line text-xl"></i>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveMenu('inquiries')}
+              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700"
+            >
+              문의 관리로 가기
+              <i className="ri-arrow-right-line"></i>
+            </button>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">총 악보 수</p>
-              <p className="text-2xl font-bold text-gray-900">{dashboardStats.totalSheets.toLocaleString()}</p>
+        {/* 최근 활동 */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+            <div className="p-6 border-b border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-900">최근 주문</h3>
             </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <i className="ri-file-text-line w-6 h-6 text-green-600"></i>
+            <div className="p-6">
+              <div className="space-y-4">
+                {orders.slice(0, 5).map((order) => (
+                  <div key={order.id} className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-gray-900">{order.profiles?.name}</p>
+                      <p className="text-sm text-gray-500">{order.profiles?.email}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium text-gray-900">₩{order.total_amount.toLocaleString()}</p>
+                      <p className="text-sm text-gray-500">{new Date(order.created_at).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">총 주문 수</p>
-              <p className="text-2xl font-bold text-gray-900">{dashboardStats.totalOrders.toLocaleString()}</p>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+            <div className="p-6 border-b border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-900">최근 맞춤 제작 요청</h3>
             </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <i className="ri-shopping-cart-line w-6 h-6 text-purple-600"></i>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">총 매출</p>
-              <p className="text-2xl font-bold text-gray-900">₩{dashboardStats.totalRevenue.toLocaleString()}</p>
-            </div>
-            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <i className="ri-money-dollar-circle-line w-6 h-6 text-yellow-600"></i>
+            <div className="p-6">
+              <div className="space-y-4">
+                {customOrders.slice(0, 5).map((order) => (
+                  <div key={order.id} className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-gray-900">{order.song_title}</p>
+                      <p className="text-sm text-gray-500">{order.artist}</p>
+                    </div>
+                    <div className="text-right">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                          order.status === 'pending'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : order.status === 'in_progress'
+                              ? 'bg-blue-100 text-blue-800'
+                              : order.status === 'completed'
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {order.status === 'pending'
+                          ? '대기중'
+                          : order.status === 'in_progress'
+                            ? '진행중'
+                            : order.status === 'completed'
+                              ? '완료'
+                              : '취소'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
       </div>
+    );
+  };
 
-      {/* 최근 활동 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-6 border-b border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-900">최근 주문</h3>
+  const renderCashManagement = () => {
+    const historyTotalPages = Math.max(1, Math.ceil(cashHistoryTotal / cashHistoryPageSize));
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-600">총 회원 수</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {cashStats.totalMembers.toLocaleString('ko-KR')}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <i className="ri-user-3-line w-6 h-6 text-blue-600"></i>
+              </div>
+            </div>
           </div>
-          <div className="p-6">
-            <div className="space-y-4">
-              {orders.slice(0, 5).map((order) => (
-                <div key={order.id} className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-gray-900">{order.profiles?.name}</p>
-                    <p className="text-sm text-gray-500">{order.profiles?.email}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium text-gray-900">₩{order.total_amount.toLocaleString()}</p>
-                    <p className="text-sm text-gray-500">{new Date(order.created_at).toLocaleDateString()}</p>
-                  </div>
-                </div>
-              ))}
+
+          <div className="bg-white rounded-xl shadow-sm border border-emerald-100 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-emerald-600">총 보유 캐쉬</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {formatCurrency(cashStats.totalBalance)}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <i className="ri-wallet-3-line w-6 h-6 text-emerald-600"></i>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-orange-100 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-orange-600">이번 달 충전액</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {formatCurrency(cashStats.monthlyCharged)}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                <i className="ri-add-circle-line w-6 h-6 text-orange-500"></i>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-rose-100 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-rose-600">이번 달 사용액</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {formatCurrency(cashStats.monthlyUsed)}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-rose-100 rounded-lg flex items-center justify-center">
+                <i className="ri-subtract-line w-6 h-6 text-rose-500"></i>
+              </div>
             </div>
           </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100">
           <div className="p-6 border-b border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-900">최근 맞춤 제작 요청</h3>
-          </div>
-          <div className="p-6">
-            <div className="space-y-4">
-              {customOrders.slice(0, 5).map((order) => (
-                <div key={order.id} className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-gray-900">{order.song_title}</p>
-                    <p className="text-sm text-gray-500">{order.artist}</p>
-                  </div>
-                  <div className="text-right">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                      order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      order.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                      order.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {order.status === 'pending' ? '대기중' :
-                       order.status === 'in_progress' ? '진행중' :
-                       order.status === 'completed' ? '완료' : '취소'}
-                    </span>
-                  </div>
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">적립금 관리</h2>
+                <p className="text-sm text-gray-500">
+                  회원의 캐쉬 잔액을 조회하고 직접 충전/차감하거나 사용 내역을 확인할 수 있습니다.
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="relative w-full sm:w-64">
+                  <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"></i>
+                  <input
+                    type="text"
+                    placeholder="회원 이메일 또는 이름 검색"
+                    value={cashSearchTerm}
+                    onChange={(event) => setCashSearchTerm(event.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  />
                 </div>
-              ))}
+                <button
+                  onClick={loadCashOverview}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors"
+                >
+                  <i className="ri-refresh-line w-4 h-4"></i>
+                  새로고침
+                </button>
+              </div>
             </div>
           </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    회원
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    보유 캐쉬
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    최근 가입
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    관리
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {cashLoading ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                      적립금 데이터를 불러오는 중입니다...
+                    </td>
+                  </tr>
+                ) : paginatedCashMembers.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                      {cashSearchTerm ? '검색 결과가 없습니다.' : '회원 정보가 없습니다.'}
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedCashMembers.map((member) => (
+                    <tr key={member.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center">
+                          <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center">
+                            <i className="ri-user-smile-line text-orange-500 text-lg"></i>
+                          </div>
+                          <div className="ml-4">
+                            <p className="text-sm font-semibold text-gray-900">
+                              {member.name || '이름 없음'}
+                            </p>
+                            <p className="text-xs text-gray-500">{member.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-semibold text-gray-900">
+                        {formatCurrency(member.credits ?? 0)}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        {new Date(member.created_at).toLocaleDateString('ko-KR')}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => handleOpenCashAdjustModal(member)}
+                            className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
+                          >
+                            <i className="ri-edit-2-line w-4 h-4"></i>
+                            캐쉬 수정
+                          </button>
+                          <button
+                            onClick={() => handleOpenCashHistoryModal(member)}
+                            className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
+                          >
+                            <i className="ri-time-line w-4 h-4"></i>
+                            내역 보기
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {cashTotalPages > 1 && (
+            <div className="px-6 py-4 border-t border-gray-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-gray-600">
+                전체 {filteredCashMembers.length}명 중{' '}
+                {filteredCashMembers.length === 0
+                  ? '0'
+                  : `${cashStartIndex + 1}-${Math.min(cashEndIndex, filteredCashMembers.length)}`}명 표시
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCashCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={cashCurrentPage === 1}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    cashCurrentPage === 1
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  <i className="ri-arrow-left-s-line"></i>
+                </button>
+                {Array.from({ length: cashTotalPages }, (_, index) => index + 1).map((page) => {
+                  if (
+                    page === 1 ||
+                    page === cashTotalPages ||
+                    (page >= cashCurrentPage - 2 && page <= cashCurrentPage + 2)
+                  ) {
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setCashCurrentPage(page)}
+                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                          cashCurrentPage === page
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  }
+                  if (page === cashCurrentPage - 3 || page === cashCurrentPage + 3) {
+                    return (
+                      <span key={page} className="px-2 text-gray-400">
+                        ...
+                      </span>
+                    );
+                  }
+                  return null;
+                })}
+                <button
+                  onClick={() => setCashCurrentPage((prev) => Math.min(cashTotalPages, prev + 1))}
+                  disabled={cashCurrentPage === cashTotalPages}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    cashCurrentPage === cashTotalPages
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  <i className="ri-arrow-right-s-line"></i>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
+
+        {showCashAdjustModal && selectedCashMember && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+            <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  캐쉬 수정 · {selectedCashMember.name || selectedCashMember.email}
+                </h3>
+                <button
+                  onClick={handleCloseCashAdjustModal}
+                  className="text-gray-400 transition-colors hover:text-gray-600"
+                >
+                  <i className="ri-close-line text-xl"></i>
+                </button>
+              </div>
+
+              <div className="space-y-5 px-6 py-6">
+                <div className="rounded-xl bg-orange-50 p-4 text-sm text-orange-700">
+                  <p className="font-semibold">현재 보유 캐쉬</p>
+                  <p className="mt-1 text-2xl font-bold text-gray-900">
+                    {formatCurrency(selectedCashMember.credits ?? 0)}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-sm font-medium text-gray-700">조정 유형</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => setCashAdjustType('admin_add')}
+                      className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-semibold transition-colors ${
+                        cashAdjustType === 'admin_add'
+                          ? 'border-orange-500 bg-orange-50 text-orange-600'
+                          : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                      }`}
+                    >
+                      <i className="ri-add-circle-line"></i>
+                      캐쉬 추가
+                    </button>
+                    <button
+                      onClick={() => setCashAdjustType('admin_deduct')}
+                      className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-semibold transition-colors ${
+                        cashAdjustType === 'admin_deduct'
+                          ? 'border-rose-500 bg-rose-50 text-rose-600'
+                          : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                      }`}
+                    >
+                      <i className="ri-subtract-line"></i>
+                      캐쉬 차감
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">금액 (원)</label>
+                  <input
+                    type="number"
+                    value={cashAdjustAmount}
+                    min={0}
+                    onChange={(event) => setCashAdjustAmount(Number(event.target.value))}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                    placeholder="예: 10000"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    음수는 입력할 수 없습니다. 차감은 \'캐쉬 차감\' 유형을 사용하세요.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">사유</label>
+                  <textarea
+                    value={cashAdjustReason}
+                    onChange={(event) => setCashAdjustReason(event.target.value)}
+                    rows={3}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                    placeholder="관리자 조정 사유를 입력하세요."
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 border-t border-gray-100 px-6 py-4">
+                <button
+                  onClick={handleCloseCashAdjustModal}
+                  className="flex-1 rounded-lg bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleSubmitCashAdjust}
+                  className="flex-1 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
+                >
+                  적용하기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showCashHistoryModal && selectedCashMember && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+            <div className="w-full max-w-4xl rounded-2xl bg-white shadow-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">캐쉬 내역</h3>
+                  <p className="text-sm text-gray-500">
+                    {selectedCashMember.name || selectedCashMember.email} · 현재 잔액{' '}
+                    {formatCurrency(selectedCashMember.credits ?? 0)}
+                  </p>
+                </div>
+                <button
+                  onClick={handleCloseCashHistoryModal}
+                  className="text-gray-400 transition-colors hover:text-gray-600"
+                >
+                  <i className="ri-close-line text-xl"></i>
+                </button>
+              </div>
+
+              <div className="max-h-[520px] overflow-y-auto">
+                <table className="w-full">
+                  <thead className="sticky top-0 bg-white shadow-sm">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        일시
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        유형
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        금액
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        보너스
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        잔액
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        관련 악보/설명
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {cashHistoryLoading ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                          캐쉬 내역을 불러오는 중입니다...
+                        </td>
+                      </tr>
+                    ) : cashHistory.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                          기록이 없습니다.
+                        </td>
+                      </tr>
+                    ) : (
+                      cashHistory.map((transaction) => {
+                        const typeMeta = CASH_TRANSACTION_TYPE_META[transaction.transaction_type];
+                        const amountDisplay = `${transaction.amount >= 0 ? '+' : '-'}${formatCurrency(
+                          Math.abs(transaction.amount)
+                        )}`;
+                        return (
+                          <tr key={transaction.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-4 text-sm text-gray-600">
+                              {new Date(transaction.created_at).toLocaleString('ko-KR')}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span
+                                className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${typeMeta.className}`}
+                              >
+                                {typeMeta.label}
+                              </span>
+                            </td>
+                            <td
+                              className={`px-6 py-4 text-sm font-semibold ${
+                                transaction.amount >= 0 ? 'text-orange-600' : 'text-rose-600'
+                              }`}
+                            >
+                              {amountDisplay}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600">
+                              {transaction.bonus_amount > 0
+                                ? `+${formatCurrency(transaction.bonus_amount)}`
+                                : '-'}
+                            </td>
+                            <td className="px-6 py-4 text-sm font-semibold text-gray-900">
+                              {formatCurrency(transaction.balance_after ?? 0)}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600">
+                              {transaction.description
+                                ? transaction.description
+                                : transaction.sheet?.title
+                                ? `악보: ${transaction.sheet.title}`
+                                : '-'}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4">
+                <div className="text-sm text-gray-600">
+                  전체 {cashHistoryTotal}건 · {cashHistoryPage}/{historyTotalPages}페이지
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleChangeCashHistoryPage(Math.max(1, cashHistoryPage - 1))}
+                    disabled={cashHistoryPage === 1}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                      cashHistoryPage === 1
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    }`}
+                  >
+                    <i className="ri-arrow-left-s-line"></i>
+                  </button>
+                  <span className="text-sm text-gray-500">
+                    {cashHistoryPage}/{historyTotalPages}
+                  </span>
+                  <button
+                    onClick={() =>
+                      handleChangeCashHistoryPage(Math.min(historyTotalPages, cashHistoryPage + 1))
+                    }
+                    disabled={cashHistoryPage === historyTotalPages}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                      cashHistoryPage === historyTotalPages
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    }`}
+                  >
+                    <i className="ri-arrow-right-s-line"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderMemberManagement = () => (
     <div className="space-y-6">
@@ -845,30 +5350,68 @@ const AdminPage: React.FC = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">회원 정보</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">가입방법</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">가입일</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">관리</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredMembers.map((member) => (
-                <tr key={member.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10">
-                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                          <i className="ri-user-line text-blue-600 w-5 h-5"></i>
+              {paginatedMembers.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                    {memberSearchTerm ? '검색 결과가 없습니다.' : '회원이 없습니다.'}
+                  </td>
+                </tr>
+              ) : (
+                paginatedMembers.map((member) => {
+                  // 가입방법 확인
+                  const hasKakao = member.kakao_id && member.kakao_id.trim() !== '';
+                  const hasGoogle = member.google_id && member.google_id.trim() !== '';
+                  const loginMethod = hasKakao && hasGoogle ? '카카오+구글' :
+                                     hasKakao ? '카카오' :
+                                     hasGoogle ? '구글' : '이메일';
+                  
+                  return (
+                  <tr key={member.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10">
+                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <i className="ri-user-line text-blue-600 w-5 h-5"></i>
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">{member.name || '이름 없음'}</div>
+                          <div className="text-sm text-gray-500">{member.email}</div>
                         </div>
                       </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{member.name || '이름 없음'}</div>
-                        <div className="text-sm text-gray-500">{member.email}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        {hasKakao && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            <i className="ri-kakao-talk-fill w-3 h-3 mr-1"></i>
+                            카카오
+                          </span>
+                        )}
+                        {hasGoogle && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            <i className="ri-google-fill w-3 h-3 mr-1"></i>
+                            구글
+                          </span>
+                        )}
+                        {!hasKakao && !hasGoogle && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            <i className="ri-mail-line w-3 h-3 mr-1"></i>
+                            이메일
+                          </span>
+                        )}
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {new Date(member.created_at).toLocaleDateString()}
-                  </td>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(member.created_at).toLocaleDateString()}
+                    </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                       member.is_admin 
@@ -889,10 +5432,79 @@ const AdminPage: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
+
+        {/* 페이지네이션 */}
+        {memberTotalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              전체 {filteredMembers.length}개 중 {memberStartIndex + 1}-{Math.min(memberEndIndex, filteredMembers.length)}개 표시
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setMemberCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={memberCurrentPage === 1}
+                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                  memberCurrentPage === 1
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                }`}
+              >
+                <i className="ri-arrow-left-s-line"></i>
+              </button>
+              
+              {Array.from({ length: memberTotalPages }, (_, i) => i + 1).map((page) => {
+                // 현재 페이지 주변 2페이지씩만 표시
+                if (
+                  page === 1 ||
+                  page === memberTotalPages ||
+                  (page >= memberCurrentPage - 2 && page <= memberCurrentPage + 2)
+                ) {
+                  return (
+                    <button
+                      key={page}
+                      onClick={() => setMemberCurrentPage(page)}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                        memberCurrentPage === page
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                } else if (
+                  page === memberCurrentPage - 3 ||
+                  page === memberCurrentPage + 3
+                ) {
+                  return (
+                    <span key={page} className="px-2 text-gray-400">
+                      ...
+                    </span>
+                  );
+                }
+                return null;
+              })}
+              
+              <button
+                onClick={() => setMemberCurrentPage(prev => Math.min(memberTotalPages, prev + 1))}
+                disabled={memberCurrentPage === memberTotalPages}
+                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                  memberCurrentPage === memberTotalPages
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                }`}
+              >
+                <i className="ri-arrow-right-s-line"></i>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* CSV 업로드 모달 */}
@@ -1029,30 +5641,130 @@ const AdminPage: React.FC = () => {
     </div>
   );
 
+  const handleSelectAllSheets = (checked: boolean) => {
+    if (checked) {
+      setSelectedSheetIds(paginatedSheets.map(sheet => sheet.id));
+    } else {
+      setSelectedSheetIds([]);
+    }
+  };
+
+  const handleSelectSheet = (sheetId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedSheetIds([...selectedSheetIds, sheetId]);
+    } else {
+      setSelectedSheetIds(selectedSheetIds.filter(id => id !== sheetId));
+    }
+  };
+
+  const handleBulkEdit = async () => {
+    if (selectedSheetIds.length === 0) {
+      alert('수정할 악보를 선택해주세요.');
+      return;
+    }
+
+    try {
+      const updateData: any = {};
+
+      if (bulkEditData.category_id) {
+        updateData.category_id = bulkEditData.category_id;
+      }
+      if (bulkEditData.difficulty) {
+        updateData.difficulty = bulkEditData.difficulty;
+      }
+      if (bulkEditData.price !== '') {
+        updateData.price = Number(bulkEditData.price);
+      }
+      if (bulkEditData.is_active !== null) {
+        updateData.is_active = bulkEditData.is_active;
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        alert('수정할 항목을 선택해주세요.');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('drum_sheets')
+        .update(updateData)
+        .in('id', selectedSheetIds);
+
+      if (error) throw error;
+
+      alert(`${selectedSheetIds.length}개의 악보가 수정되었습니다.`);
+      setShowBulkEditModal(false);
+      setSelectedSheetIds([]);
+      setBulkEditData({
+        category_id: '',
+        difficulty: '',
+        price: '',
+        is_active: null
+      });
+      loadSheets();
+    } catch (error) {
+      console.error('일괄 수정 오류:', error);
+      alert('일괄 수정 중 오류가 발생했습니다.');
+    }
+  };
+
   const renderSheetManagement = () => (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">악보 관리</h2>
-        <button
-          onClick={() => setIsAddingSheet(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
-        >
-          <i className="ri-add-line w-4 h-4"></i>
-          <span>새 악보 추가</span>
-        </button>
+        <div className="flex space-x-2">
+          {selectedSheetIds.length > 0 && (
+            <button
+              onClick={() => setShowBulkEditModal(true)}
+              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
+            >
+              <i className="ri-edit-box-line w-4 h-4"></i>
+              <span>일괄 수정 ({selectedSheetIds.length}개)</span>
+            </button>
+          )}
+          <button
+            onClick={() => setIsAddingSheet(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+          >
+            <i className="ri-add-line w-4 h-4"></i>
+            <span>새 악보 추가</span>
+          </button>
+          <button
+            onClick={startBulkAddSheets}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+          >
+            <i className="ri-file-upload-line w-4 h-4"></i>
+            <span>CSV 대량 등록</span>
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         <div className="p-6 border-b border-gray-100">
-          <div className="relative">
-            <i className="ri-search-line absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4"></i>
-            <input
-              type="text"
-              placeholder="악보 검색..."
-              value={sheetSearchTerm}
-              onChange={(e) => setSheetSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <i className="ri-search-line absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4"></i>
+              <input
+                type="text"
+                placeholder="악보 검색..."
+                value={sheetSearchTerm}
+                onChange={(e) => setSheetSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div className="sm:w-48">
+              <select
+                value={sheetCategoryFilter}
+                onChange={(e) => setSheetCategoryFilter(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+              >
+                <option value="all">전체 카테고리</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -1060,7 +5772,17 @@ const AdminPage: React.FC = () => {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <input
+                    type="checkbox"
+                    checked={paginatedSheets.length > 0 && selectedSheetIds.length === paginatedSheets.length}
+                    onChange={(e) => handleSelectAllSheets(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">앨범 이미지</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">악보 정보</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">카테고리</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">난이도</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">가격</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
@@ -1069,23 +5791,86 @@ const AdminPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredSheets.map((sheet) => (
-                <tr key={sheet.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{sheet.title}</div>
-                      <div className="text-sm text-gray-500">{sheet.artist}</div>
-                    </div>
+              {paginatedSheets.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
+                    {sheetSearchTerm || sheetCategoryFilter !== 'all' ? '검색 결과가 없습니다.' : '악보가 없습니다.'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                      sheet.difficulty === 'beginner' ? 'bg-green-100 text-green-800' :
-                      sheet.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {sheet.difficulty === 'beginner' ? '초급' :
-                       sheet.difficulty === 'intermediate' ? '중급' : '고급'}
-                    </span>
+                </tr>
+              ) : (
+                paginatedSheets.map((sheet) => {
+                  const category = (sheet as any).categories;
+                  const isSelected = selectedSheetIds.includes(sheet.id);
+                  return (
+                  <tr key={sheet.id} className={`hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => handleSelectSheet(sheet.id, e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <img
+                        src={(sheet as any).thumbnail_url || `https://readdy.ai/api/search-image?query=drum%20sheet%20music%20${sheet.title}%20modern%20minimalist%20background&width=60&height=60&seq=${sheet.id}&orientation=square`}
+                        alt={sheet.title}
+                        className="w-12 h-12 object-cover rounded border border-gray-200"
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{sheet.title}</div>
+                        <div className="text-sm text-gray-500">{sheet.artist}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                        {category?.name || '미분류'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                    {(() => {
+                      // 난이도 값 가져오기 및 정규화
+                      const rawDifficulty = sheet.difficulty;
+                      if (!rawDifficulty) {
+                        console.warn(`⚠️ 난이도 없음: 악보 ID ${sheet.id}, 제목: ${sheet.title}`);
+                        return (
+                          <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                            미설정
+                          </span>
+                        );
+                      }
+                      
+                      // 문자열로 변환하고 정규화
+                      const difficulty = String(rawDifficulty).toLowerCase().trim();
+                      
+                      let displayText = '미설정';
+                      let bgColor = 'bg-gray-100 text-gray-800';
+                      
+                      // 다양한 형식 지원
+                      if (difficulty === 'beginner' || difficulty === '초급') {
+                        displayText = '초급';
+                        bgColor = 'bg-green-100 text-green-800';
+                      } else if (difficulty === 'intermediate' || difficulty === '중급') {
+                        displayText = '중급';
+                        bgColor = 'bg-yellow-100 text-yellow-800';
+                      } else if (difficulty === 'advanced' || difficulty === '고급') {
+                        displayText = '고급';
+                        bgColor = 'bg-red-100 text-red-800';
+                      } else {
+                        // 예상치 못한 값인 경우 원본 값 표시 (디버깅용)
+                        console.warn(`⚠️ 예상치 못한 난이도 값: "${rawDifficulty}" (악보 ID: ${sheet.id}, 제목: ${sheet.title})`);
+                        displayText = `미설정 (${rawDifficulty})`;
+                        bgColor = 'bg-gray-100 text-gray-800';
+                      }
+                      
+                      return (
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${bgColor}`}>
+                          {displayText}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     ₩{sheet.price.toLocaleString()}
@@ -1102,7 +5887,25 @@ const AdminPage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      <button className="text-blue-600 hover:text-blue-900 transition-colors">
+                      <button 
+                        onClick={() => {
+                          setEditingSheet(sheet);
+                          setEditingSheetData({
+                            title: sheet.title,
+                            artist: sheet.artist,
+                            difficulty: sheet.difficulty,
+                            price: sheet.price,
+                            category_id: sheet.category_id,
+                            thumbnail_url: (sheet as any).thumbnail_url || '',
+                            album_name: (sheet as any).album_name || '',
+                            page_count: (sheet as any).page_count || 0,
+                            tempo: (sheet as any).tempo || 0,
+                            youtube_url: (sheet as any).youtube_url || '',
+                            is_active: sheet.is_active
+                          });
+                        }}
+                        className="text-blue-600 hover:text-blue-900 transition-colors"
+                      >
                         <i className="ri-edit-line w-4 h-4"></i>
                       </button>
                       <button className="text-red-600 hover:text-red-900 transition-colors">
@@ -1111,11 +5914,141 @@ const AdminPage: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
+
+        {/* 페이지네이션 */}
+        {sheetTotalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              전체 {filteredSheets.length}개 중 {sheetStartIndex + 1}-{Math.min(sheetEndIndex, filteredSheets.length)}개 표시
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setSheetCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={sheetCurrentPage === 1}
+                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                  sheetCurrentPage === 1
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                }`}
+              >
+                <i className="ri-arrow-left-s-line"></i>
+              </button>
+              
+              {Array.from({ length: sheetTotalPages }, (_, i) => i + 1).map((page) => {
+                // 현재 페이지 주변 2페이지씩만 표시
+                if (
+                  page === 1 ||
+                  page === sheetTotalPages ||
+                  (page >= sheetCurrentPage - 2 && page <= sheetCurrentPage + 2)
+                ) {
+                  return (
+                    <button
+                      key={page}
+                      onClick={() => setSheetCurrentPage(page)}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                        sheetCurrentPage === page
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                } else if (
+                  page === sheetCurrentPage - 3 ||
+                  page === sheetCurrentPage + 3
+                ) {
+                  return (
+                    <span key={page} className="px-2 text-gray-400">
+                      ...
+                    </span>
+                  );
+                }
+                return null;
+              })}
+              
+              <button
+                onClick={() => setSheetCurrentPage(prev => Math.min(sheetTotalPages, prev + 1))}
+                disabled={sheetCurrentPage === sheetTotalPages}
+                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                  sheetCurrentPage === sheetTotalPages
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                }`}
+              >
+                <i className="ri-arrow-right-s-line"></i>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* CSV 대량 등록 모달 */}
+      {showSheetBulkModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">CSV 대량 악보 등록</h3>
+              <button
+                onClick={() => setShowSheetBulkModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <i className="ri-close-line w-5 h-5"></i>
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  CSV 파일 선택
+                </label>
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleSheetCsvUpload}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              
+              <div className="text-sm text-gray-600">
+                <p className="mb-2">CSV 파일 형식:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>title (필수) - 곡 제목</li>
+                  <li>artist (필수) - 아티스트명</li>
+                  <li>difficulty (선택) - beginner/intermediate/advanced</li>
+                  <li>price (선택) - 가격 (숫자)</li>
+                  <li>category_id (선택) - 카테고리 ID</li>
+                  <li>is_active (선택) - true/false (기본값: true)</li>
+                </ul>
+              </div>
+              
+              <button
+                onClick={downloadSheetCsvSample}
+                className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2"
+              >
+                <i className="ri-download-line w-4 h-4"></i>
+                <span>샘플 CSV 다운로드</span>
+              </button>
+
+              {sheetCsvData.length > 0 && (
+                <button
+                  onClick={processSheetCsvData}
+                  disabled={isSheetCsvProcessing}
+                  className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  {isSheetCsvProcessing ? '처리 중...' : `${sheetCsvData.length}개 악보 등록`}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 새 악보 추가 모달 */}
       {isAddingSheet && (
@@ -1134,11 +6067,179 @@ const AdminPage: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">아티스트</label>
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={newSheet.artist}
+                    onChange={(e) => setNewSheet({ ...newSheet, artist: e.target.value })}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fetchSpotifyInfo(newSheet.title, newSheet.artist)}
+                    disabled={!newSheet.title || !newSheet.artist || isLoadingSpotify}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+                  >
+                    {isLoadingSpotify ? (
+                      <>
+                        <i className="ri-loader-4-line animate-spin w-4 h-4"></i>
+                        <span>검색 중...</span>
+                      </>
+                    ) : (
+                      <>
+                        <i className="ri-music-2-line w-4 h-4"></i>
+                        <span>Spotify 검색</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+              
+              {/* Spotify 정보 표시 */}
+              {(newSheet.thumbnail_url || newSheet.album_name) && (
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  {newSheet.thumbnail_url && (
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">앨범 썸네일</label>
+                      <img
+                        src={newSheet.thumbnail_url}
+                        alt="앨범 썸네일"
+                        className="w-32 h-32 object-cover rounded-lg border border-gray-300"
+                      />
+                    </div>
+                  )}
+                  {newSheet.album_name && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">앨범명</label>
+                      <input
+                        type="text"
+                        value={newSheet.album_name}
+                        onChange={(e) => setNewSheet({ ...newSheet, album_name: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* 유튜브 URL */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">유튜브 URL (선택)</label>
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={newSheet.youtube_url}
+                    onChange={(e) => {
+                      const url = e.target.value;
+                      setNewSheet({ ...newSheet, youtube_url: url });
+                      // 유튜브 URL이 입력되면 자동으로 썸네일 가져오기
+                      if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
+                        fetchYoutubeThumbnail(url);
+                      }
+                    }}
+                    placeholder="https://www.youtube.com/watch?v=영상ID 또는 https://youtu.be/영상ID"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                  {newSheet.youtube_url && extractVideoId(newSheet.youtube_url) && (
+                    <button
+                      type="button"
+                      onClick={() => fetchYoutubeThumbnail(newSheet.youtube_url)}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-1"
+                    >
+                      <i className="ri-youtube-line w-4 h-4"></i>
+                      <span>썸네일 가져오기</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              {/* 썸네일 URL 직접 입력 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 URL (선택)</label>
                 <input
                   type="text"
-                  value={newSheet.artist}
-                  onChange={(e) => setNewSheet({ ...newSheet, artist: e.target.value })}
+                  value={newSheet.thumbnail_url}
+                  onChange={(e) => setNewSheet({ ...newSheet, thumbnail_url: e.target.value })}
+                  placeholder="썸네일 이미지 URL"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+                {newSheet.thumbnail_url && (
+                  <div className="mt-2">
+                    <img
+                      src={newSheet.thumbnail_url}
+                      alt="썸네일 미리보기"
+                      className="w-32 h-32 object-cover rounded-lg border border-gray-300"
+                      onError={(e) => {
+                        // maxresdefault.jpg 실패 시 0.jpg로 폴백
+                        const img = e.target as HTMLImageElement;
+                        const currentSrc = img.src;
+                        if (currentSrc.includes('maxresdefault.jpg')) {
+                          const videoId = extractVideoId(newSheet.youtube_url);
+                          if (videoId) {
+                            img.src = `https://img.youtube.com/vi/${videoId}/0.jpg`;
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+              
+              {/* PDF 파일 업로드 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">PDF 파일</label>
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setNewSheet(prev => ({ ...prev, pdf_file: file }));
+                      handlePdfUpload(file);
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+                {isUploadingPdf && (
+                  <p className="mt-1 text-sm text-blue-600">PDF 업로드 및 처리 중...</p>
+                )}
+                {newSheet.page_count > 0 && (
+                  <p className="mt-1 text-sm text-gray-600">페이지수: {newSheet.page_count}페이지</p>
+                )}
+                {newSheet.preview_image_url && (
+                  <div className="mt-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">미리보기 이미지</label>
+                    <img
+                      src={newSheet.preview_image_url}
+                      alt="미리보기"
+                      className="w-full max-w-md object-cover rounded-lg border border-gray-300"
+                    />
+                  </div>
+                )}
+              </div>
+              
+              {/* 페이지수 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">페이지수</label>
+                <input
+                  type="number"
+                  value={newSheet.page_count}
+                  onChange={(e) => setNewSheet({ ...newSheet, page_count: Number(e.target.value) })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  min="0"
+                />
+              </div>
+              
+              {/* 템포 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">템포 (BPM)</label>
+                <input
+                  type="number"
+                  value={newSheet.tempo}
+                  onChange={(e) => setNewSheet({ ...newSheet, tempo: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  min="0"
+                  placeholder="예: 120"
                 />
               </div>
               <div>
@@ -1178,7 +6279,26 @@ const AdminPage: React.FC = () => {
             </div>
             <div className="flex justify-end space-x-3 mt-6">
               <button
-                onClick={() => setIsAddingSheet(false)}
+                onClick={() => {
+                  setIsAddingSheet(false);
+                  setNewSheet({
+                    title: '',
+                    artist: '',
+                    difficulty: 'beginner',
+                    price: 0,
+                    category_id: '',
+                    thumbnail_url: '',
+                    album_name: '',
+                    page_count: 0,
+                    tempo: 0,
+                    pdf_file: null,
+                    preview_image_url: '',
+                    pdf_url: '',
+                    youtube_url: ''
+                  });
+                  setIsLoadingSpotify(false);
+                  setIsUploadingPdf(false);
+                }}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
               >
                 취소
@@ -1188,6 +6308,398 @@ const AdminPage: React.FC = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 추가
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 악보 수정 모달 */}
+      {editingSheet && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl p-6 w-full max-w-2xl my-8">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">악보 수정</h3>
+              <button
+                onClick={() => {
+                  setEditingSheet(null);
+                  setEditingSheetData({
+                    title: '',
+                    artist: '',
+                    difficulty: 'beginner',
+                    price: 0,
+                    category_id: '',
+                    thumbnail_url: '',
+                    album_name: '',
+                    page_count: 0,
+                    tempo: 0,
+                    youtube_url: '',
+                    is_active: true
+                  });
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <i className="ri-close-line w-5 h-5"></i>
+              </button>
+            </div>
+            
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">제목 *</label>
+                  <input
+                    type="text"
+                    value={editingSheetData.title}
+                    onChange={(e) => setEditingSheetData({ ...editingSheetData, title: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">아티스트 *</label>
+                  <input
+                    type="text"
+                    value={editingSheetData.artist}
+                    onChange={(e) => setEditingSheetData({ ...editingSheetData, artist: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">난이도</label>
+                  <select
+                    value={editingSheetData.difficulty}
+                    onChange={(e) => setEditingSheetData({ ...editingSheetData, difficulty: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  >
+                    <option value="beginner">초급</option>
+                    <option value="intermediate">중급</option>
+                    <option value="advanced">고급</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">카테고리 *</label>
+                  <select
+                    value={editingSheetData.category_id}
+                    onChange={(e) => setEditingSheetData({ ...editingSheetData, category_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  >
+                    <option value="">카테고리 선택</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">가격</label>
+                  <input
+                    type="number"
+                    value={editingSheetData.price}
+                    onChange={(e) => setEditingSheetData({ ...editingSheetData, price: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">페이지수</label>
+                  <input
+                    type="number"
+                    value={editingSheetData.page_count}
+                    onChange={(e) => setEditingSheetData({ ...editingSheetData, page_count: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    min="0"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">템포 (BPM)</label>
+                  <input
+                    type="number"
+                    value={editingSheetData.tempo}
+                    onChange={(e) => setEditingSheetData({ ...editingSheetData, tempo: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    min="0"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">앨범명</label>
+                <input
+                  type="text"
+                  value={editingSheetData.album_name}
+                  onChange={(e) => setEditingSheetData({ ...editingSheetData, album_name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">유튜브 URL</label>
+                <input
+                  type="text"
+                  value={editingSheetData.youtube_url}
+                  onChange={(e) => {
+                    const url = e.target.value;
+                    setEditingSheetData({ ...editingSheetData, youtube_url: url });
+                    // 유튜브 URL이 입력되면 자동으로 썸네일 가져오기
+                    if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
+                      fetchYoutubeThumbnail(url, true);
+                    }
+                  }}
+                  placeholder="https://www.youtube.com/watch?v=영상ID 또는 https://youtu.be/영상ID"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 URL</label>
+                <input
+                  type="text"
+                  value={editingSheetData.thumbnail_url}
+                  onChange={(e) => setEditingSheetData({ ...editingSheetData, thumbnail_url: e.target.value })}
+                  placeholder="썸네일 이미지 URL을 입력하세요"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+                {editingSheetData.thumbnail_url && (
+                  <div className="mt-2">
+                    <img
+                      src={editingSheetData.thumbnail_url}
+                      alt="썸네일 미리보기"
+                      className="w-32 h-32 object-cover rounded-lg border border-gray-300"
+                      onError={(e) => {
+                        const img = e.target as HTMLImageElement;
+                        img.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={editingSheetData.is_active}
+                    onChange={(e) => setEditingSheetData({ ...editingSheetData, is_active: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">활성 상태</span>
+                </label>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6 border-t border-gray-200 pt-4">
+              <button
+                onClick={() => {
+                  setEditingSheet(null);
+                  setEditingSheetData({
+                    title: '',
+                    artist: '',
+                    difficulty: 'beginner',
+                    price: 0,
+                    category_id: '',
+                    thumbnail_url: '',
+                    album_name: '',
+                    page_count: 0,
+                    tempo: 0,
+                    youtube_url: '',
+                    is_active: true
+                  });
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={async () => {
+                  if (!editingSheet) return;
+                  
+                  if (!editingSheetData.title || !editingSheetData.artist || !editingSheetData.category_id) {
+                    alert('제목, 아티스트, 카테고리는 필수입니다.');
+                    return;
+                  }
+                  
+                  try {
+                    const updateData: any = {
+                      title: editingSheetData.title,
+                      artist: editingSheetData.artist,
+                      difficulty: editingSheetData.difficulty,
+                      price: editingSheetData.price,
+                      category_id: editingSheetData.category_id,
+                      is_active: editingSheetData.is_active
+                    };
+
+                    if (editingSheetData.thumbnail_url) {
+                      updateData.thumbnail_url = editingSheetData.thumbnail_url;
+                    } else {
+                      updateData.thumbnail_url = null;
+                    }
+                    
+                    if (editingSheetData.album_name) {
+                      updateData.album_name = editingSheetData.album_name;
+                    }
+                    
+                    if (editingSheetData.page_count > 0) {
+                      updateData.page_count = editingSheetData.page_count;
+                    }
+                    
+                    if (editingSheetData.tempo > 0) {
+                      updateData.tempo = editingSheetData.tempo;
+                    }
+                    
+                    if (editingSheetData.youtube_url) {
+                      updateData.youtube_url = editingSheetData.youtube_url;
+                    }
+
+                    const { error } = await supabase
+                      .from('drum_sheets')
+                      .update(updateData)
+                      .eq('id', editingSheet.id);
+
+                    if (error) throw error;
+
+                    alert('악보가 수정되었습니다.');
+                    setEditingSheet(null);
+                    setEditingSheetData({
+                      title: '',
+                      artist: '',
+                      difficulty: 'beginner',
+                      price: 0,
+                      category_id: '',
+                      thumbnail_url: '',
+                      album_name: '',
+                      page_count: 0,
+                      tempo: 0,
+                      youtube_url: '',
+                      is_active: true
+                    });
+                    loadSheets();
+                  } catch (error) {
+                    console.error('악보 수정 오류:', error);
+                    alert('악보 수정 중 오류가 발생했습니다.');
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 일괄 수정 모달 */}
+      {showBulkEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">일괄 수정 ({selectedSheetIds.length}개)</h3>
+              <button
+                onClick={() => {
+                  setShowBulkEditModal(false);
+                  setBulkEditData({
+                    category_id: '',
+                    difficulty: '',
+                    price: '',
+                    is_active: null
+                  });
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <i className="ri-close-line w-5 h-5"></i>
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600 mb-4">
+                선택한 {selectedSheetIds.length}개의 악보에 대해 수정할 항목만 입력하세요. 빈 항목은 변경되지 않습니다.
+              </p>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
+                <select
+                  value={bulkEditData.category_id}
+                  onChange={(e) => setBulkEditData({ ...bulkEditData, category_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                >
+                  <option value="">변경 안 함</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">난이도</label>
+                <select
+                  value={bulkEditData.difficulty}
+                  onChange={(e) => setBulkEditData({ ...bulkEditData, difficulty: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                >
+                  <option value="">변경 안 함</option>
+                  <option value="beginner">초급</option>
+                  <option value="intermediate">중급</option>
+                  <option value="advanced">고급</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">가격</label>
+                <input
+                  type="number"
+                  value={bulkEditData.price}
+                  onChange={(e) => setBulkEditData({ ...bulkEditData, price: e.target.value })}
+                  placeholder="변경 안 함 (빈칸 유지)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">활성 상태</label>
+                <select
+                  value={bulkEditData.is_active === null ? '' : bulkEditData.is_active ? 'true' : 'false'}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setBulkEditData({ 
+                      ...bulkEditData, 
+                      is_active: value === '' ? null : value === 'true' 
+                    });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                >
+                  <option value="">변경 안 함</option>
+                  <option value="true">활성</option>
+                  <option value="false">비활성</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6 border-t border-gray-200 pt-4">
+              <button
+                onClick={() => {
+                  setShowBulkEditModal(false);
+                  setBulkEditData({
+                    category_id: '',
+                    difficulty: '',
+                    price: '',
+                    is_active: null
+                  });
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleBulkEdit}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                수정 적용
               </button>
             </div>
           </div>
@@ -1234,10 +6746,16 @@ const AdminPage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      <button className="text-blue-600 hover:text-blue-900 transition-colors">
+                      <button 
+                        onClick={() => setEditingCategory(category)}
+                        className="text-blue-600 hover:text-blue-900 transition-colors"
+                      >
                         <i className="ri-edit-line w-4 h-4"></i>
                       </button>
-                      <button className="text-red-600 hover:text-red-900 transition-colors">
+                      <button 
+                        onClick={() => handleDeleteCategory(category.id)}
+                        className="text-red-600 hover:text-red-900 transition-colors"
+                      >
                         <i className="ri-delete-bin-line w-4 h-4"></i>
                       </button>
                     </div>
@@ -1291,8 +6809,968 @@ const AdminPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* 카테고리 수정 모달 */}
+      {editingCategory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">카테고리 수정</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">이름</label>
+                <input
+                  type="text"
+                  value={editingCategory.name}
+                  onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">설명</label>
+                <textarea
+                  value={editingCategory.description || ''}
+                  onChange={(e) => setEditingCategory({ ...editingCategory, description: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setEditingCategory(null)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleUpdateCategory}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                수정
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+
+  const renderCollectionManagement = () => (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">악보모음집 관리</h2>
+        <button
+          onClick={() => setIsAddingCollection(true)}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+        >
+          <i className="ri-add-line w-4 h-4"></i>
+          <span>새 모음집 추가</span>
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">제목</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">설명</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">가격</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">생성일</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {collections.map((collection) => (
+                <tr key={collection.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {collection.title}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
+                    {collection.description || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {collection.sale_price > 0 ? (
+                      <div>
+                        {collection.original_price > collection.sale_price && (
+                          <span className="line-through text-gray-400 mr-2">
+                            {new Intl.NumberFormat('ko-KR').format(collection.original_price)}원
+                          </span>
+                        )}
+                        <span className="text-blue-600 font-semibold">
+                          {new Intl.NumberFormat('ko-KR').format(collection.sale_price)}원
+                        </span>
+                        {collection.discount_percentage > 0 && (
+                          <span className="ml-2 text-red-500 text-xs">
+                            ({collection.discount_percentage}% 할인)
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span>{new Intl.NumberFormat('ko-KR').format(collection.original_price)}원</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 py-1 text-xs rounded-full ${collection.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                      {collection.is_active ? '활성' : '비활성'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(collection.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex space-x-2">
+                      <button 
+                        onClick={() => {
+                          setEditingCollection(collection);
+                          setEditingCollectionData({
+                            title: collection.title,
+                            description: collection.description || '',
+                            thumbnail_url: collection.thumbnail_url || '',
+                            original_price: collection.original_price,
+                            sale_price: collection.sale_price,
+                            discount_percentage: collection.discount_percentage,
+                            is_active: collection.is_active,
+                            category_id: collection.category_id || '',
+                            category_ids: collection.category_ids || (collection.category_id ? [collection.category_id] : [])
+                          });
+                        }}
+                        className="text-blue-600 hover:text-blue-900 transition-colors"
+                        title="수정"
+                      >
+                        <i className="ri-edit-line w-4 h-4"></i>
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setSelectedCollectionId(collection.id);
+                          loadCollectionSheets(collection.id);
+                          setShowCollectionSheetsModal(true);
+                        }}
+                        className="text-purple-600 hover:text-purple-900 transition-colors"
+                        title="악보 관리"
+                      >
+                        <i className="ri-file-music-line w-4 h-4"></i>
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteCollection(collection.id)}
+                        className="text-red-600 hover:text-red-900 transition-colors"
+                        title="삭제"
+                      >
+                        <i className="ri-delete-bin-line w-4 h-4"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 새 모음집 추가 모달 */}
+      {isAddingCollection && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">새 모음집 추가</h3>
+            <div className="space-y-4">
+              {/* 기본 정보 */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">제목 *</label>
+                  <input
+                    type="text"
+                    value={newCollection.title}
+                    onChange={(e) => setNewCollection({ ...newCollection, title: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">카테고리 (중복 선택 가능)</label>
+                  <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2 bg-gray-50">
+                    {categories.length === 0 ? (
+                      <p className="text-sm text-gray-500">카테고리가 없습니다.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {categories.map((category) => (
+                          <label key={category.id} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-1 rounded">
+                            <input
+                              type="checkbox"
+                              checked={newCollection.category_ids.includes(category.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setNewCollection({
+                                    ...newCollection,
+                                    category_ids: [...newCollection.category_ids, category.id]
+                                  });
+                                } else {
+                                  setNewCollection({
+                                    ...newCollection,
+                                    category_ids: newCollection.category_ids.filter(id => id !== category.id)
+                                  });
+                                }
+                              }}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-700">{category.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {newCollection.category_ids.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      선택됨: {newCollection.category_ids.length}개
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 URL</label>
+                  <input
+                    type="text"
+                    value={newCollection.thumbnail_url}
+                    onChange={(e) => setNewCollection({ ...newCollection, thumbnail_url: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="https://..."
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">설명</label>
+                <textarea
+                  value={newCollection.description}
+                  onChange={(e) => setNewCollection({ ...newCollection, description: e.target.value })}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* 가격 정보 */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      정가 (원) 
+                      <span className="text-xs text-gray-500 ml-2">
+                        (선택된 악보: {selectedSheetsForNewCollection.length}개)
+                      </span>
+                    </label>
+                    <input
+                      type="number"
+                      value={newCollection.original_price}
+                      onChange={(e) => {
+                        const price = parseInt(e.target.value) || 0;
+                        setNewCollection({ 
+                          ...newCollection, 
+                          original_price: price,
+                          discount_percentage: calculateDiscountPercentage(price, newCollection.sale_price)
+                        });
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      readOnly={selectedSheetsForNewCollection.length > 0}
+                    />
+                    {selectedSheetsForNewCollection.length > 0 && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        자동 계산: {new Intl.NumberFormat('ko-KR').format(calculateTotalPrice(selectedSheetsForNewCollection))}원
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">할인가 (원)</label>
+                    <input
+                      type="number"
+                      value={newCollection.sale_price}
+                      onChange={(e) => {
+                        const salePrice = parseInt(e.target.value) || 0;
+                        const discount = calculateDiscountPercentage(newCollection.original_price, salePrice);
+                        setNewCollection({ 
+                          ...newCollection, 
+                          sale_price: salePrice,
+                          discount_percentage: discount
+                        });
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">할인율 (%)</label>
+                    <input
+                      type="number"
+                      value={newCollection.discount_percentage}
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
+                    />
+                    {newCollection.discount_percentage > 0 && (
+                      <p className="text-xs text-red-600 mt-1 font-semibold">
+                        {newCollection.discount_percentage}% 할인
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 선택된 악보 목록 */}
+              {selectedSheetsForNewCollection.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    선택된 악보 ({selectedSheetsForNewCollection.length}개)
+                  </label>
+                  <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50">
+                    <div className="flex flex-wrap gap-2">
+                      {selectedSheetsForNewCollection.map((sheet) => (
+                        <div
+                          key={sheet.id}
+                          className="flex items-center space-x-2 bg-white px-3 py-1 rounded-full border border-gray-300"
+                        >
+                          <span className="text-sm text-gray-900">{sheet.title} - {sheet.artist}</span>
+                          <span className="text-xs text-gray-500">({new Intl.NumberFormat('ko-KR').format(sheet.price || 0)}원)</span>
+                          <button
+                            onClick={() => handleRemoveSheetFromNewCollection(sheet.id)}
+                            className="text-red-600 hover:text-red-800"
+                            title="제거"
+                          >
+                            <i className="ri-close-line w-4 h-4"></i>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 악보 검색 및 선택 */}
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">악보 추가</h4>
+                
+                {/* 검색 필터 */}
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">곡명/아티스트 검색</label>
+                    <input
+                      type="text"
+                      value={collectionSheetSearchTerm}
+                      onChange={(e) => setCollectionSheetSearchTerm(e.target.value)}
+                      placeholder="곡명 또는 아티스트로 검색..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">아티스트로 일괄 선택</label>
+                    <input
+                      type="text"
+                      value={collectionArtistSearchTerm}
+                      onChange={(e) => setCollectionArtistSearchTerm(e.target.value)}
+                      placeholder="아티스트명 입력 후 일괄 선택..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* 아티스트별 일괄 선택 버튼 */}
+                {collectionArtistSearchTerm && Object.keys(sheetsByArtist).length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs text-gray-600 mb-2">일괄 선택 가능한 아티스트:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.keys(sheetsByArtist).map((artist) => (
+                        <button
+                          key={artist}
+                          onClick={() => handleSelectArtistSheets(artist)}
+                          className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm transition-colors"
+                        >
+                          {artist} ({sheetsByArtist[artist].length}개) 모두 선택
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 검색 결과 목록 */}
+                <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg">
+                  {filteredSheetsForCollection.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500 text-sm">
+                      검색 결과가 없습니다.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-200">
+                      {filteredSheetsForCollection.map((sheet) => (
+                        <div
+                          key={sheet.id}
+                          className="flex items-center justify-between p-3 hover:bg-gray-50"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{sheet.title}</p>
+                            <p className="text-xs text-gray-500 truncate">{sheet.artist}</p>
+                          </div>
+                          <div className="flex items-center space-x-3 ml-4">
+                            <span className="text-sm text-gray-600 whitespace-nowrap">
+                              {new Intl.NumberFormat('ko-KR').format(sheet.price || 0)}원
+                            </span>
+                            <button
+                              onClick={() => handleAddSheetToNewCollection(sheet)}
+                              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm transition-colors"
+                            >
+                              추가
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 활성화 체크박스 */}
+              <div>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={newCollection.is_active}
+                    onChange={(e) => setNewCollection({ ...newCollection, is_active: e.target.checked })}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">활성화</span>
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => {
+                  setIsAddingCollection(false);
+                  setSelectedSheetsForNewCollection([]);
+                  setCollectionSheetSearchTerm('');
+                  setCollectionArtistSearchTerm('');
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleAddCollection}
+                disabled={isAddingCollectionLoading}
+                className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 ${
+                  isAddingCollectionLoading ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {isAddingCollectionLoading ? (
+                  <>
+                    <i className="ri-loader-4-line w-4 h-4 animate-spin"></i>
+                    <span>처리 중...</span>
+                  </>
+                ) : (
+                  <span>추가 ({selectedSheetsForNewCollection.length}개 악보)</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 모음집 수정 모달 */}
+      {editingCollection && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">모음집 수정</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">제목 *</label>
+                <input
+                  type="text"
+                  value={editingCollectionData.title}
+                  onChange={(e) => setEditingCollectionData({ ...editingCollectionData, title: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">카테고리 (중복 선택 가능)</label>
+                <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2 bg-gray-50">
+                  {categories.length === 0 ? (
+                    <p className="text-sm text-gray-500">카테고리가 없습니다.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {categories.map((category) => (
+                        <label key={category.id} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-1 rounded">
+                          <input
+                            type="checkbox"
+                            checked={editingCollectionData.category_ids.includes(category.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setEditingCollectionData({
+                                  ...editingCollectionData,
+                                  category_ids: [...editingCollectionData.category_ids, category.id]
+                                });
+                              } else {
+                                setEditingCollectionData({
+                                  ...editingCollectionData,
+                                  category_ids: editingCollectionData.category_ids.filter(id => id !== category.id)
+                                });
+                              }
+                            }}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">{category.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {editingCollectionData.category_ids.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    선택됨: {editingCollectionData.category_ids.length}개
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">설명</label>
+                <textarea
+                  value={editingCollectionData.description}
+                  onChange={(e) => setEditingCollectionData({ ...editingCollectionData, description: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 URL</label>
+                <input
+                  type="text"
+                  value={editingCollectionData.thumbnail_url}
+                  onChange={(e) => setEditingCollectionData({ ...editingCollectionData, thumbnail_url: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="https://..."
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">정가 (원)</label>
+                  <input
+                    type="number"
+                    value={editingCollectionData.original_price}
+                    onChange={(e) => setEditingCollectionData({ ...editingCollectionData, original_price: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">할인가 (원)</label>
+                  <input
+                    type="number"
+                    value={editingCollectionData.sale_price}
+                    onChange={(e) => setEditingCollectionData({ ...editingCollectionData, sale_price: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={editingCollectionData.is_active}
+                    onChange={(e) => setEditingCollectionData({ ...editingCollectionData, is_active: e.target.checked })}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">활성화</span>
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setEditingCollection(null)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleUpdateCollection}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                수정
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 모음집 악보 관리 모달 */}
+      {showCollectionSheetsModal && selectedCollectionId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">모음집 악보 관리</h3>
+              <button
+                onClick={() => {
+                  setShowCollectionSheetsModal(false);
+                  setSelectedCollectionId(null);
+                  setCollectionSheets([]);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <i className="ri-close-line w-5 h-5"></i>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              {/* 현재 모음집에 포함된 악보 */}
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3">포함된 악보 ({collectionSheets.length}개)</h4>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {collectionSheets.length === 0 ? (
+                    <p className="text-gray-500 text-sm">포함된 악보가 없습니다.</p>
+                  ) : (
+                    collectionSheets.map((cs) => (
+                      <div key={cs.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {cs.drum_sheets?.title || '알 수 없음'}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {cs.drum_sheets?.artist || ''}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveSheetFromCollection(cs.id)}
+                          className="text-red-600 hover:text-red-900 ml-2"
+                          title="제거"
+                        >
+                          <i className="ri-delete-bin-line w-4 h-4"></i>
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* 악보 추가 */}
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3">악보 추가</h4>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {sheets.filter(sheet => !collectionSheets.some(cs => cs.drum_sheet_id === sheet.id)).map((sheet) => (
+                    <div key={sheet.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{sheet.title}</p>
+                        <p className="text-xs text-gray-500 truncate">{sheet.artist}</p>
+                      </div>
+                      <button
+                        onClick={() => handleAddSheetToCollection(sheet.id)}
+                        className="text-blue-600 hover:text-blue-900 ml-2"
+                        title="추가"
+                      >
+                        <i className="ri-add-line w-4 h-4"></i>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderOrderDetailModal = () => {
+    if (!isOrderDetailModalOpen || !selectedOrder) {
+      return null;
+    }
+
+    const statusMeta = getOrderStatusMetaSafe(selectedOrder.status);
+    const paymentLabel = getPaymentMethodLabel(selectedOrder.payment_method);
+    const paymentKey = selectedOrder.payment_method
+      ? normalizePaymentMethodKey(selectedOrder.payment_method)
+      : '';
+    const isBankTransfer = ['bank_transfer', 'virtual_account'].includes(paymentKey);
+    const itemCount = selectedOrder.order_items?.length ?? 0;
+    const normalizedSelectedStatus = (selectedOrder.status ?? '').toLowerCase() as OrderStatus | '';
+    const isRefundable = normalizedSelectedStatus
+      ? REFUNDABLE_STATUSES.includes(normalizedSelectedStatus as OrderStatus)
+      : false;
+    const disableDelete =
+      orderActionLoading !== null ||
+      normalizedSelectedStatus === 'refunded' ||
+      normalizedSelectedStatus === 'cancelled';
+    const disableRefund = orderActionLoading !== null || !isRefundable;
+    const shortOrderId = selectedOrder.id ? selectedOrder.id.slice(0, 8).toUpperCase() : '-';
+    const displayOrderNumber = selectedOrder.order_number ?? `#${shortOrderId}`;
+
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6"
+        onClick={handleCloseOrderDetail}
+      >
+        <div
+          className="relative w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-start justify-between border-b border-gray-100 px-6 py-5">
+            <div>
+              <div className="flex items-center gap-3">
+                <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${statusMeta.className}`}>
+                  {statusMeta.label}
+                </span>
+                <span className="text-xs text-gray-500">주문 상태</span>
+              </div>
+              <h3 className="mt-2 text-2xl font-bold text-gray-900">주문 상세</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                주문 ID {selectedOrder.id} · 생성 {formatDateTime(selectedOrder.created_at)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleCloseOrderDetail}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700"
+            >
+              <i className="ri-close-line text-xl"></i>
+            </button>
+          </div>
+
+          <div className="space-y-6 px-6 py-6">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-xl bg-blue-50 p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-blue-700">총 결제금액</p>
+                <p className="mt-2 text-2xl font-semibold text-blue-900">{formatCurrency(selectedOrder.total_amount)}</p>
+                <p className="mt-1 text-xs text-blue-700">결제수단: {paymentLabel}</p>
+              </div>
+              <div className="rounded-xl bg-teal-50 p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-teal-700">구매 악보 수</p>
+                <p className="mt-2 text-2xl font-semibold text-teal-900">{itemCount.toLocaleString('ko-KR')}개</p>
+                <p className="mt-1 text-xs text-teal-700">다운로드 가능한 악보 개수</p>
+              </div>
+              <div className="rounded-xl bg-purple-50 p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-purple-700">최근 업데이트</p>
+                <p className="mt-2 text-lg font-semibold text-purple-900">{formatDateTime(selectedOrder.updated_at)}</p>
+                {selectedOrder.raw_status && selectedOrder.raw_status !== selectedOrder.status ? (
+                  <p className="mt-1 text-xs text-purple-600">원본 상태: {selectedOrder.raw_status}</p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-3">
+              <div className="space-y-6 lg:col-span-2">
+                <section className="rounded-xl border border-gray-100 p-6">
+                  <h4 className="text-lg font-semibold text-gray-900">결제 및 주문 정보</h4>
+                  <dl className="mt-4 grid gap-x-6 gap-y-4 text-sm text-gray-700 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1">
+                      <dt className="text-gray-500">주문 번호</dt>
+                      <dd className="font-medium text-gray-900 break-all">{displayOrderNumber}</dd>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <dt className="text-gray-500">주문 ID (UUID)</dt>
+                      <dd className="font-medium text-gray-900 break-all">{selectedOrder.id}</dd>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <dt className="text-gray-500">결제 방법</dt>
+                      <dd className="font-medium text-gray-900">{paymentLabel}</dd>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <dt className="text-gray-500">주문 일시</dt>
+                      <dd className="font-medium text-gray-900">{formatDateTime(selectedOrder.created_at)}</dd>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <dt className="text-gray-500">최근 업데이트</dt>
+                      <dd className="font-medium text-gray-900">{formatDateTime(selectedOrder.updated_at)}</dd>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <dt className="text-gray-500">총 결제금액</dt>
+                      <dd className="font-medium text-gray-900">{formatCurrency(selectedOrder.total_amount)}</dd>
+                    </div>
+                  </dl>
+                </section>
+
+                <section className="rounded-xl border border-gray-100 p-6">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-lg font-semibold text-gray-900">구매 악보</h4>
+                    <span className="text-sm text-gray-500">{itemCount}개</span>
+                  </div>
+                  {itemCount === 0 ? (
+                    <p className="mt-4 text-sm text-gray-500">구매한 악보 정보가 없습니다.</p>
+                  ) : (
+                    <ul className="mt-4 space-y-4">
+                      {selectedOrder.order_items?.map((item) => {
+                        const sheet = item.drum_sheets;
+                        return (
+                          <li
+                            key={item.id}
+                            className="flex items-start gap-4 rounded-lg border border-gray-100 p-4 transition-colors hover:border-blue-200"
+                          >
+                            <div className="h-16 w-16 overflow-hidden rounded-lg bg-gray-100">
+                              {sheet?.thumbnail_url ? (
+                                <img
+                                  src={sheet.thumbnail_url}
+                                  alt={sheet.title ?? '악보 썸네일'}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-[10px] text-gray-400">
+                                  이미지 없음
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold text-gray-900">
+                                {sheet?.title ?? '삭제된 악보'}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {sheet?.artist ?? '아티스트 미확인'}
+                              </p>
+                              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                                <span>구매가 {formatCurrency(item.price ?? sheet?.price ?? 0)}</span>
+                                {item.created_at ? <span>구매일 {formatDateTime(item.created_at)}</span> : null}
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </section>
+              </div>
+
+              <div className="space-y-6">
+                <section className="rounded-xl border border-gray-100 p-6">
+                  <h4 className="text-lg font-semibold text-gray-900">고객 정보</h4>
+                  <dl className="mt-4 space-y-4 text-sm text-gray-700">
+                    <div className="flex flex-col gap-1">
+                      <dt className="text-gray-500">고객명</dt>
+                      <dd className="font-medium text-gray-900">{selectedOrder.profiles?.name ?? '이름 미확인'}</dd>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <dt className="text-gray-500">이메일</dt>
+                      <dd className="font-medium text-gray-900">{selectedOrder.profiles?.email ?? '-'}</dd>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <dt className="text-gray-500">회원 ID</dt>
+                      <dd className="font-medium text-gray-900 break-all">{selectedOrder.user_id}</dd>
+                    </div>
+                  </dl>
+                </section>
+
+                <section
+                  className={`rounded-xl border p-6 ${
+                    isBankTransfer ? 'border-amber-200 bg-amber-50' : 'border-gray-100'
+                  }`}
+                >
+                  <h4 className="text-lg font-semibold text-gray-900">무통장입금 안내</h4>
+                  {isBankTransfer ? (
+                    <>
+                      <p className="mt-2 text-sm text-amber-800">
+                        페이액션 자동입금 확인 연동 시 고객이 입금하는 즉시 주문 상태가 &lsquo;입금 확인&rsquo;으로
+                        업데이트되고 다운로드가 자동으로 활성화됩니다.
+                      </p>
+                      <ul className="mt-4 space-y-2 text-sm text-amber-900">
+                        <li>· 현재 상태: {statusMeta.label}</li>
+                        <li>· 자동 전환 흐름: 입금 확인 → 다운로드 가능</li>
+                        <li>· 계좌/입금자 정보는 연동 완료 후 자동으로 노출됩니다.</li>
+                      </ul>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-600">
+                      이 주문은 {paymentLabel}로 결제되었습니다. 무통장입금 자동 확인 설정은 ‘설정 &gt; 결제 정보’에서
+                      관리할 수 있습니다.
+                    </p>
+                  )}
+                </section>
+
+                <section className="rounded-xl border border-blue-100 bg-blue-50 p-6">
+                  <h4 className="text-lg font-semibold text-blue-900">다운로드 안내</h4>
+                  <ul className="mt-4 space-y-2 text-sm text-blue-900">
+                    <li>· 상태가 &lsquo;다운로드 가능&rsquo;이면 고객이 즉시 PDF를 내려받을 수 있습니다.</li>
+                    <li>· 마이페이지 &gt; 주문내역에서 각 악보별 다운로드 현황을 확인하도록 연동 예정입니다.</li>
+                    <li>· 다운로드 제한/로그 기능은 향후 업데이트 계획에 포함되어 있습니다.</li>
+                  </ul>
+                </section>
+
+                {isBankTransfer && ['awaiting_deposit', 'pending'].includes(normalizedSelectedStatus) ? (
+                  <section className="rounded-xl border border-amber-200 bg-amber-50 p-6 space-y-4">
+                    <h4 className="text-lg font-semibold text-amber-900">무통장입금 수동 확인</h4>
+                    <p className="text-sm text-amber-800">
+                      입금이 확인되면 아래 버튼을 눌러 다운로드를 활성화하세요. 주문 상태가 &lsquo;완료&rsquo;로
+                      변경됩니다.
+                    </p>
+                    {selectedOrder.virtual_account_info ? (
+                      <dl className="grid gap-2 rounded-lg border border-amber-200 bg-white/70 p-4 text-sm text-amber-900 sm:grid-cols-2">
+                        <div>
+                          <dt className="font-medium text-amber-800">은행</dt>
+                          <dd>{selectedOrder.virtual_account_info.bankName ?? '-'}</dd>
+                        </div>
+                        <div>
+                          <dt className="font-medium text-amber-800">계좌번호</dt>
+                          <dd>{selectedOrder.virtual_account_info.accountNumber ?? '-'}</dd>
+                        </div>
+                        <div>
+                          <dt className="font-medium text-amber-800">예금주</dt>
+                          <dd>{selectedOrder.virtual_account_info.depositor ?? '-'}</dd>
+                        </div>
+                        <div>
+                          <dt className="font-medium text-amber-800">입금금액</dt>
+                          <dd>{formatCurrency(selectedOrder.virtual_account_info.amount ?? selectedOrder.total_amount)}</dd>
+                        </div>
+                        <div>
+                          <dt className="font-medium text-amber-800">입금자명</dt>
+                          <dd>
+                            {selectedOrder.virtual_account_info.expectedDepositor ??
+                              selectedOrder.depositor_name ??
+                              '미지정'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="font-medium text-amber-800">생성일</dt>
+                          <dd>{formatDateTime(selectedOrder.created_at)}</dd>
+                        </div>
+                      </dl>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={handleConfirmBankDeposit}
+                      disabled={orderActionLoading !== null}
+                      className="inline-flex w-full items-center justify-center rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {orderActionLoading === 'confirm' ? '입금 확인 중...' : '입금 확인 처리'}
+                    </button>
+                  </section>
+                ) : null}
+
+                <section className="rounded-xl border border-rose-200 bg-rose-50 p-6 space-y-4">
+                  <h4 className="text-lg font-semibold text-rose-900">관리자 작업</h4>
+                  <p className="text-sm text-rose-700">
+                    환불 여부를 선택해 주문을 정리할 수 있습니다. 환불 없이 취소하면 주문 상태가 &lsquo;취소됨&rsquo;으로
+                    변경되고 악보 다운로드가 차단되며, 환불 처리 시 주문 상태가 &lsquo;환불 완료&rsquo;로 변경되고 고객
+                    캐시가 복원됩니다.
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={handleDeleteOrderWithoutRefund}
+                      disabled={disableDelete}
+                      className="inline-flex flex-1 items-center justify-center rounded-lg border border-rose-300 bg-white px-4 py-2.5 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {orderActionLoading === 'delete'
+                        ? '취소 처리 중...'
+                        : normalizedSelectedStatus === 'refunded'
+                        ? '환불 완료됨'
+                        : normalizedSelectedStatus === 'cancelled'
+                        ? '이미 취소됨'
+                        : '환불 없이 취소'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRefundOrder}
+                      disabled={disableRefund}
+                      className="inline-flex flex-1 items-center justify-center rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {orderActionLoading === 'refund'
+                        ? '환불 처리 중...'
+                        : disableRefund
+                        ? '환불 불가'
+                        : '환불 후 취소'}
+                    </button>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderOrderManagement = () => (
     <div className="space-y-6">
@@ -1301,16 +7779,121 @@ const AdminPage: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        <div className="p-6 border-b border-gray-100">
-          <div className="relative">
-            <i className="ri-search-line absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4"></i>
+        <div className="space-y-4 border-b border-gray-100 px-6 py-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="relative w-full lg:max-w-sm">
+              <i className="ri-search-line pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              <input
+                type="text"
+                placeholder="주문번호, 주문 ID, 고객명, 이메일 검색..."
+                value={orderSearchTerm}
+                onChange={(event) => setOrderSearchTerm(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-4 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => loadOrders()}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                <i className="ri-refresh-line text-base"></i>
+                새로고침
+              </button>
+              <button
+                type="button"
+                onClick={handleExportOrders}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                <i className="ri-download-2-line text-base"></i>
+                엑셀 다운로드
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <select
+              value={orderStatusFilter}
+              onChange={(event) => setOrderStatusFilter(event.target.value as OrderStatus | 'all')}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">전체 상태</option>
+              {ORDER_STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={orderPaymentFilter}
+              onChange={(event) => setOrderPaymentFilter(event.target.value)}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">전체 결제수단</option>
+              {orderPaymentOptions.map((option) => (
+                <option key={option} value={option}>
+                  {getPaymentMethodLabel(option)}
+                </option>
+              ))}
+            </select>
+
             <input
-              type="text"
-              placeholder="주문 검색..."
-              value={orderSearchTerm}
-              onChange={(e) => setOrderSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              type="date"
+              value={orderStartDate}
+              onChange={(event) => setOrderStartDate(event.target.value)}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+
+            <input
+              type="date"
+              value={orderEndDate}
+              onChange={(event) => setOrderEndDate(event.target.value)}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+
+            <select
+              value={orderSortKey}
+              onChange={(event) => setOrderSortKey(event.target.value as OrderSortKey)}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {ORDER_SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-gray-500">
+              총 {totalOrderCount.toLocaleString('ko-KR')}건 중{' '}
+              <span className="font-semibold text-gray-700">
+                {filteredOrderCount.toLocaleString('ko-KR')}건
+              </span>{' '}
+              표시 중
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={clearOrderFilters}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                <i className="ri-filter-off-line text-base"></i>
+                필터 초기화
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderSearchTerm('');
+                  clearOrderFilters();
+                }}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-100 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-200"
+              >
+                <i className="ri-eraser-line text-base"></i>
+                검색 초기화
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1320,138 +7903,2004 @@ const AdminPage: React.FC = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">주문 ID</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">고객</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">구매 악보 수</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">금액</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">결제 방법</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">주문일</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {order.id.slice(0, 8)}...
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{order.profiles?.name}</div>
-                      <div className="text-sm text-gray-500">{order.profiles?.email}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ₩{order.total_amount.toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                      order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      order.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      order.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {order.status === 'pending' ? '대기중' :
-                       order.status === 'completed' ? '완료' :
-                       order.status === 'cancelled' ? '취소' : order.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(order.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button className="text-blue-600 hover:text-blue-900 transition-colors">
-                      <i className="ri-eye-line w-4 h-4"></i>
-                    </button>
+              {sortedOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-10 text-center text-sm text-gray-500">
+                    조건에 맞는 주문이 없습니다.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                sortedOrders.map((order) => {
+                  const statusMeta = getOrderStatusMetaSafe(order.status);
+                  const itemCount = order.order_items?.length ?? 0;
+                  const paymentLabel = getPaymentMethodLabel(order.payment_method);
+                  const expanded = isOrderExpanded(order.id);
+                  const orderItems = order.order_items ?? [];
+
+                  return (
+                    <React.Fragment key={order.id}>
+                      <tr className={`hover:bg-gray-50 ${expanded ? 'bg-gray-50/80' : ''}`}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => toggleOrderExpanded(order.id)}
+                              className="rounded-full border border-gray-200 bg-white p-1 text-gray-500 hover:border-blue-200 hover:text-blue-600"
+                              aria-label={expanded ? '주문 상세 접기' : '주문 상세 펼치기'}
+                            >
+                              <i
+                                className={`ri-${expanded ? 'arrow-down-s-line' : 'arrow-right-s-line'} text-lg`}
+                              ></i>
+                            </button>
+                            <span>{order.id.slice(0, 8)}...</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{order.profiles?.name ?? '이름 미확인'}</div>
+                            <div className="text-sm text-gray-500">{order.profiles?.email ?? '-'}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {itemCount.toLocaleString('ko-KR')}개
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          ₩{order.total_amount.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {paymentLabel}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${statusMeta.className}`}
+                            title={statusMeta.description}
+                          >
+                            {statusMeta.label}
+                          </span>
+                        </td>
+                        <td
+                          className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                          title={formatDateTime(order.created_at)}
+                        >
+                          {formatDate(order.created_at)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenOrderDetail(order)}
+                            className="text-blue-600 hover:text-blue-900 transition-colors"
+                          >
+                            <i className="ri-eye-line w-4 h-4"></i>
+                          </button>
+                        </td>
+                      </tr>
+                      {expanded && (
+                        <tr className="bg-gray-50">
+                          <td colSpan={8} className="px-6 pb-6 pt-4">
+                            {orderItems.length === 0 ? (
+                              <p className="text-sm text-gray-500">구매한 악보가 없습니다.</p>
+                            ) : (
+                              <div className="space-y-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                                  <span>총 {orderItems.length.toLocaleString('ko-KR')}개 악보</span>
+                                  <span>주문번호: {order.order_number ?? order.id.slice(0, 8).toUpperCase()}</span>
+                                </div>
+                                <div className="grid gap-3 md:grid-cols-2">
+                                  {orderItems.map((item) => {
+                                    const sheetTitle = item.sheet_title ?? item.drum_sheets?.title ?? '제목 미확인';
+                                    const sheetArtist = item.drum_sheets?.artist ?? '아티스트 정보 없음';
+                                    const thumbnail = item.drum_sheets?.thumbnail_url ?? null;
+
+                                    return (
+                                      <div
+                                        key={item.id}
+                                        className="flex items-start gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+                                      >
+                                        <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
+                                          {thumbnail ? (
+                                            <img src={thumbnail} alt={sheetTitle} className="h-full w-full object-cover" />
+                                          ) : (
+                                            <div className="flex h-full w-full items-center justify-center text-gray-400">
+                                              <i className="ri-music-2-line text-lg"></i>
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-semibold text-gray-900 truncate">{sheetTitle}</p>
+                                          <p className="text-xs text-gray-500 truncate">{sheetArtist}</p>
+                                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                                            <span>가격 {formatCurrency(item.price)}</span>
+                                            {item.created_at ? <span>구매일 {formatDate(item.created_at)}</span> : null}
+                                            {item.sheet_id ? <span>ID {item.sheet_id}</span> : null}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
       </div>
+      {renderOrderDetailModal()}
     </div>
   );
 
   const renderCustomOrderManagement = () => (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">맞춤 제작 주문 관리</h2>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        <div className="p-6 border-b border-gray-100">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">맞춤 제작 주문 관리</h2>
+          <p className="text-sm text-gray-500">
+            고객 주문제작 신청을 확인하고 견적, 진행 상태, 완료 파일을 관리하세요.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative">
-            <i className="ri-search-line absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4"></i>
+            <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
             <input
               type="text"
-              placeholder="맞춤 제작 주문 검색..."
+              placeholder="곡명, 고객 이메일로 검색"
               value={customOrderSearchTerm}
-              onChange={(e) => setCustomOrderSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              onChange={(event) => setCustomOrderSearchTerm(event.target.value)}
+              className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-64"
             />
           </div>
+          <select
+            value={customOrderStatusFilter}
+            onChange={(event) =>
+              setCustomOrderStatusFilter(event.target.value as 'all' | CustomOrderStatus)
+            }
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">전체 상태</option>
+            {Object.entries(CUSTOM_ORDER_STATUS_META).map(([value, meta]) => (
+              <option key={value} value={value}>
+                {meta.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => loadCustomOrders()}
+            className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <i className="ri-refresh-line mr-1"></i>
+            새로고침
+          </button>
         </div>
+      </div>
 
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">곡 정보</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">고객</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">난이도</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">예상 가격</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">요청일</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  곡 정보
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  신청자
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  견적 금액
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  상태
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  최근 업데이트
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                  작업
+                </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredCustomOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{order.song_title}</div>
-                      <div className="text-sm text-gray-500">{order.artist}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{order.profiles?.name}</div>
-                      <div className="text-sm text-gray-500">{order.profiles?.email}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {order.difficulty_preference}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {order.estimated_price ? `₩${order.estimated_price.toLocaleString()}` : '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                      order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      order.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                      order.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {order.status === 'pending' ? '대기중' :
-                       order.status === 'in_progress' ? '진행중' :
-                       order.status === 'completed' ? '완료' : '취소'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(order.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button className="text-blue-600 hover:text-blue-900 transition-colors">
-                      <i className="ri-eye-line w-4 h-4"></i>
-                    </button>
+            <tbody className="divide-y divide-gray-100">
+              {filteredCustomOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-10 text-center text-sm text-gray-500">
+                    조건에 맞는 주문이 없습니다.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredCustomOrders.map((order) => {
+                  const meta = CUSTOM_ORDER_STATUS_META[order.status] ?? CUSTOM_ORDER_STATUS_META.pending;
+                  return (
+                    <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-gray-900">{order.song_title}</p>
+                          <p className="text-xs text-gray-500">{order.artist}</p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-gray-900">
+                            {order.profiles?.name ?? '이름 미확인'}
+                          </p>
+                          <p className="text-xs text-gray-500">{order.profiles?.email}</p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {typeof order.estimated_price === 'number'
+                          ? `₩${order.estimated_price.toLocaleString('ko-KR')}`
+                          : '견적 미정'}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${meta.className}`}
+                        >
+                          {meta.label}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        {new Date(order.updated_at ?? order.created_at).toLocaleString('ko-KR')}
+                      </td>
+                      <td className="px-6 py-4 text-right text-sm font-medium">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCustomOrderId(order.id);
+                            setIsCustomOrderModalOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                        >
+                          <i className="ri-chat-1-line text-sm"></i>
+                          상세 보기
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {isCustomOrderModalOpen && selectedCustomOrderId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+          <div className="relative h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <CustomOrderDetail
+              orderId={selectedCustomOrderId}
+              onClose={() => {
+                setIsCustomOrderModalOpen(false);
+                setSelectedCustomOrderId(null);
+              }}
+              onUpdated={() => loadCustomOrders()}
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
+
+  const renderEventDiscountManagement = () => {
+    const activeCount = eventDiscounts.filter((item) => item.status === 'active').length;
+    const scheduledCount = eventDiscounts.filter((item) => item.status === 'scheduled').length;
+    const endedCount = eventDiscounts.filter((item) => item.status === 'ended').length;
+    const totalCount = eventDiscounts.length;
+    const discountPercent = calculateDiscountPercent(eventForm.original_price, DEFAULT_EVENT_PRICE);
+
+    const formatDateTime = (value: string) =>
+      new Date(value).toLocaleString('ko-KR', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+    const renderStatusBadge = (status: EventDiscountStatus) => {
+      const meta = EVENT_STATUS_META[status];
+      return (
+        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${meta.className}`}>
+          {meta.label}
+        </span>
+      );
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold text-gray-900">이벤트 할인악보 관리</h2>
+          <p className="text-gray-500">
+            100원 특가 이벤트 악보를 등록하고 이벤트 기간과 활성 상태를 관리하세요. 등록된 악보는 이용자 화면의
+            &lsquo;이벤트 할인악보&rsquo; 코너에 노출됩니다.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white border border-green-100 rounded-xl p-4 shadow-sm">
+            <p className="text-sm font-medium text-gray-600">진행 중</p>
+            <p className="text-2xl font-bold text-green-600 mt-1">{activeCount}</p>
+          </div>
+          <div className="bg-white border border-blue-100 rounded-xl p-4 shadow-sm">
+            <p className="text-sm font-medium text-gray-600">예정</p>
+            <p className="text-2xl font-bold text-blue-600 mt-1">{scheduledCount}</p>
+          </div>
+          <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+            <p className="text-sm font-medium text-gray-600">종료</p>
+            <p className="text-2xl font-bold text-gray-700 mt-1">{endedCount}</p>
+          </div>
+          <div className="bg-white border border-orange-100 rounded-xl p-4 shadow-sm">
+            <p className="text-sm font-medium text-gray-600">총 등록</p>
+            <p className="text-2xl font-bold text-orange-600 mt-1">{totalCount}</p>
+          </div>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">등록된 이벤트 악보</h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    이벤트 기간, 할인율, 활성 여부를 빠르게 확인하고 수정할 수 있습니다.
+                  </p>
+                </div>
+                <button
+                  onClick={() => loadEventDiscounts()}
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+                >
+                  <i className="ri-refresh-line text-base"></i>
+                  새로고침
+                </button>
+              </div>
+
+              {isLoadingEventDiscounts ? (
+                <div className="py-16 flex flex-col items-center justify-center gap-3 text-gray-500">
+                  <i className="ri-loader-4-line w-8 h-8 animate-spin text-blue-600"></i>
+                  <p>이벤트 악보를 불러오는 중입니다...</p>
+                </div>
+              ) : eventDiscounts.length === 0 ? (
+                <div className="py-16 text-center text-gray-500">
+                  아직 등록된 이벤트 할인 악보가 없습니다. 오른쪽 폼을 사용해 첫 이벤트를 등록해보세요.
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {eventDiscounts.map((event) => {
+                    const percent = calculateDiscountPercent(
+                      event.original_price ?? DEFAULT_EVENT_PRICE,
+                      event.discount_price ?? DEFAULT_EVENT_PRICE
+                    );
+                    return (
+                      <li key={event.id} className="px-6 py-5">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                          <div className="flex items-start gap-4">
+                            <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
+                              {event.thumbnail_url ? (
+                                <img
+                                  src={event.thumbnail_url}
+                                  alt={event.title || '이벤트 악보'}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <i className="ri-music-2-line text-2xl text-gray-400"></i>
+                              )}
+                            </div>
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="text-lg font-semibold text-gray-900">{event.title}</h4>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-600">
+                                  100원 특가
+                                </span>
+                                {renderStatusBadge(event.status)}
+                                {editingEventId === event.id && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-600">
+                                    편집 중
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-500 mt-1">{event.artist}</p>
+                              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                                <span className="line-through text-gray-400">{formatCurrency(event.original_price)}</span>
+                                <span className="text-lg font-bold text-red-600">
+                                  {formatCurrency(event.discount_price)}
+                                </span>
+                                {percent > 0 && (
+                                  <span className="px-2 py-0.5 text-xs font-semibold text-red-600 bg-red-50 rounded-full">
+                                    {percent}% 할인
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-3">
+                                {formatDateTime(event.event_start)} ~ {formatDateTime(event.event_end)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:items-end lg:gap-3">
+                            <button
+                              onClick={() => handleEditEventDiscount(event)}
+                              className="px-3 py-2 text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+                            >
+                              편집
+                            </button>
+                            <button
+                              onClick={() => handleToggleEventDiscount(event)}
+                              disabled={updatingEventId === event.id}
+                              className={`px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                                event.is_active
+                                  ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                  : 'bg-green-100 text-green-700 hover:bg-green-200'
+                              } ${updatingEventId === event.id ? 'opacity-70 cursor-not-allowed' : ''}`}
+                            >
+                              {event.is_active ? '비활성화' : '활성화'}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteEventDiscount(event.id)}
+                              disabled={deletingEventId === event.id}
+                              className={`px-3 py-2 text-sm font-semibold text-red-600 hover:text-red-700 transition-colors ${
+                                deletingEventId === event.id ? 'opacity-60 cursor-not-allowed' : ''
+                              }`}
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+              <div className="px-6 py-4 border-b border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">이벤트 등록 / 수정</h3>
+                    <p className="text-sm text-gray-500 mt-1">악보를 검색해 선택하고 이벤트 기간을 설정하세요.</p>
+                  </div>
+                  {editingEventId && (
+                    <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">수정 중</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="px-6 py-6 space-y-6">
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-700">이벤트 악보 검색</label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={eventSearchTerm}
+                      onChange={(e) => setEventSearchTerm(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          searchEventCandidateSheets();
+                        }
+                      }}
+                      placeholder="악보 제목 또는 아티스트를 입력하세요."
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={searchEventCandidateSheets}
+                        disabled={isEventSearchLoading}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {isEventSearchLoading ? '검색 중...' : '검색'}
+                      </button>
+                      <button
+                        onClick={resetEventFormState}
+                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-semibold"
+                      >
+                        초기화
+                      </button>
+                    </div>
+                  </div>
+
+                  {eventSearchResults.length > 0 && (
+                    <div className="border border-gray-200 rounded-lg max-h-64 overflow-y-auto divide-y divide-gray-100">
+                      {eventSearchResults.map((sheet) => {
+                        const alreadyRegistered = eventDiscounts.some((event) => event.sheet_id === sheet.id);
+                        return (
+                          <button
+                            key={sheet.id}
+                            onClick={() => handleSelectEventCandidate(sheet)}
+                            className={`w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors ${
+                              selectedEventSheet?.id === sheet.id ? 'bg-blue-50' : ''
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="font-semibold text-gray-900">{sheet.title}</p>
+                                <p className="text-sm text-gray-500">{sheet.artist}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-semibold text-gray-800">{formatCurrency(sheet.price)}</p>
+                                {alreadyRegistered && (
+                                  <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-orange-100 text-orange-600 mt-1">
+                                    이미 등록됨
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {selectedEventSheet ? (
+                  <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-orange-700">선택된 악보</p>
+                        <p className="text-lg font-bold text-gray-900">{selectedEventSheet.title}</p>
+                        <p className="text-sm text-gray-600">{selectedEventSheet.artist}</p>
+                      </div>
+                      <button
+                        onClick={clearSelectedEventSheet}
+                        className="text-xs font-semibold text-gray-500 hover:text-gray-700 transition-colors"
+                      >
+                        선택 해제
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="text-gray-600">정가</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(eventForm.original_price)}</span>
+                      <span className="text-gray-400">→</span>
+                      <span className="text-red-600 font-bold">{formatCurrency(DEFAULT_EVENT_PRICE)}</span>
+                      {discountPercent > 0 && (
+                        <span className="px-2 py-0.5 text-xs font-semibold text-red-600 bg-red-100 rounded-full">
+                          {discountPercent}% 할인
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500">
+                    이벤트로 등록할 악보를 먼저 검색해 선택해주세요.
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">이벤트 기간</label>
+                    <div className="grid grid-cols-1 gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-gray-500 w-16">시작</span>
+                        <input
+                          type="datetime-local"
+                          value={eventForm.event_start}
+                          onChange={(e) => updateEventForm('event_start', e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-gray-500 w-16">종료</span>
+                        <input
+                          type="datetime-local"
+                          value={eventForm.event_end}
+                          onChange={(e) => updateEventForm('event_end', e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">이벤트 가격</label>
+                    <div className="grid grid-cols-1 gap-2 text-sm text-gray-600">
+                      <p>
+                        정가 <span className="font-semibold text-gray-900">{formatCurrency(eventForm.original_price)}</span> →
+                        이벤트가 <span className="font-semibold text-red-600">{formatCurrency(DEFAULT_EVENT_PRICE)}</span>
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        할인가는 100원으로 고정되며, 할인율은 정가 기준으로 자동 계산됩니다.
+                      </p>
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-3 text-sm font-medium text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={eventForm.is_active}
+                      onChange={(e) => updateEventForm('is_active', e.target.checked)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    이벤트를 즉시 활성화
+                  </label>
+                </div>
+
+                <button
+                  onClick={handleSaveEventDiscount}
+                  disabled={isSavingEventDiscount}
+                  className="w-full py-3 bg-red-500 text-white rounded-lg font-semibold text-sm hover:bg-red-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isSavingEventDiscount ? '저장 중...' : editingEventId ? '이벤트 수정하기' : '이벤트 등록하기'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderSettings = () => {
+    if (isLoadingSettings) {
+      return (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+          <div className="flex items-center gap-3 px-6 py-8 text-gray-600">
+            <i className="ri-loader-4-line h-6 w-6 animate-spin text-blue-600"></i>
+            <span>설정을 불러오는 중입니다...</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (settingsError) {
+      return (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+          <div className="px-6 py-8">
+            <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-red-700">
+              <div className="flex items-start gap-3">
+                <i className="ri-error-warning-line text-xl"></i>
+                <div>
+                  <p className="font-semibold">설정을 불러오는 중 오류가 발생했습니다.</p>
+                  <p className="mt-1 text-sm">{settingsError}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={loadSiteSettings}
+                className="mt-6 inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+              >
+                <i className="ri-refresh-line"></i>
+                다시 시도
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const activeConfig = SETTINGS_TAB_CONFIG[activeSettingsTab];
+
+    const renderFooter = (key: SiteSettingKey) => {
+      const meta = settingsMeta[key];
+      return (
+        <div className="flex flex-col gap-3 border-t border-gray-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-gray-500">
+            마지막 저장: {formatSettingsTimestamp(meta?.updatedAt ?? '')}
+          </p>
+          <button
+            type="submit"
+            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+            disabled={isSavingSettings}
+          >
+            {isSavingSettings ? '저장 중...' : '변경 사항 저장'}
+          </button>
+        </div>
+      );
+    };
+
+    const renderTabContent = () => {
+      switch (activeSettingsTab) {
+        case 'general':
+          return (
+            <form
+              className="space-y-6"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleSaveSettings('general');
+              }}
+            >
+              <div className="grid gap-6">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700" htmlFor="setting-site-name">
+                      사이트 이름
+                    </label>
+                    <input
+                      id="setting-site-name"
+                      type="text"
+                      value={siteSettings.general.siteName}
+                      onChange={(event) => updateGeneralSetting('siteName', event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="CopyDrum"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700" htmlFor="setting-contact-number">
+                      연락처
+                    </label>
+                    <input
+                      id="setting-contact-number"
+                      type="text"
+                      value={siteSettings.general.contactNumber}
+                      onChange={(event) => updateGeneralSetting('contactNumber', event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="010-0000-0000"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700" htmlFor="setting-contact-email">
+                      고객 지원 이메일
+                    </label>
+                    <input
+                      id="setting-contact-email"
+                      type="email"
+                      value={siteSettings.general.contactEmail}
+                      onChange={(event) => updateGeneralSetting('contactEmail', event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="copydrum@hanmail.net"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700" htmlFor="setting-address">
+                      주소
+                    </label>
+                    <input
+                      id="setting-address"
+                      type="text"
+                      value={siteSettings.general.address}
+                      onChange={(event) => updateGeneralSetting('address', event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="서울특별시"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="setting-about">
+                    소개 문구
+                  </label>
+                  <textarea
+                    id="setting-about"
+                    rows={4}
+                    value={siteSettings.general.about}
+                    onChange={(event) => updateGeneralSetting('about', event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    placeholder="서비스 소개 문구를 입력하세요."
+                  ></textarea>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="setting-business-hours">
+                    운영 시간
+                  </label>
+                  <input
+                    id="setting-business-hours"
+                    type="text"
+                    value={siteSettings.general.businessHours}
+                    onChange={(event) => updateGeneralSetting('businessHours', event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    placeholder="평일 10:00-18:00 (점심 12:00-13:00)"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">방문자에게 표시되는 기본 운영 시간을 입력하세요.</p>
+                </div>
+              </div>
+              {renderFooter('general')}
+            </form>
+          );
+        case 'payment':
+          return (
+            <form
+              className="space-y-6"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleSaveSettings('payment');
+              }}
+            >
+              <div className="grid gap-6">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="md:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700" htmlFor="setting-bank-name">
+                      은행명
+                    </label>
+                    <input
+                      id="setting-bank-name"
+                      type="text"
+                      value={siteSettings.payment.bankName}
+                      onChange={(event) => updatePaymentSetting('bankName', event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="국민은행"
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700" htmlFor="setting-account-number">
+                      계좌번호
+                    </label>
+                    <input
+                      id="setting-account-number"
+                      type="text"
+                      value={siteSettings.payment.accountNumber}
+                      onChange={(event) => updatePaymentSetting('accountNumber', event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="000000-00-000000"
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700" htmlFor="setting-account-holder">
+                      예금주
+                    </label>
+                    <input
+                      id="setting-account-holder"
+                      type="text"
+                      value={siteSettings.payment.accountHolder}
+                      onChange={(event) => updatePaymentSetting('accountHolder', event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="홍길동"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="setting-payment-guide">
+                    결제 안내 문구
+                  </label>
+                  <textarea
+                    id="setting-payment-guide"
+                    rows={5}
+                    value={siteSettings.payment.paymentGuide}
+                    onChange={(event) => updatePaymentSetting('paymentGuide', event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    placeholder="입금 안내 문구를 입력하세요."
+                  ></textarea>
+                  <p className="mt-1 text-xs text-gray-500">고객에게 안내되는 결제 방법 및 주의사항을 작성합니다.</p>
+                </div>
+              </div>
+              {renderFooter('payment')}
+            </form>
+          );
+        case 'event':
+          return (
+            <form
+              className="space-y-6"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleSaveSettings('event');
+              }}
+            >
+              <div className="grid gap-6 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="setting-event-discount-rate">
+                    기본 할인율 (%)
+                  </label>
+                  <input
+                    id="setting-event-discount-rate"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={siteSettings.event.defaultDiscountRate}
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      const safe = Number.isNaN(value) ? 0 : Math.min(100, Math.max(0, value));
+                      updateEventSetting('defaultDiscountRate', safe);
+                    }}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">새 이벤트 생성 시 기본으로 적용되는 할인율입니다.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="setting-event-duration">
+                    기본 이벤트 기간 (일)
+                  </label>
+                  <input
+                    id="setting-event-duration"
+                    type="number"
+                    min={1}
+                    value={siteSettings.event.defaultDurationDays}
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      const safe = Number.isNaN(value) ? 1 : Math.max(1, value);
+                      updateEventSetting('defaultDurationDays', safe);
+                    }}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">이벤트 시작일 기준 기본 종료일까지의 기간입니다.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="setting-event-min-price">
+                    최소 할인 가격 (₩)
+                  </label>
+                  <input
+                    id="setting-event-min-price"
+                    type="number"
+                    min={0}
+                    value={siteSettings.event.minPrice}
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      const safe = Number.isNaN(value) ? 0 : Math.max(0, value);
+                      updateEventSetting('minPrice', safe);
+                    }}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">할인 적용 시 허용되는 최솟값입니다.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="setting-event-max-price">
+                    최대 할인 가격 (₩)
+                  </label>
+                  <input
+                    id="setting-event-max-price"
+                    type="number"
+                    min={0}
+                    value={siteSettings.event.maxPrice}
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      const safe = Number.isNaN(value) ? 0 : Math.max(0, value);
+                      updateEventSetting('maxPrice', safe);
+                    }}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">할인 적용 시 허용되는 최대값입니다.</p>
+                </div>
+              </div>
+              {renderFooter('event')}
+            </form>
+          );
+        case 'system':
+          return (
+            <form
+              className="space-y-6"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleSaveSettings('system');
+              }}
+            >
+              <div className="space-y-5">
+                <div className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">유지보수 모드</p>
+                    <p className="text-xs text-gray-500">활성화 시 방문자에게 점검 안내 메시지를 표시합니다.</p>
+                  </div>
+                  <label className="inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      checked={siteSettings.system.maintenanceMode}
+                      onChange={(event) => updateSystemSetting('maintenanceMode', event.target.checked)}
+                    />
+                  </label>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700" htmlFor="setting-max-upload">
+                      첨부 파일 최대 용량 (MB)
+                    </label>
+                    <input
+                      id="setting-max-upload"
+                      type="number"
+                      min={1}
+                      value={siteSettings.system.maxUploadSizeMB}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        const safe = Number.isNaN(value) ? 1 : Math.max(1, value);
+                        updateSystemSetting('maxUploadSizeMB', safe);
+                      }}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">맞춤 제작 요청 등 파일 업로드 허용 용량입니다.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700" htmlFor="setting-items-per-page">
+                      페이지당 항목 수
+                    </label>
+                    <input
+                      id="setting-items-per-page"
+                      type="number"
+                      min={1}
+                      value={siteSettings.system.itemsPerPage}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        const safe = Number.isNaN(value) ? 1 : Math.max(1, value);
+                        updateSystemSetting('itemsPerPage', safe);
+                      }}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">목록 화면에서 기본으로 보여줄 항목 개수입니다.</p>
+                  </div>
+                </div>
+              </div>
+              {renderFooter('system')}
+            </form>
+          );
+        case 'notification':
+          return (
+            <form
+              className="space-y-6"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleSaveSettings('notification');
+              }}
+            >
+              <div className="space-y-4">
+                <label className="inline-flex items-start gap-3 rounded-lg border border-gray-200 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={siteSettings.notification.orderNotification}
+                    onChange={(event) => updateNotificationSetting('orderNotification', event.target.checked)}
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">일반 주문 알림</p>
+                    <p className="text-xs text-gray-500">새로운 일반 주문이 접수되면 알림을 받습니다.</p>
+                  </div>
+                </label>
+                <label className="inline-flex items-start gap-3 rounded-lg border border-gray-200 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={siteSettings.notification.customOrderNotification}
+                    onChange={(event) => updateNotificationSetting('customOrderNotification', event.target.checked)}
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">맞춤 제작 알림</p>
+                    <p className="text-xs text-gray-500">맞춤 제작 요청이 생성되거나 상태가 변경되면 알림을 받습니다.</p>
+                  </div>
+                </label>
+                <label className="inline-flex items-start gap-3 rounded-lg border border-gray-200 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={siteSettings.notification.inquiryNotification}
+                    onChange={(event) => updateNotificationSetting('inquiryNotification', event.target.checked)}
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">상담/문의 알림</p>
+                    <p className="text-xs text-gray-500">새로운 1:1 문의가 접수되면 알림을 받습니다.</p>
+                  </div>
+                </label>
+                <label className="inline-flex items-start gap-3 rounded-lg border border-gray-200 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={siteSettings.notification.newsletterSubscription}
+                    onChange={(event) => updateNotificationSetting('newsletterSubscription', event.target.checked)}
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">뉴스레터 발송 동의</p>
+                    <p className="text-xs text-gray-500">이메일 뉴스레터 및 주요 공지 발송에 동의합니다.</p>
+                  </div>
+                </label>
+              </div>
+              {renderFooter('notification')}
+            </form>
+          );
+        default:
+          return null;
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+          <div className="border-b border-gray-100 px-6 py-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">사이트 설정</h2>
+                <p className="text-sm text-gray-500">서비스 운영 전반에 필요한 설정을 관리하세요.</p>
+              </div>
+              <button
+                type="button"
+                onClick={loadSiteSettings}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <i className="ri-refresh-line"></i>
+                전체 새로고침
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-col lg:flex-row">
+            <div className="lg:min-w-[240px] lg:border-r lg:border-gray-100">
+              <nav className="flex overflow-x-auto border-b border-gray-100 lg:flex-col lg:border-b-0">
+                {SETTINGS_TABS.map((tab) => {
+                  const config = SETTINGS_TAB_CONFIG[tab];
+                  const isActive = activeSettingsTab === tab;
+                  return (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setActiveSettingsTab(tab)}
+                      className={`flex-1 min-w-[160px] border-b border-gray-100 px-4 py-3 text-sm font-medium transition-colors last:border-b-0 lg:min-w-full lg:border-b-0 ${
+                        isActive
+                          ? 'bg-blue-50 text-blue-700 lg:border-l-4 lg:border-blue-500'
+                          : 'text-gray-600 hover:bg-gray-50 lg:border-l-4 lg:border-transparent'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-2 lg:justify-start">
+                        <i className={`${config.icon} text-base`}></i>
+                        <span>{config.label}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+            <div className="flex-1">
+              <div className="border-b border-gray-100 px-6 py-5">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg bg-blue-50 p-3 text-blue-600">
+                    <i className={`${activeConfig.icon} text-xl`}></i>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900">{activeConfig.label}</h3>
+                    <p className="mt-1 text-sm text-gray-500">{activeConfig.description}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="px-6 py-6">{renderTabContent()}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderAnalytics = () => {
+    const periodOptions: { value: AnalyticsPeriod; label: string }[] = [
+      { value: 'today', label: '오늘' },
+      { value: '7d', label: '최근 7일' },
+      { value: '30d', label: '최근 30일' },
+      { value: '365d', label: '최근 1년' },
+      { value: 'all', label: '전체 기간' },
+    ];
+
+    const formatGrowthText = (value: number | null | undefined) =>
+      value != null && Number.isFinite(value) ? formatPercentChange(value) : '-';
+
+    const growthBadgeClass = (value: number | null | undefined) => {
+      if (value == null || !Number.isFinite(value)) {
+        return 'bg-gray-100 text-gray-500';
+      }
+      return getChangeBadgeClassName(value);
+    };
+
+    const getCustomOrderStatusLabel = (status: string) =>
+      CUSTOM_ORDER_STATUS_META[status as CustomOrderStatus]?.label ?? status;
+
+    const pieColors = [
+      '#2563eb',
+      '#22c55e',
+      '#f97316',
+      '#a855f7',
+      '#f43f5e',
+      '#0ea5e9',
+      '#6366f1',
+      '#14b8a6',
+      '#ef4444',
+      '#78350f',
+    ];
+
+    const statusColorMap: Record<string, string> = {
+      pending: '#f59e0b',
+      quoted: '#38bdf8',
+      payment_confirmed: '#22c55e',
+      in_progress: '#6366f1',
+      completed: '#9333ea',
+      cancelled: '#ef4444',
+    };
+
+    const isInitialLoading = analyticsLoading && !analyticsData;
+    const hasData = Boolean(analyticsData);
+
+    const revenueData = analyticsData?.revenueTrend ?? [];
+    const popularData = analyticsData?.popularSheets ?? [];
+    const categoryData = analyticsData?.categoryBreakdown ?? [];
+    const customStatusData = analyticsData?.customOrder.statusDistribution ?? [];
+    const newUsersData = analyticsData?.newUsersTrend ?? [];
+
+    const kpiItems = analyticsData
+      ? [
+          {
+            title: '총 매출',
+            value: formatCurrency(analyticsData.summary.totalRevenue),
+            change: analyticsData.summary.revenueGrowth,
+            caption: '완료된 주문 기준',
+            icon: 'ri-coins-line',
+            iconWrapperClass: 'bg-amber-100 text-amber-600',
+          },
+          {
+            title: '총 주문 수',
+            value: analyticsData.summary.totalOrders.toLocaleString('ko-KR'),
+            change: analyticsData.summary.orderGrowth,
+            caption: '기간 내 완료된 주문',
+            icon: 'ri-shopping-bag-3-line',
+            iconWrapperClass: 'bg-blue-100 text-blue-600',
+          },
+          {
+            title: '총 회원 수',
+            value: analyticsData.summary.totalCustomers.toLocaleString('ko-KR'),
+            change: analyticsData.summary.customerGrowth,
+            caption: '신규 회원 증감률',
+            icon: 'ri-user-3-line',
+            iconWrapperClass: 'bg-sky-100 text-sky-600',
+          },
+          {
+            title: '평균 주문 금액',
+            value: formatCurrency(analyticsData.summary.averageOrderValue),
+            change: analyticsData.summary.averageOrderGrowth,
+            caption: '주문당 평균 매출',
+            icon: 'ri-line-chart-line',
+            iconWrapperClass: 'bg-emerald-100 text-emerald-600',
+          },
+        ]
+      : [];
+
+    const isExportDisabled = !analyticsData || analyticsLoading || analyticsExporting;
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {periodOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => handleAnalyticsPeriodChange(option.value)}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                  analyticsPeriod === option.value
+                    ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100'
+                }`}
+                disabled={analyticsLoading && analyticsPeriod === option.value}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleAnalyticsRefresh}
+              className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+              disabled={analyticsLoading}
+            >
+              <i className="ri-refresh-line mr-2"></i>
+              새로고침
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleAnalyticsExport()}
+              className="inline-flex items-center rounded-lg border border-blue-600 px-3 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 disabled:border-gray-300 disabled:text-gray-400"
+              disabled={isExportDisabled}
+            >
+              <i className="ri-download-2-line mr-2"></i>
+              {analyticsExporting ? '내보내는 중...' : 'Excel 내보내기'}
+            </button>
+          </div>
+        </div>
+
+        {analyticsError && (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="font-semibold">데이터를 불러오는 중 오류가 발생했습니다.</p>
+                <p className="mt-1 text-rose-600">{analyticsError}</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleAnalyticsRefresh}
+                className="inline-flex items-center rounded-lg border border-rose-400 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100"
+              >
+                <i className="ri-refresh-line mr-2"></i>
+                다시 시도
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isInitialLoading ? (
+          <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-gray-200 bg-white">
+            <div className="text-center text-gray-500">
+              <i className="ri-loader-4-line animate-spin text-2xl"></i>
+              <p className="mt-2 text-sm">데이터를 불러오는 중입니다...</p>
+            </div>
+          </div>
+        ) : hasData ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+              {kpiItems.map((item) => (
+                <div key={item.title} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500">{item.title}</p>
+                      <p className="mt-2 text-2xl font-semibold text-gray-900">{item.value}</p>
+                    </div>
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${item.iconWrapperClass}`}>
+                      <i className={`${item.icon} text-xl`}></i>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-center gap-2">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${growthBadgeClass(
+                        item.change,
+                      )}`}
+                    >
+                      {formatGrowthText(item.change)}
+                    </span>
+                    <span className="text-xs text-gray-500">{item.caption}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">매출 추이</h3>
+                  <p className="text-sm text-gray-500">기간 내 매출 흐름</p>
+                </div>
+              </div>
+              <div className="mt-6 h-[300px]">
+                {revenueData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={revenueData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                      <YAxis tickFormatter={(value: number) => `₩${value.toLocaleString('ko-KR')}`} />
+                      <Tooltip
+                        formatter={(value: number, name: string) => {
+                          if (name === 'revenue') {
+                            return [`₩${value.toLocaleString('ko-KR')}`, '매출'];
+                          }
+                          if (name === 'orders') {
+                            return [`${value.toLocaleString('ko-KR')}건`, '주문 수'];
+                          }
+                          return value;
+                        }}
+                      />
+                      <Line type="monotone" dataKey="revenue" name="매출" stroke="#2563eb" strokeWidth={2} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                    표시할 데이터가 없습니다.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">주문 추이</h3>
+                  <p className="text-sm text-gray-500">기간 내 주문 수 변화</p>
+                </div>
+              </div>
+              <div className="mt-6 h-[300px]">
+                {revenueData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={revenueData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                      <YAxis tickFormatter={(value: number) => `${value.toLocaleString('ko-KR')}건`} />
+                      <Tooltip formatter={(value: number) => [`${value.toLocaleString('ko-KR')}건`, '주문 수']} />
+                      <Area type="monotone" dataKey="orders" name="주문 수" stroke="#22c55e" fill="#bbf7d0" fillOpacity={0.6} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                    표시할 데이터가 없습니다.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">인기 악보 Top 10</h3>
+                  <p className="text-sm text-gray-500">주문 수 기준 상위 악보</p>
+                </div>
+              </div>
+              <div className="h-[320px]">
+                {popularData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={popularData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="title"
+                        tickFormatter={(value: string) => (value.length > 8 ? `${value.slice(0, 8)}…` : value)}
+                        tick={{ fontSize: 12 }}
+                      />
+                      <YAxis tickFormatter={(value: number) => `${value.toLocaleString('ko-KR')}건`} />
+                      <Tooltip
+                        formatter={(value: number, name: string) =>
+                          name === 'orders'
+                            ? [`${value.toLocaleString('ko-KR')}건`, '주문 수']
+                            : [`₩${value.toLocaleString('ko-KR')}`, '매출']
+                        }
+                      />
+                      <Legend />
+                      <Bar dataKey="orders" name="주문 수" fill="#2563eb" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="revenue" name="매출" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                    표시할 데이터가 없습니다.
+                  </div>
+                )}
+              </div>
+              <div className="mt-6 divide-y divide-gray-100 rounded-lg border border-gray-100">
+                {popularData.slice(0, 5).map((sheet, index) => (
+                  <div key={sheet.sheetId} className="flex items-center justify-between px-4 py-3 text-sm">
+                    <div>
+                      <p className="font-semibold text-gray-900">
+                        {index + 1}. {sheet.title}
+                      </p>
+                      <p className="text-xs text-gray-500">{sheet.artist}</p>
+                    </div>
+                    <div className="text-right text-xs text-gray-500">
+                      <p>주문 {sheet.orders.toLocaleString('ko-KR')}건</p>
+                      <p className="text-gray-600">매출 {formatCurrency(sheet.revenue)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">카테고리별 판매 비중</h3>
+                  <p className="text-sm text-gray-500">매출 기준 분포</p>
+                </div>
+              </div>
+              <div className="h-[320px]">
+                {categoryData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={categoryData}
+                        dataKey="revenue"
+                        nameKey="categoryName"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={4}
+                      >
+                        {categoryData.map((entry, index) => (
+                          <Cell
+                            key={entry.categoryId ?? `category-${index}`}
+                            fill={pieColors[index % pieColors.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => `₩${value.toLocaleString('ko-KR')}`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                    표시할 데이터가 없습니다.
+                  </div>
+                )}
+              </div>
+              <div className="mt-6 space-y-3">
+                {categoryData.map((category, index) => (
+                  <div
+                    key={category.categoryId ?? `category-${index}`}
+                    className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3 text-sm"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="inline-flex h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: pieColors[index % pieColors.length] }}
+                      ></span>
+                      <span className="font-medium text-gray-900">{category.categoryName}</span>
+                    </div>
+                    <div className="text-right text-xs text-gray-500">
+                      <p>매출 {formatCurrency(category.revenue)}</p>
+                      <p>주문 {category.orders.toLocaleString('ko-KR')}건</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">커스텀 주문 현황</h3>
+                  <p className="text-sm text-gray-500">상태별 분포와 평균 견적</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-xs text-gray-500">총 요청</p>
+                  <p className="mt-1 text-xl font-semibold text-gray-900">
+                    {analyticsData.customOrder.metrics.totalCount.toLocaleString('ko-KR')}건
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-xs text-gray-500">진행 중</p>
+                  <p className="mt-1 text-xl font-semibold text-gray-900">
+                    {analyticsData.customOrder.metrics.activeCount.toLocaleString('ko-KR')}건
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-xs text-gray-500">평균 견적 금액</p>
+                  <p className="mt-1 text-xl font-semibold text-gray-900">
+                    {formatCurrency(analyticsData.customOrder.metrics.averageEstimatedPrice)}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-6 h-[280px]">
+                {customStatusData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={customStatusData} dataKey="count" nameKey="status" innerRadius={60} outerRadius={100} paddingAngle={4}>
+                        {customStatusData.map((entry, index) => (
+                          <Cell
+                            key={entry.status}
+                            fill={statusColorMap[entry.status] ?? pieColors[index % pieColors.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => `${value.toLocaleString('ko-KR')}건`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                    표시할 데이터가 없습니다.
+                  </div>
+                )}
+              </div>
+              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                {customStatusData.map((entry) => (
+                  <div
+                    key={entry.status}
+                    className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3 text-sm"
+                  >
+                    <span className="font-medium text-gray-700">
+                      {getCustomOrderStatusLabel(entry.status)}
+                    </span>
+                    <span className="font-semibold text-gray-900">
+                      {entry.count.toLocaleString('ko-KR')}건
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">신규 회원 추이</h3>
+                  <p className="text-sm text-gray-500">기간 내 가입한 회원 수</p>
+                </div>
+              </div>
+              <div className="h-[320px]">
+                {newUsersData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={newUsersData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                      <YAxis tickFormatter={(value: number) => `${value.toLocaleString('ko-KR')}명`} />
+                      <Tooltip formatter={(value: number) => [`${value.toLocaleString('ko-KR')}명`, '신규 회원']} />
+                      <Line type="monotone" dataKey="count" name="신규 회원" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                    표시할 데이터가 없습니다.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        ) : (
+          <div className="rounded-xl border border-gray-200 bg-white p-12 text-center text-gray-500">
+            아직 집계된 데이터가 없습니다.
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderCopyrightReport = () => {
+    const totalPurchases = copyrightReportData.reduce(
+      (sum, row) => sum + row.purchaseCount,
+      0,
+    );
+    const totalRevenue = copyrightReportData.reduce((sum, row) => sum + row.revenue, 0);
+    const totalDirectSalesAmount = directSalesData.reduce(
+      (sum, order) => sum + (Number.isFinite(order.totalAmount) ? order.totalAmount : 0),
+      0,
+    );
+    const totalCashChargeAmount = cashChargeData.reduce(
+      (sum, transaction) => sum + (Number.isFinite(transaction.amount) ? transaction.amount : 0),
+      0,
+    );
+    const totalCashBonusAmount = cashChargeData.reduce(
+      (sum, transaction) => sum + (Number.isFinite(transaction.bonusAmount) ? transaction.bonusAmount : 0),
+      0,
+    );
+    const totalCashIssued = cashChargeData.reduce(
+      (sum, transaction) => sum + (Number.isFinite(transaction.totalCredit) ? transaction.totalCredit : 0),
+      0,
+    );
+    const hasPurchaseData = copyrightReportData.length > 0;
+    const hasDirectSalesData = directSalesData.length > 0;
+    const hasCashChargeData = cashChargeData.length > 0;
+    const hasAnyExcelData = hasPurchaseData || hasDirectSalesData || hasCashChargeData;
+    const isTableEmpty = !copyrightReportLoading && !hasPurchaseData;
+
+    return (
+      <div className="space-y-6">
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">시작일</label>
+              <input
+                type="date"
+                className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                value={copyrightStartDate}
+                onChange={(event) => handleCopyrightStartDateChange(event.target.value)}
+                max={copyrightEndDate}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">종료일</label>
+              <input
+                type="date"
+                className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                value={copyrightEndDate}
+                onChange={(event) => handleCopyrightEndDateChange(event.target.value)}
+                min={copyrightStartDate}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {COPYRIGHT_QUICK_RANGES.map((range) => (
+              <button
+                key={range.key}
+                type="button"
+                onClick={() => handleSelectCopyrightQuickRange(range.key)}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                  copyrightQuickRange === range.key
+                    ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100'
+                }`}
+                disabled={copyrightReportLoading}
+              >
+                {range.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleCopyrightSearch}
+              className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:bg-blue-300"
+              disabled={copyrightReportLoading}
+            >
+              <i className="ri-search-line mr-2"></i>
+              자료 조회
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleIntegratedCopyrightExport()}
+              className="inline-flex items-center rounded-lg border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 disabled:border-gray-300 disabled:text-gray-400"
+              disabled={copyrightReportLoading || !hasAnyExcelData}
+            >
+              <i className="ri-file-excel-2-line mr-2"></i>
+              통합 Excel 다운로드
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleCopyrightExport()}
+              className="inline-flex items-center rounded-lg border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 disabled:border-gray-300 disabled:text-gray-400"
+              disabled={copyrightReportLoading || !hasPurchaseData}
+            >
+              <i className="ri-download-2-line mr-2"></i>
+              Excel 다운로드
+            </button>
+            {copyrightReportLoading && (
+              <span className="inline-flex items-center text-sm text-gray-500">
+                <i className="ri-loader-4-line mr-2 animate-spin"></i>
+                데이터를 불러오는 중입니다...
+              </span>
+            )}
+          </div>
+
+          {copyrightReportError && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+              {copyrightReportError}
+            </div>
+          )}
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="text-sm text-gray-500">총 구매 수</div>
+            <div className="mt-2 text-2xl font-semibold text-gray-900">
+              {totalPurchases.toLocaleString('ko-KR')}건
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              선택한 기간 동안 판매된 악보의 총 구매 수입니다.
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="text-sm text-gray-500">직접 결제 매출</div>
+            <div className="mt-2 text-2xl font-semibold text-gray-900">
+              {formatCurrency(Math.round(totalDirectSalesAmount))}
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              카드·무통장입금·카카오페이로 결제된 주문 금액 합계입니다.
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="text-sm text-gray-500">캐시 충전 금액 (유상)</div>
+            <div className="mt-2 text-2xl font-semibold text-gray-900">
+              {formatCurrency(Math.round(totalCashChargeAmount))}
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              고객이 실제 결제한 캐시 충전 금액 합계입니다. (보너스 제외)
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="text-sm text-gray-500">캐시 실결제 금액</div>
+            <div className="mt-2 text-2xl font-semibold text-gray-900">
+              {formatCurrency(Math.round(totalCashChargeAmount))}
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              캐시 충전 시 결제된 금액입니다. 보너스 지급: {formatCurrency(Math.round(totalCashBonusAmount))} · 총 지급 캐시:
+              {formatCurrency(Math.round(totalCashIssued))}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="overflow-x-auto">
+            {copyrightReportLoading ? (
+              <div className="flex h-48 items-center justify-center text-sm text-gray-500">
+                <i className="ri-loader-4-line mr-2 animate-spin"></i>
+                데이터를 불러오는 중입니다...
+              </div>
+            ) : isTableEmpty ? (
+              <div className="flex h-48 flex-col items-center justify-center text-sm text-gray-500">
+                <i className="ri-information-line mb-2 text-xl"></i>
+                선택한 기간에 해당하는 판매 데이터가 없습니다.
+              </div>
+            ) : (
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      SONG ID
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      작품명
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      가수명
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      앨범명
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      장르
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      구매 수
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      매출액
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {copyrightReportData.map((row) => (
+                    <tr key={row.songId}>
+                      <td className="px-4 py-3 text-sm font-semibold text-gray-900">{row.songId}</td>
+                      <td className="px-4 py-3 text-sm text-gray-800">{row.title || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-700">{row.artist || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{row.albumName || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{row.categoryName || '-'}</td>
+                      <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">
+                        {row.purchaseCount.toLocaleString('ko-KR')}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm font-semibold text-blue-700">
+                        {formatCurrency(Math.round(row.revenue))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-8 space-y-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">직접 결제 매출</h3>
+              <p className="text-sm text-gray-500">
+                카드·무통장입금·카카오페이로 결제된 주문 내역입니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleDirectSalesExport()}
+              className="inline-flex items-center rounded-lg border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 disabled:border-gray-300 disabled:text-gray-400"
+              disabled={copyrightReportLoading || directSalesData.length === 0}
+            >
+              <i className="ri-download-2-line mr-2"></i>
+              Excel 다운로드
+            </button>
+          </div>
+
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              {copyrightReportLoading ? (
+                <div className="flex h-48 items-center justify-center text-sm text-gray-500">
+                  <i className="ri-loader-4-line mr-2 animate-spin"></i>
+                  데이터를 불러오는 중입니다...
+                </div>
+              ) : directSalesData.length === 0 ? (
+                <div className="flex h-48 items-center justify-center text-sm text-gray-500">
+                  선택한 기간의 직접 결제 매출 데이터가 없습니다.
+                </div>
+              ) : (
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        주문번호
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        주문일시
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        결제수단
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        주문금액
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        악보 수량
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        고객 이메일
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {directSalesData.map((order) => (
+                      <tr key={order.orderId}>
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                          {order.orderNumber ?? order.orderId}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">{formatDateTime(order.orderedAt)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700">{order.paymentMethodLabel}</td>
+                        <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">
+                          {formatCurrency(order.totalAmount)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm text-gray-700">
+                          {order.itemCount.toLocaleString('ko-KR')}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{order.customerEmail ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8 space-y-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">캐시 충전 내역 (유상)</h3>
+              <p className="text-sm text-gray-500">
+                고객이 결제한 캐시 충전 내역과 보너스 지급 정보를 확인할 수 있습니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleCashChargeExport()}
+              className="inline-flex items-center rounded-lg border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 disabled:border-gray-300 disabled:text-gray-400"
+              disabled={copyrightReportLoading || cashChargeData.length === 0}
+            >
+              <i className="ri-download-2-line mr-2"></i>
+              Excel 다운로드
+            </button>
+          </div>
+
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              {copyrightReportLoading ? (
+                <div className="flex h-48 items-center justify-center text-sm text-gray-500">
+                  <i className="ri-loader-4-line mr-2 animate-spin"></i>
+                  데이터를 불러오는 중입니다...
+                </div>
+              ) : cashChargeData.length === 0 ? (
+                <div className="flex h-48 items-center justify-center text-sm text-gray-500">
+                  선택한 기간의 캐시 충전 데이터가 없습니다.
+                </div>
+              ) : (
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        충전일시
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        고객 이메일
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        유상 금액
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        보너스 금액
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        총 지급 캐시
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        결제수단
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {cashChargeData.map((transaction) => (
+                      <tr key={transaction.id}>
+                        <td className="px-4 py-3 text-sm text-gray-700">{formatDateTime(transaction.chargedAt)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700">{transaction.userEmail ?? '-'}</td>
+                        <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">
+                          {formatCurrency(transaction.amount)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm text-gray-700">
+                          {formatCurrency(transaction.bonusAmount)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">
+                          {formatCurrency(transaction.totalCredit)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          <div>{transaction.paymentLabel}</div>
+                          {transaction.description ? (
+                            <div className="text-xs text-gray-500">{transaction.description}</div>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderMainContent = () => {
     switch (activeMenu) {
@@ -1461,45 +9910,26 @@ const AdminPage: React.FC = () => {
         return renderSheetManagement();
       case 'categories':
         return renderCategoryManagement();
+      case 'collections':
+        return renderCollectionManagement();
+      case 'event-discounts':
+        return renderEventDiscountManagement();
       case 'member-list':
         return renderMemberManagement();
       case 'orders':
         return renderOrderManagement();
+      case 'inquiries':
+        return renderInquiryManagement();
       case 'custom-orders':
         return renderCustomOrderManagement();
       case 'points':
-        return (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-6 border-b border-gray-100">
-              <h2 className="text-2xl font-bold text-gray-900">적립금 관리</h2>
-            </div>
-            <div className="p-6">
-              <p className="text-gray-500">적립금 관리 기능이 곧 추가될 예정입니다.</p>
-            </div>
-          </div>
-        );
+        return renderCashManagement();
       case 'analytics':
-        return (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-6 border-b border-gray-100">
-              <h2 className="text-2xl font-bold text-gray-900">분석</h2>
-            </div>
-            <div className="p-6">
-              <p className="text-gray-500">분석 기능이 곧 추가될 예정입니다.</p>
-            </div>
-          </div>
-        );
+        return renderAnalytics();
+      case 'copyright-report':
+        return renderCopyrightReport();
       case 'settings':
-        return (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-6 border-b border-gray-100">
-              <h2 className="text-2xl font-bold text-gray-900">설정</h2>
-            </div>
-            <div className="p-6">
-              <p className="text-gray-500">설정 기능이 곧 추가될 예정입니다.</p>
-            </div>
-          </div>
-        );
+        return renderSettings();
       default:
         return renderDashboard();
     }
@@ -1576,6 +10006,26 @@ const AdminPage: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setActiveMenu('collections')}
+            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
+              activeMenu === 'collections' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <i className="ri-bookmark-line w-5 h-5"></i>
+            <span>악보모음집 관리</span>
+          </button>
+
+          <button
+            onClick={() => setActiveMenu('event-discounts')}
+            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
+              activeMenu === 'event-discounts' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <i className="ri-fire-line w-5 h-5"></i>
+            <span>이벤트 할인악보</span>
+          </button>
+
+          <button
             onClick={() => setActiveMenu('orders')}
             className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
               activeMenu === 'orders' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hoverbg-gray-100'
@@ -1586,13 +10036,37 @@ const AdminPage: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveMenu('custom-orders')}
-            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
-              activeMenu === 'custom-orders' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hoverbg-gray-100'
+            onClick={() => setActiveMenu('inquiries')}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors ${
+              activeMenu === 'inquiries' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
-            <i className="ri-clipboard-line w-5 h-5"></i>
-            <span>맞춤 제작 관리</span>
+            <span className="flex items-center gap-3">
+              <i className="ri-customer-service-2-line w-5 h-5"></i>
+              <span>문의 관리</span>
+            </span>
+            {pendingInquiryCount > 0 && (
+              <span className="inline-flex min-w-[24px] justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">
+                {pendingInquiryCount > 99 ? '99+' : pendingInquiryCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveMenu('custom-orders')}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors ${
+              activeMenu === 'custom-orders' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <span className="flex items-center gap-3">
+              <i className="ri-clipboard-line w-5 h-5"></i>
+              <span>주문 제작 관리</span>
+            </span>
+            {pendingCustomOrderCount > 0 && (
+              <span className="inline-flex min-w-[24px] justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">
+                {pendingCustomOrderCount > 99 ? '99+' : pendingCustomOrderCount}
+              </span>
+            )}
           </button>
 
           <button
@@ -1606,9 +10080,21 @@ const AdminPage: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setActiveMenu('copyright-report')}
+            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
+              activeMenu === 'copyright-report'
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <i className="ri-file-chart-line w-5 h-5"></i>
+            <span>저작권 보고</span>
+          </button>
+
+          <button
             onClick={() => setActiveMenu('analytics')}
             className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
-              activeMenu === 'analytics' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hoverbg-gray-100'
+              activeMenu === 'analytics' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <i className="ri-bar-chart-line w-5 h-5"></i>
@@ -1649,9 +10135,13 @@ const AdminPage: React.FC = () => {
                    activeMenu === 'member-list' ? '회원 관리' :
                    activeMenu === 'sheets' ? '악보 관리' :
                    activeMenu === 'categories' ? '카테고리 관리' :
+                   activeMenu === 'collections' ? '악보모음집 관리' :
+                   activeMenu === 'event-discounts' ? '이벤트 할인악보 관리' :
                    activeMenu === 'orders' ? '주문 관리' :
-                   activeMenu === 'custom-orders' ? '맞춤 제작 관리' :
+                   activeMenu === 'inquiries' ? '채팅 상담 관리' :
+                   activeMenu === 'custom-orders' ? '주문 제작 관리' :
                    activeMenu === 'points' ? '적립금 관리' :
+                   activeMenu === 'copyright-report' ? '저작권 보고' :
                    activeMenu === 'analytics' ? '분석' :
                    activeMenu === 'settings' ? '설정' : '대시보드'}
                 </h2>

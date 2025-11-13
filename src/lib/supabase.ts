@@ -18,4 +18,5 @@ export type Profile = {
   role: 'user' | 'admin';
   created_at: string;
   updated_at: string;
+  migrated_at?: string | null;
 };
