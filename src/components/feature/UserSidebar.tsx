@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
 import { supabase } from '../../lib/supabase';
+import { getSiteUrl } from '../../lib/siteUrl';
 import { kakaoAuth } from '../../lib/kakao';
 import { googleAuth } from '../../lib/google';
 import type { User } from '@supabase/supabase-js';
@@ -102,8 +103,9 @@ export default function UserSidebar({ user }: UserSidebarProps) {
             .maybeSingle();
 
           if (!profileError && profile?.migrated_at) {
+            const redirectBase = getSiteUrl();
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-              redirectTo: `${window.location.origin}/auth/reset-password`,
+              redirectTo: `${redirectBase}/auth/reset-password`,
             });
 
             if (resetError) {

@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { getSiteUrl } from '../../lib/siteUrl';
 import Footer from '../../components/common/Footer';
 import MainHeader from '../../components/common/MainHeader';
 
@@ -74,8 +75,9 @@ export default function Login() {
             .maybeSingle();
 
           if (!profileError && profile?.migrated_at) {
+            const redirectBase = getSiteUrl();
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-              redirectTo: `${window.location.origin}/auth/reset-password`,
+              redirectTo: `${redirectBase}/auth/reset-password`,
             });
 
             if (resetError) {
