@@ -6,6 +6,7 @@ import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { startCashCharge } from '../../lib/payments';
+import MainHeader from '../../components/common/MainHeader';
 import UserSidebar from '../../components/feature/UserSidebar';
 import { useCart } from '../../hooks/useCart';
 import type { FavoriteSheet } from '../../lib/favorites';
@@ -204,10 +205,12 @@ export default function MyPage() {
   // 캐시충전 모달 상태
   const [showCashChargeModal, setShowCashChargeModal] = useState(false);
   const [chargeAmount, setChargeAmount] = useState(10000);
-  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank'>('card');
+  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank'>('bank');
   const [chargeAgreementChecked, setChargeAgreementChecked] = useState(false);
   const [chargeProcessing, setChargeProcessing] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
+  const [showDepositorInput, setShowDepositorInput] = useState(false);
+  const [depositorName, setDepositorName] = useState('');
   
   const chargeOptions = [
     { amount: 3000, bonus: 0, label: '3천원' },
@@ -219,7 +222,14 @@ export default function MyPage() {
   ];
 
   const paymentMethods = [
-    { id: 'card', name: '신용카드', icon: 'ri-bank-card-line', color: 'text-blue-600' },
+    { 
+      id: 'card', 
+      name: '신용카드', 
+      icon: 'ri-bank-card-line', 
+      color: 'text-blue-600',
+      disabled: true,
+      badge: '준비 중',
+    },
     {
       id: 'kakaopay',
       name: '카카오페이',
@@ -467,6 +477,7 @@ export default function MyPage() {
           virtual_account_info,
           order_items (
             id,
+            drum_sheet_id,
             price,
             created_at,
             drum_sheets (
@@ -509,8 +520,7 @@ export default function MyPage() {
         depositor_name: order.depositor_name ?? null,
         virtual_account_info: (order.virtual_account_info ?? null) as VirtualAccountInfo | null,
         order_items: (order.order_items ?? []).map((item: any) => {
-          // drum_sheets에서 id를 가져와서 sheet_id로 사용
-          const sheetId = item.drum_sheets?.id || null;
+          const sheetId = item.drum_sheet_id || item.drum_sheets?.id || '';
           return {
             id: item.id,
             sheet_id: sheetId || '',
@@ -719,6 +729,8 @@ export default function MyPage() {
     setChargeAgreementChecked(false);
     setChargeProcessing(false);
     setBankTransferInfo(null);
+    setShowDepositorInput(false);
+    setDepositorName('');
   };
 
   const handleChargeConfirm = async () => {
@@ -738,38 +750,53 @@ export default function MyPage() {
       return;
     }
 
-    if (selectedPayment === 'kakaopay') {
-      alert('카카오페이는 준비 중입니다. 다른 결제 수단을 선택해 주세요.');
+    if (selectedPayment === 'kakaopay' || selectedPayment === 'card') {
+      alert('해당 결제수단은 현재 준비 중입니다.');
+      return;
+    }
+
+    if (selectedPayment === 'bank') {
+      // 무통장 입금은 입금자명 입력 단계로 이동
+      setShowDepositorInput(true);
+      return;
+    }
+  };
+
+  const handleBankTransferConfirm = async () => {
+    if (!user) return;
+
+    if (!depositorName.trim()) {
+      alert('입금자명을 입력해 주세요.');
+      return;
+    }
+
+    const selectedOption = chargeOptions.find((option) => option.amount === chargeAmount);
+    if (!selectedOption) {
+      alert('선택한 충전 금액을 확인할 수 없습니다.');
       return;
     }
 
     setChargeProcessing(true);
 
     try {
-      const paymentMethod = selectedPayment === 'bank' ? 'bank_transfer' : 'card';
       const description = `캐쉬 충전 ${selectedOption.amount.toLocaleString('ko-KR')}원`;
       const result = await startCashCharge({
         userId: user.id,
         amount: selectedOption.amount,
         bonusAmount: selectedOption.bonus ?? 0,
-        paymentMethod,
+        paymentMethod: 'bank_transfer',
         description,
         buyerName: profile?.name ?? profileForm.name ?? null,
         buyerEmail: user.email ?? null,
         buyerTel: profile?.phone ?? profileForm.phone ?? null,
-        depositorName: profile?.name ?? undefined,
+        depositorName: depositorName.trim(),
         returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
       });
 
-      if (paymentMethod === 'bank_transfer') {
-        setBankTransferInfo(result.virtualAccountInfo ?? null);
-        await loadCashTransactions(user);
-        alert('무통장입금 안내가 생성되었습니다.\n안내에 따라 입금 후 자동으로 충전됩니다.');
-      } else {
-        setBankTransferInfo(null);
-        setShowCashChargeModal(false);
-      }
-
+      setBankTransferInfo(result.virtualAccountInfo ?? null);
+      setShowDepositorInput(false);
+      await loadCashTransactions(user);
+      alert('주문이 접수되었습니다.\n입금 확인 후 관리자가 캐시 충전을 완료합니다.');
       setChargeAgreementChecked(false);
     } catch (error) {
       console.error('캐쉬 충전 오류:', error);
@@ -1235,76 +1262,17 @@ export default function MyPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-blue-700" style={{ height: '156px' }}>
-        <div className={`${user ? 'lg:pr-64' : ''}`}>
-          <div className="max-w-7xl mx-auto flex h-full flex-col justify-between px-4 sm:px-6 lg:px-8">
-            <div className="relative flex items-center py-4">
-              <div className="absolute left-0 flex items-center gap-3">
-                <img
-                  src="/logo.png"
-                  alt="카피드럼"
-                  className="h-12 w-auto cursor-pointer"
-                  onClick={() => navigate('/')}
-                />
-                <h1
-                  className="text-2xl font-bold text-white cursor-pointer"
-                  style={{ fontFamily: '"Noto Sans KR", "Malgun Gothic", sans-serif' }}
-                  onClick={() => navigate('/')}
-                >
-                  카피드럼
-                </h1>
-              </div>
-
-              <div className="mx-auto flex-1 max-w-2xl">
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    placeholder="곡명, 아티스트, 장르로 검색..."
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        handleSearch();
-                      }
-                    }}
-                    className="w-full rounded-full border-0 bg-blue-50 px-6 py-3 pr-12 text-base placeholder-blue-200 focus:outline-none text-gray-900"
-                  />
-                  <button
-                    onClick={handleSearch}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-700 transition"
-                  >
-                    <i className="ri-search-line text-xl" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <nav className="flex items-center justify-center space-x-8 pb-4">
-              <Link to="/categories" className="text-lg font-semibold text-white hover:text-purple-300 transition">
-                악보 카테고리
-              </Link>
-              <Link to="/free-sheets" className="text-lg font-semibold text-white hover:text-purple-300 transition">
-                무료악보
-              </Link>
-              <Link to="/collections" className="text-lg font-semibold text-white hover:text-purple-300 transition">
-                악보모음집
-              </Link>
-              <Link to="/event-sale" className="text-lg font-semibold text-white hover:text-purple-300 transition">
-                이벤트 할인악보
-              </Link>
-              <Link to="/custom-order" className="text-lg font-semibold text-white hover:text-purple-300 transition">
-                주문제작
-              </Link>
-            </nav>
-          </div>
-        </div>
+    <div className="min-h-screen bg-gray-50 pb-24 md:pb-0">
+      <div className="hidden md:block">
+        <MainHeader user={user} />
       </div>
 
-      <UserSidebar user={user} />
+      <div className="hidden lg:block">
+        <UserSidebar user={user} />
+      </div>
 
-      <div className={`${user ? 'lg:pr-64' : ''}`}>
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div className={`${user ? 'lg:pr-64' : ''} pt-[76px] md:pt-0`}>
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-10">
           {loading ? (
             renderLoader()
           ) : !user ? (
@@ -2227,7 +2195,80 @@ export default function MyPage() {
                 </span>
               </div>
 
-              {bankTransferInfo ? (
+              {showDepositorInput ? (
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-gray-900">무통장 입금 정보</h3>
+                  
+                  <div className="bg-blue-50 rounded-lg px-4 py-3 border border-blue-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">입금하실 금액</span>
+                      <span className="text-lg font-bold text-blue-600">
+                        {formatCurrency(chargeAmount)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-lg px-4 py-3 space-y-2">
+                    <h4 className="text-xs font-semibold text-gray-900 mb-2">입금 계좌 정보</h4>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-600">은행</span>
+                      <span className="text-xs font-medium text-gray-900">농협</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-600">계좌번호</span>
+                      <span className="text-xs font-medium text-gray-900">106-02-303742</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-600">예금주</span>
+                      <span className="text-xs font-medium text-gray-900">강만수</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="depositor-name" className="block text-sm font-semibold text-gray-900">
+                      입금자명 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="depositor-name"
+                      type="text"
+                      value={depositorName}
+                      onChange={(e) => setDepositorName(e.target.value)}
+                      placeholder="입금자명을 입력하세요"
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-xs text-gray-500">
+                      * 회원명과 입금자가 다른 경우, 입금자명을 기입해 주시기 바랍니다.
+                    </p>
+                  </div>
+
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
+                    <div className="flex gap-2">
+                      <i className="ri-information-line text-yellow-600 text-base flex-shrink-0 mt-0.5"></i>
+                      <div className="text-xs text-gray-700 space-y-1">
+                        <p>• 입금 확인 후 관리자가 수동으로 캐시 충전을 완료합니다.</p>
+                        <p>• 입금자명이 일치하지 않으면 확인이 지연될 수 있습니다.</p>
+                        <p>• 입금 확인은 영업일 기준 1~2일 소요될 수 있습니다.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowDepositorInput(false)}
+                      className="flex-1 border border-gray-300 text-gray-700 py-2.5 px-4 rounded-lg hover:bg-gray-50 font-medium text-sm transition-colors"
+                    >
+                      이전
+                    </button>
+                    <button
+                      onClick={handleBankTransferConfirm}
+                      disabled={chargeProcessing}
+                      className="flex-1 bg-blue-600 text-white py-2.5 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-70 font-medium text-sm transition-colors"
+                    >
+                      {chargeProcessing ? '처리 중...' : '확인'}
+                    </button>
+                  </div>
+                </div>
+              ) : bankTransferInfo ? (
                 <div className="space-y-5">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <h3 className="text-sm font-semibold text-blue-800 mb-3">무통장입금 안내</h3>
@@ -2379,7 +2420,7 @@ export default function MyPage() {
                       chargeProcessing ? 'opacity-70 cursor-not-allowed' : 'hover:from-blue-700 hover:to-purple-700'
                     }`}
                   >
-                    {chargeProcessing ? '결제 준비 중...' : '충전하기'}
+                    {chargeProcessing ? '처리 중...' : '다음'}
                   </button>
                 </>
               )}
@@ -2390,7 +2431,7 @@ export default function MyPage() {
 
       <button
         onClick={() => navigate('/cart')}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-blue-600 text-white px-5 py-3 shadow-lg hover:bg-blue-700"
+        className="hidden md:fixed md:bottom-6 md:right-6 md:z-40 md:flex items-center gap-2 rounded-full bg-blue-600 text-white px-5 py-3 shadow-lg hover:bg-blue-700"
       >
         <i className="ri-shopping-cart-line text-lg" />
         장바구니

@@ -4,7 +4,7 @@ import {
   ensureInicisSdkLoaded,
   submitInicisPaymentForm,
 } from './inicis';
-import { createPayactionVirtualAccount } from './payaction';
+import { updateOrderPaymentStatus } from './paymentService';
 import type { VirtualAccountInfo, PaymentIntentResponse } from './types';
 
 type PurchaseMethod = 'card' | 'bank_transfer';
@@ -49,6 +49,8 @@ export const startSheetPurchase = async ({
   depositorName,
   returnUrl,
 }: StartSheetPurchaseParams): Promise<StartSheetPurchaseResult> => {
+  const trimmedDepositorName = depositorName?.trim();
+
   const { orderId, orderNumber } = await createOrderWithItems({
     userId,
     amount,
@@ -63,26 +65,31 @@ export const startSheetPurchase = async ({
   });
 
   if (paymentMethod === 'bank_transfer') {
-    const resolvedDepositor =
-      depositorName ?? (orderNumber ? `CD${orderNumber.slice(-6)}` : buyerName ?? undefined);
+    // 페이액션 연동 제거, 간단한 무통장 입금 처리
+    // 입금자명 저장
+    if (trimmedDepositorName) {
+      await updateOrderPaymentStatus(orderId, 'awaiting_deposit', {
+        depositorName: trimmedDepositorName,
+      });
+    }
 
-    const intent = await createPayactionVirtualAccount({
-      userId,
+    // 고정 계좌 정보 반환
+    const bankInfo: VirtualAccountInfo = {
+      bankName: '농협',
+      accountNumber: '106-02-303742',
+      accountHolder: '강만수',
+      depositor: '강만수',
+      expectedDepositor: trimmedDepositorName ?? undefined,
       amount,
-      description,
-      method: 'bank_transfer',
-      orderId,
-      bonusAmount: 0,
-      depositorName: resolvedDepositor,
-    });
+      expiresAt: null, // 무기한
+    };
 
     return {
       orderId,
       orderNumber,
       amount,
       paymentMethod,
-      paymentIntent: intent,
-      virtualAccountInfo: intent.virtualAccountInfo ?? null,
+      virtualAccountInfo: bankInfo,
     };
   }
 
@@ -112,4 +119,5 @@ export const startSheetPurchase = async ({
     paymentIntent: intent,
   };
 };
+
 

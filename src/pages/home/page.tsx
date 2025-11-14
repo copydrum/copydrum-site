@@ -17,6 +17,8 @@ import type { EventDiscountMap, EventDiscountSheet } from '../../lib/eventDiscou
 import { fetchUserFavorites, toggleFavorite } from '../../lib/favorites';
 import MainHeader from '../../components/common/MainHeader';
 import Footer from '../../components/common/Footer';
+import { useTranslation } from 'react-i18next';
+import { formatPrice } from '../../lib/priceFormatter';
 
 interface DrumSheet {
   id: string;
@@ -64,6 +66,7 @@ export default function Home() {
   const [now, setNow] = useState(() => new Date());
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoriteLoadingIds, setFavoriteLoadingIds] = useState<Set<string>>(new Set());
+  const { i18n } = useTranslation();
 
   const loadLatestSheets = useCallback(async () => {
     try {
@@ -335,7 +338,7 @@ export default function Home() {
 
     setEventCarouselIndex((prev) => (prev > maxIndex ? 0 : prev));
 
-    if (maxIndex === 0) {
+    if (maxIndex === 0 || slidesPerView <= 1) {
       return;
     }
 
@@ -366,7 +369,10 @@ export default function Home() {
     return match ? match[1] : '';
   };
 
-  const formatCurrency = (value: number) => `₩${value.toLocaleString('ko-KR')}`;
+  const formatCurrency = useCallback(
+    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
+    [i18n.language],
+  );
   const getEventForSheet = (sheetId: string) => eventDiscounts[sheetId];
   const getDisplayPrice = (sheet: DrumSheet) => {
     const event = getEventForSheet(sheet.id);
@@ -460,17 +466,20 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Top Header - 재사용 컴포넌트 */}
-      <MainHeader user={user} />
+      {/* Desktop Header */}
+      <div className="hidden md:block">
+        <MainHeader user={user} />
+      </div>
 
-      {/* User Sidebar - 로그인 시 항상 표시 */}
-      <UserSidebar user={user} />
+      {/* Desktop User Sidebar */}
+      <div className="hidden lg:block">
+        <UserSidebar user={user} />
+      </div>
 
-      {/* Main Content - 사이드바 공간 확보 */}
-      <div className="mr-64">
-        {/* Hero Section */}
+      {/* Hero Section - 전체 폭 */}
+      <div className="lg:mr-64">
         <section 
-          className="relative bg-cover bg-center bg-no-repeat h-[500px] bg-gray-900"
+          className="relative bg-cover bg-center bg-no-repeat h-[320px] sm:h-[380px] md:h-[480px] lg:h-[500px] bg-gray-900 overflow-hidden"
           style={{
             backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('/banner1.jpg')`,
             backgroundSize: 'cover',
@@ -480,20 +489,39 @@ export default function Home() {
         >
           <div className="absolute inset-0 flex items-center">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-              <div className="max-w-2xl">
-                <h2 className="text-5xl font-bold text-white mb-6 leading-tight">
+              {/* Mobile Version */}
+              <div className="max-w-xl md:hidden text-center space-y-4">
+                <h2 className="text-3xl sm:text-4xl font-bold text-white leading-tight">
+                  전 세계 드러머들이 찾는
+                  <br />
+                  드럼 악보 컬렉션
+                </h2>
+                <div className="text-white text-base sm:text-lg leading-relaxed space-y-1">
+                  <p>K-POP, 락, CCM, 팝까지!</p>
+                  <p>전문가가 직접 만든 정교한 드럼 악보를</p>
+                  <p>PDF로 바로 다운로드하세요.</p>
+                </div>
+                <button 
+                  onClick={() => window.location.href = '/categories'}
+                  className="inline-flex items-center justify-center bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 sm:px-8 sm:py-3 rounded-full hover:from-blue-700 hover:to-purple-700 font-semibold whitespace-nowrap cursor-pointer transition-all duration-300 shadow-lg"
+                >
+                  악보 둘러보기
+                </button>
+              </div>
+              {/* PC Version */}
+              <div className="hidden md:block max-w-2xl text-left space-y-6">
+                <h2 className="text-5xl font-bold text-white leading-tight">
                   전 세계 드러머들이 찾는<br />
                   드럼 악보 컬렉션
                 </h2>
-                <p className="text-xl text-white mb-2 leading-relaxed">
-                  K-POP, 락, CCM, 팝까지!
-                </p>
-                <p className="text-xl text-white mb-8 leading-relaxed">
-                  전문가가 직접 만든 정교한 드럼 악보를 PDF로 바로 다운로드하세요.
-                </p>
+                <div className="text-white text-xl leading-relaxed space-y-1">
+                  <p>K-POP, 락, CCM, 팝까지!</p>
+                  <p>전문가가 직접 만든 정교한 드럼 악보를</p>
+                  <p>PDF로 바로 다운로드하세요.</p>
+                </div>
                 <button 
                   onClick={() => window.location.href = '/categories'}
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-10 py-4 rounded-lg hover:from-blue-700 hover:to-purple-700 font-semibold whitespace-nowrap cursor-pointer transition-all duration-300 shadow-lg"
+                  className="inline-flex items-center justify-center bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-3 rounded-full hover:from-blue-700 hover:to-purple-700 font-semibold whitespace-nowrap cursor-pointer transition-all duration-300 shadow-lg"
                 >
                   악보 둘러보기
                 </button>
@@ -501,521 +529,875 @@ export default function Home() {
             </div>
           </div>
         </section>
+      </div>
 
+      {/* Main Content */}
+      <div className="px-4 pb-8 pt-6 sm:px-6 lg:px-8 lg:mr-64">
         {/* Latest Sheets */}
-        <section className="py-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <h3 className="text-3xl font-bold text-gray-900 mb-8 text-center">최신 악보</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {latestSheets.map((sheet) => {
-                const eventInfo = getEventForSheet(sheet.id);
-                const displayPrice = getDisplayPrice(sheet);
-                const isFavorite = favoriteIds.has(sheet.id);
-                const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
-                return (
-                  <div
-                    key={sheet.id}
-                    onClick={() => navigate(`/sheet-detail/${sheet.id}`)}
-                    className="relative aspect-square cursor-pointer group overflow-hidden rounded-lg"
-                  >
-                    <img
-                      src={getThumbnailUrl(sheet)}
-                      alt={sheet.title}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      onError={(e) => {
-                        const img = e.target as HTMLImageElement;
-                        img.src = generateDefaultThumbnail(400, 400);
-                      }}
-                    />
-                    {eventInfo && (
-                      <div className="absolute left-3 top-3 rounded-full bg-red-500/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
-                        100원 특가
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleToggleFavorite(sheet.id);
-                      }}
-                      disabled={isFavoriteLoading}
-                      className={`absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-sm transition-colors ${
-                        isFavorite
-                          ? 'border-red-200 bg-red-50/90 text-red-500'
-                          : 'border-white/60 bg-black/30 text-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/80'
-                      } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                      aria-label={isFavorite ? '찜 해제' : '찜하기'}
+        <section className="py-12 md:py-16">
+          <div className="max-w-7xl mx-auto space-y-8">
+            <div className="md:hidden">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-2xl font-bold text-gray-900">최신 악보</h3>
+                <button
+                  type="button"
+                  onClick={() => navigate('/categories')}
+                  className="text-sm font-semibold text-gray-500 hover:text-blue-600"
+                >
+                  더보기
+                </button>
+              </div>
+            <div className="flex gap-4 overflow-x-auto pb-2">
+                {latestSheets.map((sheet) => {
+                  const eventInfo = getEventForSheet(sheet.id);
+                  const isFavorite = favoriteIds.has(sheet.id);
+                  const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
+                  return (
+                    <div
+                      key={sheet.id}
+                      onClick={() => navigate(`/sheet-detail/${sheet.id}`)}
+                      className="relative flex w-48 flex-shrink-0 cursor-pointer flex-col"
                     >
-                      <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
-                    </button>
-                    {/* 하단 불투명 배경 오버레이 */}
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-3 py-3 text-center">
-                      <h4 className="text-white font-bold text-sm mb-1 line-clamp-1">{sheet.title}</h4>
-                      <p className="text-white text-xs line-clamp-1">{sheet.artist}</p>
-                      {eventInfo && (
-                        <p className="mt-1 text-xs font-semibold text-red-300">
-                          {formatCurrency(displayPrice)} (정가 {formatCurrency(sheet.price)})
-                        </p>
-                      )}
+                      <div className="relative aspect-square overflow-hidden rounded-2xl">
+                        <img
+                          src={getThumbnailUrl(sheet)}
+                          alt={sheet.title}
+                          className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
+                          onError={(e) => {
+                            const img = e.target as HTMLImageElement;
+                            img.src = generateDefaultThumbnail(400, 400);
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent"></div>
+                        {eventInfo && (
+                          <div className="absolute left-3 top-3 rounded-full bg-red-500/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
+                            100원 특가
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleToggleFavorite(sheet.id);
+                          }}
+                          disabled={isFavoriteLoading}
+                          className={`absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-sm transition-colors ${
+                            isFavorite
+                              ? 'border-red-200 bg-red-50/90 text-red-500'
+                              : 'border-white/60 bg-black/30 text-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/80'
+                          } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          aria-label={isFavorite ? '찜 해제' : '찜하기'}
+                        >
+                          <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
+                        </button>
+                        <div className="absolute bottom-0 left-0 right-0 px-3 pb-3 text-center text-white">
+                          <h4 className="text-base font-bold line-clamp-2">{sheet.title}</h4>
+                          <p className="text-xs text-white/80 line-clamp-1">{sheet.artist}</p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="hidden md:block">
+              <h3 className="mb-8 text-center text-3xl font-bold text-gray-900">최신 악보</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {latestSheets.map((sheet) => {
+                  const eventInfo = getEventForSheet(sheet.id);
+                  const displayPrice = getDisplayPrice(sheet);
+                  const isFavorite = favoriteIds.has(sheet.id);
+                  const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
+                  return (
+                    <div
+                      key={sheet.id}
+                      onClick={() => navigate(`/sheet-detail/${sheet.id}`)}
+                      className="relative aspect-square cursor-pointer group overflow-hidden rounded-lg"
+                    >
+                      <img
+                        src={getThumbnailUrl(sheet)}
+                        alt={sheet.title}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        onError={(e) => {
+                          const img = e.target as HTMLImageElement;
+                          img.src = generateDefaultThumbnail(400, 400);
+                        }}
+                      />
+                      {eventInfo && (
+                        <div className="absolute left-3 top-3 rounded-full bg-red-500/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
+                          100원 특가
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleToggleFavorite(sheet.id);
+                        }}
+                        disabled={isFavoriteLoading}
+                        className={`absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-sm transition-colors ${
+                          isFavorite
+                            ? 'border-red-200 bg-red-50/90 text-red-500'
+                            : 'border-white/60 bg-black/30 text-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/80'
+                        } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        aria-label={isFavorite ? '찜 해제' : '찜하기'}
+                      >
+                        <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
+                      </button>
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-3 py-3 text-center">
+                        <h4 className="text-white font-bold text-sm mb-1 line-clamp-1">{sheet.title}</h4>
+                        <p className="text-white text-xs line-clamp-1">{sheet.artist}</p>
+                        {eventInfo && (
+                          <p className="mt-1 text-xs font-semibold text-red-300">
+                            {formatCurrency(displayPrice)} (정가 {formatCurrency(sheet.price)})
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </section>
 
         {/* Event Sale Carousel */}
-        <section className="py-16 bg-gradient-to-r from-orange-50 via-white to-orange-100">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-12">
-              <div>
-                <p className="text-sm font-semibold text-orange-500 uppercase tracking-wide">100원 특가 이벤트</p>
-                <h3 className="mt-2 text-3xl font-bold text-gray-900">단 100원으로 인기 드럼 악보를 만나보세요</h3>
-                <p className="mt-3 text-gray-600">
-                  한정 기간 동안만 진행되는 초특가 이벤트입니다. 실시간 타이머를 확인하고 원하는 악보를 바로 담아보세요.
-                </p>
+        <section className="py-12 md:py-16 bg-gradient-to-r from-orange-50 via-white to-orange-100 rounded-3xl md:rounded-none -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto space-y-8">
+            <div className="md:hidden">
+                <div className="flex flex-col gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-orange-500">100원 특가 이벤트</p>
+                    <h3 className="mt-1 text-2xl font-bold text-gray-900 leading-snug">
+                      단 100원으로
+                      <br />
+                      인기 드럼 악보를 만나보세요
+                    </h3>
+                  <p className="mt-2 text-sm text-gray-600">
+                    한정 기간 동안 진행되는 초특가 이벤트를 놓치지 마세요.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/event-sale')}
+                  className="inline-flex w-full items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-3 text-sm font-semibold text-orange-500 shadow-sm transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600"
+                >
+                  전체 이벤트 보기
+                  <i className="ri-arrow-right-line ml-2 text-base" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => navigate('/event-sale')}
-                className="inline-flex items-center justify-center rounded-full border border-orange-200 bg-white px-6 py-3 text-sm font-semibold text-orange-500 shadow-sm transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600"
-              >
-                전체 이벤트 보기
-                <i className="ri-arrow-right-line ml-2 text-base" />
-              </button>
+
+              {eventsLoading ? (
+                <div className="py-12 text-center text-gray-500">
+                  <i className="ri-loader-4-line mx-auto mb-2 block h-10 w-10 animate-spin text-orange-500" />
+                  <p className="text-sm font-medium">100원 특가 악보를 불러오는 중입니다...</p>
+                </div>
+              ) : activeEvents.length === 0 ? (
+                <div className="mt-6 rounded-2xl border border-dashed border-orange-300 bg-white/70 px-6 py-10 text-center text-gray-600">
+                  <i className="ri-music-2-line mb-4 text-4xl text-orange-300" />
+                  <p className="text-base font-semibold">현재 진행 중인 100원 특가 이벤트가 없습니다.</p>
+                  <p className="mt-2 text-sm text-gray-500">곧 새로운 특가가 준비될 예정이니 조금만 기다려 주세요!</p>
+                </div>
+              ) : (
+                <div className="mt-6 flex gap-4 overflow-x-auto pb-2">
+                  {activeEvents.map((event) => {
+                    const remaining = getRemainingTime(event, now);
+                    const isActiveNow = isEventActive(event, now);
+                    return (
+                      <article
+                        key={event.id}
+                        onClick={() => navigate(`/event-sale/${event.id}`)}
+                        className="flex w-72 flex-shrink-0 flex-col overflow-hidden rounded-3xl bg-white shadow-lg ring-1 ring-orange-100"
+                      >
+                        <div className="relative h-48 overflow-hidden">
+                          <img
+                            src={event.thumbnail_url || generateDefaultThumbnail(480, 480)}
+                            alt={event.title || '이벤트 악보'}
+                            className="h-full w-full object-cover transition duration-500 hover:scale-105"
+                          />
+                          <div className="absolute left-4 top-4 rounded-full bg-red-500/95 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow">
+                            100원 특가
+                          </div>
+                          {!isActiveNow && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white">
+                              판매 종료
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-1 flex-col gap-3 px-5 py-5 text-center">
+                          <div className="space-y-1">
+                            <h4 className="text-lg font-bold text-gray-900">
+                              단 100원으로
+                              <br />
+                              인기 드럼 악보를 만나보세요
+                            </h4>
+                            <p className="text-sm font-medium text-gray-500">{event.artist}</p>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-center gap-3">
+                              <span className="text-sm text-gray-400 line-through">
+                                {formatCurrency(event.original_price)}
+                              </span>
+                              <span className="text-xl font-extrabold text-red-500">
+                                {formatCurrency(event.discount_price)}
+                              </span>
+                            </div>
+                            {event.discount_percent !== null && (
+                              <span className="mt-2 inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-500">
+                                {event.discount_percent}% 할인
+                              </span>
+                            )}
+                          </div>
+                          <p
+                            className={`text-xs font-semibold ${isActiveNow ? 'text-orange-600' : 'text-gray-400'}`}
+                          >
+                            {remaining.totalMilliseconds > 0
+                              ? `⏰ 남은 시간 ${
+                                  remaining.days > 0 ? `${remaining.days}일 ` : ''
+                                }${formatRemainingTime(remaining)}`
+                              : '판매 종료'}
+                          </p>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            {eventsLoading ? (
-              <div className="py-24 text-center text-gray-500">
-                <i className="ri-loader-4-line w-10 h-10 animate-spin text-orange-500 mx-auto mb-2" />
-                <p className="font-medium">100원 특가 악보를 불러오는 중입니다...</p>
-              </div>
-            ) : activeEvents.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-orange-300 bg-white/70 px-10 py-16 text-center text-gray-600">
-                <i className="ri-music-2-line text-5xl text-orange-300 mb-4" />
-                <p className="text-lg font-semibold">현재 진행 중인 100원 특가 이벤트가 없습니다.</p>
-                <p className="mt-2 text-sm text-gray-500">곧 새로운 특가가 준비될 예정이니 조금만 기다려 주세요!</p>
-              </div>
-            ) : (
-              <>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={handlePrevEventSlide}
-                    disabled={!canSlide}
-                    className={`absolute left-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-white/80 p-3 shadow-lg transition hover:bg-white lg:block ${
-                      canSlide ? 'text-orange-500 hover:text-orange-600' : 'text-gray-300 cursor-not-allowed'
-                    }`}
-                    aria-label="이전 슬라이드"
-                  >
-                    <i className="ri-arrow-left-s-line text-2xl" />
-                  </button>
-                  <div className="overflow-hidden">
-                    <div
-                      className="flex transition-transform duration-500 ease-out"
-                      style={{ transform: `translateX(-${carouselTranslate}%)` }}
-                    >
-                      {activeEvents.map((event) => {
-                        const remaining = getRemainingTime(event, now);
-                        const isActiveNow = isEventActive(event, now);
-                        return (
-                          <div
-                            key={event.id}
-                            className="px-2 sm:px-3 lg:px-4"
-                            style={{ flex: `0 0 ${eventCardBasis}` }}
-                          >
-                            <article
-                              className="flex h-full flex-col overflow-hidden rounded-3xl bg-white shadow-lg ring-1 ring-orange-100 transition hover:-translate-y-1 hover:shadow-2xl"
-                              onClick={() => navigate(`/event-sale/${event.id}`)}
-                            >
-                              <div className="relative h-56 overflow-hidden">
-                                <img
-                                  src={event.thumbnail_url || generateDefaultThumbnail(480, 480)}
-                                  alt={event.title || '이벤트 악보'}
-                                  className="h-full w-full object-cover transition duration-500 hover:scale-105"
-                                />
-                                <div className="absolute left-4 top-4 rounded-full bg-red-500/95 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow">
-                                  100원 특가
-                                </div>
-                                {!isActiveNow && (
-                                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white">
-                                    판매 종료
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex flex-1 flex-col gap-4 px-6 py-6">
-                                <div className="space-y-1">
-                                  <h4 className="text-xl font-bold text-gray-900 line-clamp-1">{event.title}</h4>
-                                  <p className="text-sm font-medium text-gray-500 line-clamp-1">{event.artist}</p>
-                                </div>
-                                <div className="space-y-2">
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-sm text-gray-400 line-through">
-                                      {formatCurrency(event.original_price)}
-                                    </span>
-                                    <span className="text-2xl font-extrabold text-red-500">
-                                      {formatCurrency(event.discount_price)}
-                                    </span>
-                                  </div>
-                                  {event.discount_percent !== null && (
-                                    <span className="inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-500">
-                                      {event.discount_percent}% 할인
-                                    </span>
-                                  )}
-                                  <p
-                                    className={`text-sm font-semibold ${isActiveNow ? 'text-orange-600' : 'text-gray-400'}`}
-                                  >
-                                    {remaining.totalMilliseconds > 0
-                                      ? `⏰ 남은 시간 ${
-                                          remaining.days > 0 ? `${remaining.days}일 ` : ''
-                                        }${formatRemainingTime(remaining)}`
-                                      : '판매 종료'}
-                                  </p>
-                                </div>
-                                <div className="mt-auto flex gap-3">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      navigate(`/event-sale/${event.id}`);
-                                    }}
-                                    className="flex-1 rounded-xl border border-orange-200 px-4 py-2 text-sm font-semibold text-orange-500 transition hover:bg-orange-50 hover:text-orange-600"
-                                  >
-                                    상세 보기
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      navigate(`/event-sale/${event.id}`);
-                                    }}
-                                    className="flex-1 rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-red-600"
-                                  >
-                                    지금 구매
-                                  </button>
-                                </div>
-                              </div>
-                            </article>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleNextEventSlide}
-                    disabled={!canSlide}
-                    className={`absolute right-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-white/80 p-3 shadow-lg transition hover:bg-white lg:block ${
-                      canSlide ? 'text-orange-500 hover:text-orange-600' : 'text-gray-300 cursor-not-allowed'
-                    }`}
-                    aria-label="다음 슬라이드"
-                  >
-                    <i className="ri-arrow-right-s-line text-2xl" />
-                  </button>
+            <div className="hidden md:block">
+              <div className="mb-12 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-orange-500 uppercase tracking-wide">100원 특가 이벤트</p>
+                  <h3 className="mt-2 text-3xl font-bold text-gray-900">단 100원으로 인기 드럼 악보를 만나보세요</h3>
+                  <p className="mt-3 text-gray-600">
+                    한정 기간 동안만 진행되는 초특가 이벤트입니다. 실시간 타이머를 확인하고 원하는 악보를 바로 담아보세요.
+                  </p>
                 </div>
-                {totalCarouselDots > 1 && (
-                  <div className="mt-8 flex justify-center gap-2">
-                    {Array.from({ length: totalCarouselDots }).map((_, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => setEventCarouselIndex(index)}
-                        className={`h-2.5 rounded-full transition-all ${
-                          eventCarouselIndex === index ? 'w-10 bg-orange-500' : 'w-2.5 bg-orange-200 hover:bg-orange-300'
-                        }`}
-                        aria-label={`${index + 1}번째 슬라이드 이동`}
-                      />
-                    ))}
+                <button
+                  type="button"
+                  onClick={() => navigate('/event-sale')}
+                  className="inline-flex items-center justify-center rounded-full border border-orange-200 bg-white px-6 py-3 text-sm font-semibold text-orange-500 shadow-sm transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600"
+                >
+                  전체 이벤트 보기
+                  <i className="ri-arrow-right-line ml-2 text-base" />
+                </button>
+              </div>
+
+              {eventsLoading ? (
+                <div className="py-24 text-center text-gray-500">
+                  <i className="ri-loader-4-line w-10 h-10 animate-spin text-orange-500 mx-auto mb-2" />
+                  <p className="font-medium">100원 특가 악보를 불러오는 중입니다...</p>
+                </div>
+              ) : activeEvents.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-orange-300 bg-white/70 px-10 py-16 text-center text-gray-600">
+                  <i className="ri-music-2-line text-5xl text-orange-300 mb-4" />
+                  <p className="text-lg font-semibold">현재 진행 중인 100원 특가 이벤트가 없습니다.</p>
+                  <p className="mt-2 text-sm text-gray-500">곧 새로운 특가가 준비될 예정이니 조금만 기다려 주세요!</p>
+                </div>
+              ) : (
+                <>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={handlePrevEventSlide}
+                      disabled={!canSlide}
+                      className={`absolute left-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-white/80 p-3 shadow-lg transition hover:bg-white lg:block ${
+                        canSlide ? 'text-orange-500 hover:text-orange-600' : 'text-gray-300 cursor-not-allowed'
+                      }`}
+                      aria-label="이전 슬라이드"
+                    >
+                      <i className="ri-arrow-left-s-line text-2xl" />
+                    </button>
+                    <div className="overflow-hidden">
+                      <div
+                        className="flex transition-transform duration-500 ease-out"
+                        style={{ transform: `translateX(-${carouselTranslate}%)` }}
+                      >
+                        {activeEvents.map((event) => {
+                          const remaining = getRemainingTime(event, now);
+                          const isActiveNow = isEventActive(event, now);
+                          return (
+                            <div
+                              key={event.id}
+                              className="px-2 sm:px-3 lg:px-4"
+                              style={{ flex: `0 0 ${eventCardBasis}` }}
+                            >
+                              <article
+                                className="flex h-full flex-col overflow-hidden rounded-3xl bg-white shadow-lg ring-1 ring-orange-100 transition hover:-translate-y-1 hover:shadow-2xl"
+                                onClick={() => navigate(`/event-sale/${event.id}`)}
+                              >
+                                <div className="relative h-56 overflow-hidden">
+                                  <img
+                                    src={event.thumbnail_url || generateDefaultThumbnail(480, 480)}
+                                    alt={event.title || '이벤트 악보'}
+                                    className="h-full w-full object-cover transition duration-500 hover:scale-105"
+                                  />
+                                  <div className="absolute left-4 top-4 rounded-full bg-red-500/95 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow">
+                                    100원 특가
+                                  </div>
+                                  {!isActiveNow && (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white">
+                                      판매 종료
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex flex-1 flex-col gap-4 px-6 py-6">
+                                  <div className="space-y-1">
+                                    <h4 className="text-xl font-bold text-gray-900 line-clamp-1">{event.title}</h4>
+                                    <p className="text-sm font-medium text-gray-500 line-clamp-1">{event.artist}</p>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-sm text-gray-400 line-through">
+                                        {formatCurrency(event.original_price)}
+                                      </span>
+                                      <span className="text-2xl font-extrabold text-red-500">
+                                        {formatCurrency(event.discount_price)}
+                                      </span>
+                                    </div>
+                                    {event.discount_percent !== null && (
+                                      <span className="inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-500">
+                                        {event.discount_percent}% 할인
+                                      </span>
+                                    )}
+                                    <p
+                                      className={`text-sm font-semibold ${isActiveNow ? 'text-orange-600' : 'text-gray-400'}`}
+                                    >
+                                      {remaining.totalMilliseconds > 0
+                                        ? `⏰ 남은 시간 ${
+                                            remaining.days > 0 ? `${remaining.days}일 ` : ''
+                                          }${formatRemainingTime(remaining)}`
+                                        : '판매 종료'}
+                                    </p>
+                                  </div>
+                                  <div className="mt-auto flex gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/event-sale/${event.id}`);
+                                      }}
+                                      className="flex-1 rounded-xl border border-orange-200 px-4 py-2 text-sm font-semibold text-orange-500 transition hover:bg-orange-50 hover:text-orange-600"
+                                    >
+                                      상세 보기
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/event-sale/${event.id}`);
+                                      }}
+                                      className="flex-1 rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-red-600"
+                                    >
+                                      지금 구매
+                                    </button>
+                                  </div>
+                                </div>
+                              </article>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleNextEventSlide}
+                      disabled={!canSlide}
+                      className={`absolute right-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-white/80 p-3 shadow-lg transition hover:bg-white lg:block ${
+                        canSlide ? 'text-orange-500 hover:text-orange-600' : 'text-gray-300 cursor-not-allowed'
+                      }`}
+                      aria-label="다음 슬라이드"
+                    >
+                      <i className="ri-arrow-right-s-line text-2xl" />
+                    </button>
                   </div>
-                )}
-              </>
-            )}
+                  {totalCarouselDots > 1 && (
+                    <div className="mt-8 flex justify-center gap-2">
+                      {Array.from({ length: totalCarouselDots }).map((_, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => setEventCarouselIndex(index)}
+                          className={`h-2.5 rounded-full transition-all ${
+                            eventCarouselIndex === index ? 'w-10 bg-orange-500' : 'w-2.5 bg-orange-200 hover:bg-orange-300'
+                          }`}
+                          aria-label={`${index + 1}번째 슬라이드 이동`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </section>
 
         {/* Popular Sheets */}
-        <section className="py-16 bg-gray-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="text-3xl font-bold text-gray-900">인기악보</h3>
-              <a href="/categories" className="text-gray-500 hover:text-gray-700 text-sm">
-                더보기 &gt;
-              </a>
-            </div>
-            
-            {/* 장르 필터 */}
-            <div className="mb-6 flex flex-wrap gap-2">
-              <button
-                onClick={() => setSelectedGenre('')}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                  selectedGenre === ''
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                전체
-              </button>
-              {categories.map((category) => (
+        <section className="py-12 md:py-16 bg-gray-50 rounded-3xl md:rounded-none -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto space-y-8">
+            <div className="md:hidden">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-2xl font-bold text-gray-900">인기 악보</h3>
                 <button
-                  key={category.id}
-                  onClick={() => setSelectedGenre(category.id)}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                    selectedGenre === category.id
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white text-gray-700 hover:bg-gray-100'
-                  }`}
+                  type="button"
+                  onClick={() => navigate('/categories')}
+                  className="text-sm font-semibold text-gray-500 hover:text-blue-600"
                 >
-                  {category.name}
+                  전체보기
                 </button>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* 왼쪽: 1-5위 */}
-              <div className="space-y-4">
-                {popularSheets.slice(0, 5).map((sheet, index) => {
-                  const rank = index + 1;
-                  const isTop3 = rank <= 3;
+              </div>
+            <div className="flex gap-4 overflow-x-auto pb-2">
+                {popularSheets.slice(0, 10).map((sheet, index) => {
                   const eventInfo = getEventForSheet(sheet.id);
-                  const displayPrice = getDisplayPrice(sheet);
                   const isFavorite = favoriteIds.has(sheet.id);
                   const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
                   return (
                     <div
                       key={sheet.id}
                       onClick={() => navigate(`/sheet-detail/${sheet.id}`)}
-                      className="group flex items-center justify-between gap-4 p-3 rounded-lg hover:bg-white cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
+                      className="relative flex w-48 flex-shrink-0 cursor-pointer flex-col"
                     >
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <div className="relative flex-shrink-0">
-                          {isTop3 && (
-                            <div className="absolute -top-2 -left-2 bg-blue-600 text-white text-xs px-2 py-0.5 rounded z-10">
-                              BEST
-                            </div>
-                          )}
-                          <div className="w-12 h-12 flex items-center justify-center">
-                            <span
-                              className={`font-bold text-2xl transition-colors duration-300 ${
-                                isTop3 ? 'text-blue-600 group-hover:text-blue-700' : 'text-gray-600 group-hover:text-gray-800'
-                              }`}
-                            >
-                              {rank}
-                            </span>
-                          </div>
-                        </div>
+                      <div className="relative aspect-square overflow-hidden rounded-2xl">
                         <img
                           src={getThumbnailUrl(sheet)}
                           alt={sheet.title}
-                          className="w-16 h-16 object-cover rounded flex-shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:shadow-md"
+                          className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
                           onError={(e) => {
                             const img = e.target as HTMLImageElement;
                             img.src = generateDefaultThumbnail(400, 400);
                           }}
                         />
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-bold text-gray-900 text-sm mb-1 truncate transition-colors duration-300 group-hover:text-blue-600">
-                            {sheet.title}
-                          </h4>
-                          <p className="text-gray-600 text-xs truncate transition-colors duration-300 group-hover:text-gray-800">{sheet.artist}</p>
-                          {eventInfo && (
-                            <div className="mt-1 flex items-center gap-2">
-                              <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">100원 특가</span>
-                              <span className="text-xs font-semibold text-red-500">{formatCurrency(displayPrice)}</span>
-                            </div>
-                          )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+                        {eventInfo && (
+                          <div className="absolute left-3 top-3 rounded-full bg-red-500/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
+                            100원 특가
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleToggleFavorite(sheet.id);
+                          }}
+                          disabled={isFavoriteLoading}
+                          className={`absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border ${
+                            isFavorite
+                              ? 'border-red-200 bg-red-50 text-red-500'
+                              : 'border-white/60 bg-black/30 text-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/80'
+                          } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          aria-label={isFavorite ? '찜 해제' : '찜하기'}
+                        >
+                          <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-base`} />
+                        </button>
+                        <div className="absolute bottom-0 left-0 right-0 px-3 pb-3 text-center text-white">
+                          <h4 className="text-base font-bold line-clamp-2">{sheet.title}</h4>
+                          <p className="text-xs text-white/80 line-clamp-1">{sheet.artist}</p>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleToggleFavorite(sheet.id);
-                        }}
-                        disabled={isFavoriteLoading}
-                        className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
-                          isFavorite
-                            ? 'border-red-200 bg-red-50 text-red-500'
-                            : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
-                        } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                        aria-label={isFavorite ? '찜 해제' : '찜하기'}
-                      >
-                        <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
-                      </button>
                     </div>
                   );
                 })}
               </div>
+            </div>
 
-              {/* 오른쪽: 6-10위 */}
-              <div className="space-y-4">
-                {popularSheets.slice(5, 10).map((sheet, index) => {
-                  const rank = index + 6;
-                  const eventInfo = getEventForSheet(sheet.id);
-                  const displayPrice = getDisplayPrice(sheet);
-                  const isFavorite = favoriteIds.has(sheet.id);
-                  const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
-                  return (
-                    <div
-                      key={sheet.id}
-                      onClick={() => navigate(`/sheet-detail/${sheet.id}`)}
-                      className="group flex items-center justify-between gap-4 p-3 rounded-lg hover:bg-white cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
-                    >
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <div className="w-12 h-12 flex items-center justify-center flex-shrink-0">
-                          <span className="text-gray-600 font-bold text-2xl transition-colors duration-300 group-hover:text-gray-800">
-                            {rank}
-                          </span>
-                        </div>
-                        <img
-                          src={getThumbnailUrl(sheet)}
-                          alt={sheet.title}
-                          className="w-16 h-16 object-cover rounded flex-shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:shadow-md"
-                          onError={(e) => {
-                            const img = e.target as HTMLImageElement;
-                            img.src = generateDefaultThumbnail(400, 400);
-                          }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-bold text-gray-900 text-sm mb-1 truncate transition-colors duration-300 group-hover:text-blue-600">
-                            {sheet.title}
-                          </h4>
-                          <p className="text-gray-600 text-xs truncate transition-colors duration-300 group-hover:text-gray-800">{sheet.artist}</p>
-                          {eventInfo && (
-                            <div className="mt-1 flex items-center gap-2">
-                              <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">100원 특가</span>
-                              <span className="text-xs font-semibold text-red-500">{formatCurrency(displayPrice)}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleToggleFavorite(sheet.id);
-                        }}
-                        disabled={isFavoriteLoading}
-                        className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
-                          isFavorite
-                            ? 'border-red-200 bg-red-50 text-red-500'
-                            : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
-                        } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                        aria-label={isFavorite ? '찜 해제' : '찜하기'}
+            <div className="hidden md:block">
+              <div className="mb-8 flex items-center justify-between">
+                <h3 className="text-3xl font-bold text-gray-900">인기악보</h3>
+                <a href="/categories" className="text-sm text-gray-500 hover:text-gray-700">
+                  더보기 &gt;
+                </a>
+              </div>
+
+              {/* 장르 필터 */}
+              <div className="mb-6 flex flex-wrap gap-2">
+                <button
+                  onClick={() => setSelectedGenre('')}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    selectedGenre === ''
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  전체
+                </button>
+                {categories.map((category) => (
+                  <button
+                    key={category.id}
+                    onClick={() => setSelectedGenre(category.id)}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                      selectedGenre === category.id
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    {category.name}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-4">
+                  {popularSheets.slice(0, 5).map((sheet, index) => {
+                    const rank = index + 1;
+                    const isTop3 = rank <= 3;
+                    const eventInfo = getEventForSheet(sheet.id);
+                    const displayPrice = getDisplayPrice(sheet);
+                    const isFavorite = favoriteIds.has(sheet.id);
+                    const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
+                    return (
+                      <div
+                        key={sheet.id}
+                        onClick={() => navigate(`/sheet-detail/${sheet.id}`)}
+                        className="group flex items-center justify-between gap-4 rounded-lg p-3 transition-all duration-300 hover:-translate-y-1 hover:bg-white hover:shadow-lg cursor-pointer"
                       >
-                        <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
-                      </button>
-                    </div>
-                  );
-                })}
+                        <div className="flex min-w-0 flex-1 items-center gap-4">
+                          <div className="relative flex-shrink-0">
+                            {isTop3 && (
+                              <div className="absolute -top-2 -left-2 rounded px-2 py-0.5 text-xs font-semibold text-white bg-blue-600 z-10">
+                                BEST
+                              </div>
+                            )}
+                            <div className="flex h-12 w-12 items-center justify-center">
+                              <span
+                                className={`text-2xl font-bold transition-colors duration-300 ${
+                                  isTop3 ? 'text-blue-600 group-hover:text-blue-700' : 'text-gray-600 group-hover:text-gray-800'
+                                }`}
+                              >
+                                {rank}
+                              </span>
+                            </div>
+                          </div>
+                          <img
+                            src={getThumbnailUrl(sheet)}
+                            alt={sheet.title}
+                            className="h-16 w-16 flex-shrink-0 rounded object-cover transition-transform duration-300 group-hover:scale-110 group-hover:shadow-md"
+                            onError={(e) => {
+                              const img = e.target as HTMLImageElement;
+                              img.src = generateDefaultThumbnail(400, 400);
+                            }}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <h4 className="mb-1 truncate text-sm font-bold text-gray-900 transition-colors duration-300 group-hover:text-blue-600">
+                              {sheet.title}
+                            </h4>
+                            <p className="truncate text-xs text-gray-600 transition-colors duration-300 group-hover:text-gray-800">
+                              {sheet.artist}
+                            </p>
+                            {eventInfo && (
+                              <div className="mt-1 flex items-center gap-2">
+                                <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
+                                  100원 특가
+                                </span>
+                                <span className="text-xs font-semibold text-red-500">{formatCurrency(displayPrice)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleToggleFavorite(sheet.id);
+                          }}
+                          disabled={isFavoriteLoading}
+                          className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
+                            isFavorite
+                              ? 'border-red-200 bg-red-50 text-red-500'
+                              : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                          } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          aria-label={isFavorite ? '찜 해제' : '찜하기'}
+                        >
+                          <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="space-y-4">
+                  {popularSheets.slice(5, 10).map((sheet, index) => {
+                    const rank = index + 6;
+                    const eventInfo = getEventForSheet(sheet.id);
+                    const displayPrice = getDisplayPrice(sheet);
+                    const isFavorite = favoriteIds.has(sheet.id);
+                    const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
+                    return (
+                      <div
+                        key={sheet.id}
+                        onClick={() => navigate(`/sheet-detail/${sheet.id}`)}
+                        className="group flex items-center justify-between gap-4 rounded-lg p-3 transition-all duration-300 hover:-translate-y-1 hover:bg-white hover:shadow-lg cursor-pointer"
+                      >
+                        <div className="flex min-w-0 flex-1 items-center gap-4">
+                          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center">
+                            <span className="text-2xl font-bold text-gray-600 transition-colors duration-300 group-hover:text-gray-800">
+                              {rank}
+                            </span>
+                          </div>
+                          <img
+                            src={getThumbnailUrl(sheet)}
+                            alt={sheet.title}
+                            className="h-16 w-16 flex-shrink-0 rounded object-cover transition-transform duration-300 group-hover:scale-110 group-hover:shadow-md"
+                            onError={(e) => {
+                              const img = e.target as HTMLImageElement;
+                              img.src = generateDefaultThumbnail(400, 400);
+                            }}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <h4 className="mb-1 truncate text-sm font-bold text-gray-900 transition-colors duration-300 group-hover:text-blue-600">
+                              {sheet.title}
+                            </h4>
+                            <p className="truncate text-xs text-gray-600 transition-colors duration-300 group-hover:text-gray-800">
+                              {sheet.artist}
+                            </p>
+                            {eventInfo && (
+                              <div className="mt-1 flex items-center gap-2">
+                                <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
+                                  100원 특가
+                                </span>
+                                <span className="text-xs font-semibold text-red-500">{formatCurrency(displayPrice)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleToggleFavorite(sheet.id);
+                          }}
+                          disabled={isFavoriteLoading}
+                          className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
+                            isFavorite
+                              ? 'border-red-200 bg-red-50 text-red-500'
+                              : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                          } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          aria-label={isFavorite ? '찜 해제' : '찜하기'}
+                        >
+                          <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
         </section>
 
         {/* Collections Preview */}
-        <section className="py-16 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-12">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-wide text-blue-500">악보 모음집</p>
-                <h3 className="mt-2 text-3xl font-bold text-gray-900">테마별로 엄선한 프리미엄 드럼 악보 컬렉션</h3>
-                <p className="mt-3 text-gray-600">
-                  여러 곡을 한 번에, 할인된 가격으로 만나보세요. 연습 목적이나 공연 준비에 딱 맞는 모음집을 추천드립니다.
-                </p>
+        <section className="py-12 md:py-16 bg-white">
+          <div className="max-w-7xl mx-auto space-y-8">
+            <div className="md:hidden">
+              <div className="flex flex-col gap-4">
+                <div>
+                  <p className="text-base font-semibold uppercase tracking-wide text-blue-500">악보 모음집</p>
+                  <h3 className="mt-1 text-2xl font-bold text-gray-900 leading-snug">
+                    테마별로 엄선한
+                    <br />
+                    프리미엄 드럼 악보 컬렉션
+                  </h3>
+                  <p className="mt-2 text-sm text-gray-600">
+                    여러 곡을 한 번에 할인된 가격으로 만나보세요.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/collections')}
+                  className="inline-flex w-full items-center justify-center rounded-full border border-blue-200 bg-white px-5 py-3 text-sm font-semibold text-blue-600 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                >
+                  모음집 모두 보기
+                  <i className="ri-arrow-right-line ml-2 text-base" />
+                </button>
               </div>
-              <a
-                href="/collections"
-                className="inline-flex items-center justify-center rounded-full border border-blue-200 bg-white px-6 py-3 text-sm font-semibold text-blue-600 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
-              >
-                모음집 모두 보기
-                <i className="ri-arrow-right-line ml-2 text-base" />
-              </a>
-            </div>
 
-            {collectionsLoading ? (
-              <div className="py-24 text-center text-gray-500">
-                <i className="ri-loader-4-line w-10 h-10 animate-spin text-blue-500 mx-auto mb-2" />
-                <p className="font-medium">악보 모음집을 불러오는 중입니다...</p>
-              </div>
-            ) : collectionsToDisplay.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-blue-200 bg-blue-50/50 px-10 py-16 text-center text-gray-600">
-                <i className="ri-folder-music-line text-5xl text-blue-300 mb-4" />
-                <p className="text-lg font-semibold">아직 등록된 모음집이 없습니다.</p>
-                <p className="mt-2 text-sm text-gray-500">새로운 모음집이 준비되는 대로 가장 먼저 알려드릴게요!</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-                {collectionsToDisplay.map((collection) => {
-                  const hasSalePrice =
-                    collection.sale_price > 0 &&
-                    (collection.original_price === 0 || collection.sale_price < collection.original_price);
-                  const displayPrice =
-                    collection.sale_price > 0 ? collection.sale_price : Math.max(collection.original_price, 0);
-                  return (
-                    <article
-                      key={collection.id}
-                      onClick={() => navigate(`/collections/${collection.id}`)}
-                      className="group flex h-full flex-col overflow-hidden rounded-3xl bg-white shadow-lg ring-1 ring-blue-100 transition hover:-translate-y-1 hover:shadow-2xl"
-                    >
-                      <div className="relative aspect-[4/3] overflow-hidden">
-                        <img
-                          src={collection.thumbnail_url || generateDefaultThumbnail(640, 480)}
-                          alt={collection.title}
-                          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                          onError={(e) => {
-                            const img = e.target as HTMLImageElement;
-                            img.src = generateDefaultThumbnail(640, 480);
-                          }}
-                        />
-                        {collection.discount_percentage > 0 && (
-                          <div className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow">
-                            {collection.discount_percentage}% 할인
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-1 flex-col gap-4 px-6 py-6">
-                        <div className="space-y-2">
-                          <h4 className="text-xl font-bold text-gray-900 line-clamp-1 group-hover:text-blue-600">
-                            {collection.title}
-                          </h4>
+              {collectionsLoading ? (
+                <div className="py-12 text-center text-gray-500">
+                  <i className="ri-loader-4-line mx-auto mb-2 block h-10 w-10 animate-spin text-blue-500" />
+                  <p className="text-sm font-medium">악보 모음집을 불러오는 중입니다...</p>
+                </div>
+              ) : collectionsToDisplay.length === 0 ? (
+                <div className="mt-6 rounded-2xl border border-dashed border-blue-200 bg-blue-50/60 px-6 py-10 text-center text-gray-600">
+                  <i className="ri-folder-music-line mb-4 text-4xl text-blue-300" />
+                  <p className="text-base font-semibold">아직 등록된 모음집이 없습니다.</p>
+                  <p className="mt-2 text-sm text-gray-500">새로운 모음집이 준비되는 대로 가장 먼저 알려드릴게요!</p>
+                </div>
+              ) : (
+                <div className="mt-6 flex gap-4 overflow-x-auto pb-2">
+                  {collectionsToDisplay.map((collection) => {
+                    const hasSalePrice =
+                      collection.sale_price > 0 &&
+                      (collection.original_price === 0 || collection.sale_price < collection.original_price);
+                    const displayPrice =
+                      collection.sale_price > 0 ? collection.sale_price : Math.max(collection.original_price, 0);
+                    return (
+                      <article
+                        key={collection.id}
+                        onClick={() => navigate(`/collections/${collection.id}`)}
+                        className="flex w-72 flex-shrink-0 flex-col overflow-hidden rounded-3xl bg-white shadow-lg ring-1 ring-blue-100"
+                      >
+                        <div className="relative aspect-[4/3] overflow-hidden">
+                          <img
+                            src={collection.thumbnail_url || generateDefaultThumbnail(640, 480)}
+                            alt={collection.title}
+                            className="h-full w-full object-cover transition duration-500 hover:scale-105"
+                            onError={(e) => {
+                              const img = e.target as HTMLImageElement;
+                              img.src = generateDefaultThumbnail(640, 480);
+                            }}
+                          />
+                          {collection.discount_percentage > 0 && (
+                            <div className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow">
+                              {collection.discount_percentage}% 할인
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-1 flex-col gap-3 px-5 py-5">
+                          <h4 className="text-lg font-bold text-gray-900 line-clamp-2">{collection.title}</h4>
                           {collection.description && (
                             <p className="text-sm text-gray-500 line-clamp-2">{collection.description}</p>
                           )}
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          <i className="ri-drum-line text-base text-blue-500" />
-                          <span>{collection.sheet_count || 0}곡 포함</span>
-                        </div>
-                        <div className="mt-auto flex items-center justify-between">
-                          <div className="flex flex-col">
-                            {hasSalePrice && collection.original_price > 0 && (
-                              <span className="text-xs text-gray-400 line-through">
-                                {formatCurrency(collection.original_price)}
-                              </span>
-                            )}
-                            <span className="text-2xl font-extrabold text-blue-600">
-                              {formatCurrency(displayPrice)}
-                            </span>
+                          <div className="flex items-center gap-2 text-sm text-gray-500">
+                            <i className="ri-drum-line text-base text-blue-500" />
+                            <span>{collection.sheet_count || 0}곡 포함</span>
                           </div>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/collections/${collection.id}`);
-                            }}
-                            className="inline-flex items-center rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
-                          >
-                            자세히 보기
-                            <i className="ri-arrow-right-line ml-2" />
-                          </button>
+                          <div className="mt-auto flex items-center justify-between">
+                            <div>
+                              {hasSalePrice && collection.original_price > 0 && (
+                                <span className="text-xs text-gray-400 line-through">
+                                  {formatCurrency(collection.original_price)}
+                                </span>
+                              )}
+                              <p className="text-xl font-extrabold text-blue-600">
+                                {formatCurrency(displayPrice)}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/collections/${collection.id}`);
+                              }}
+                              className="inline-flex items-center rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+                            >
+                              자세히 보기
+                              <i className="ri-arrow-right-line ml-2" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    </article>
-                  );
-                })}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="hidden md:block">
+              <div className="mb-12 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-base font-semibold uppercase tracking-wide text-blue-500">악보 모음집</p>
+                  <h3 className="mt-2 text-3xl font-bold text-gray-900 leading-snug">
+                    테마별로 엄선한
+                    <br />
+                    프리미엄 드럼 악보 컬렉션
+                  </h3>
+                  <p className="mt-3 text-gray-600">
+                    여러 곡을 한 번에, 할인된 가격으로 만나보세요. 연습 목적이나 공연 준비에 딱 맞는 모음집을 추천드립니다.
+                  </p>
+                </div>
+                <a
+                  href="/collections"
+                  className="inline-flex items-center justify-center rounded-full border border-blue-200 bg-white px-6 py-3 text-sm font-semibold text-blue-600 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                >
+                  모음집 모두 보기
+                  <i className="ri-arrow-right-line ml-2 text-base" />
+                </a>
               </div>
-            )}
+
+              {collectionsLoading ? (
+                <div className="py-24 text-center text-gray-500">
+                  <i className="ri-loader-4-line w-10 h-10 animate-spin text-blue-500 mx-auto mb-2" />
+                  <p className="font-medium">악보 모음집을 불러오는 중입니다...</p>
+                </div>
+              ) : collectionsToDisplay.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-blue-200 bg-blue-50/50 px-10 py-16 text-center text-gray-600">
+                  <i className="ri-folder-music-line text-5xl text-blue-300 mb-4" />
+                  <p className="text-lg font-semibold">아직 등록된 모음집이 없습니다.</p>
+                  <p className="mt-2 text-sm text-gray-500">새로운 모음집이 준비되는 대로 가장 먼저 알려드릴게요!</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                  {collectionsToDisplay.map((collection) => {
+                    const hasSalePrice =
+                      collection.sale_price > 0 &&
+                      (collection.original_price === 0 || collection.sale_price < collection.original_price);
+                    const displayPrice =
+                      collection.sale_price > 0 ? collection.sale_price : Math.max(collection.original_price, 0);
+                    return (
+                      <article
+                        key={collection.id}
+                        onClick={() => navigate(`/collections/${collection.id}`)}
+                        className="group flex h-full flex-col overflow-hidden rounded-3xl bg-white shadow-lg ring-1 ring-blue-100 transition hover:-translate-y-1 hover:shadow-2xl cursor-pointer"
+                      >
+                        <div className="relative aspect-[4/3] overflow-hidden">
+                          <img
+                            src={collection.thumbnail_url || generateDefaultThumbnail(640, 480)}
+                            alt={collection.title}
+                            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                            onError={(e) => {
+                              const img = e.target as HTMLImageElement;
+                              img.src = generateDefaultThumbnail(640, 480);
+                            }}
+                          />
+                          {collection.discount_percentage > 0 && (
+                            <div className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow">
+                              {collection.discount_percentage}% 할인
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-1 flex-col gap-4 px-6 py-6">
+                          <div className="space-y-2">
+                            <h4 className="text-xl font-bold text-gray-900 line-clamp-1 group-hover:text-blue-600">
+                              {collection.title}
+                            </h4>
+                            {collection.description && (
+                              <p className="text-sm text-gray-500 line-clamp-2">{collection.description}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-gray-500">
+                            <i className="ri-drum-line text-base text-blue-500" />
+                            <span>{collection.sheet_count || 0}곡 포함</span>
+                          </div>
+                          <div className="mt-auto flex items-center justify-between">
+                            <div className="flex flex-col">
+                              {hasSalePrice && collection.original_price > 0 && (
+                                <span className="text-xs text-gray-400 line-through">
+                                  {formatCurrency(collection.original_price)}
+                                </span>
+                              )}
+                              <span className="text-2xl font-extrabold text-blue-600">
+                                {formatCurrency(displayPrice)}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/collections/${collection.id}`);
+                              }}
+                              className="inline-flex items-center rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                            >
+                              자세히 보기
+                              <i className="ri-arrow-right-line ml-2" />
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
@@ -1061,14 +1443,25 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Custom Order CTA */}
-        <section className="py-16 bg-blue-600">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h3 className="text-3xl font-bold text-white mb-4">찾으시는 악보가 없으신가요?</h3>
-            <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
-              원하시는 곡의 드럼 악보를 전문가가 직접 제작해드립니다.<br />
-              지금 주문제작으로 나만의 악보를 받아보세요.
-            </p>
+      </div>
+
+      {/* Custom Order CTA */}
+      <div className="lg:mr-64">
+        <section className="bg-blue-600 text-center text-white">
+          <div className="px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
+            <h3 className="text-2xl sm:text-3xl font-bold mb-4">찾으시는 악보가 없으신가요?</h3>
+            {/* Mobile Version */}
+            <div className="md:hidden text-lg sm:text-xl text-blue-100 mb-8 space-y-1">
+              <p>원하시는 곡의 드럼 악보를</p>
+              <p>전문가가 직접 제작해드립니다.</p>
+              <p>지금 주문제작으로</p>
+              <p>나만의 악보를 받아보세요.</p>
+            </div>
+            {/* PC Version */}
+            <div className="hidden md:block text-xl text-blue-100 mb-8 space-y-1">
+              <p>원하시는 곡의 드럼 악보를 전문가가 직접 제작해드립니다.</p>
+              <p>지금 주문제작으로 나만의 악보를 받아보세요.</p>
+            </div>
             <button 
               onClick={() => navigate('/custom-order')}
               className="bg-white text-blue-600 px-8 py-4 rounded-lg hover:bg-gray-100 font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors shadow-lg"
@@ -1077,8 +1470,23 @@ export default function Home() {
             </button>
           </div>
         </section>
+      </div>
 
+      {/* Footer (PC) */}
+      <div className="hidden md:block lg:mr-64">
         <Footer />
+      </div>
+
+      {/* Business info link (Mobile) */}
+      <div className="md:hidden px-4 sm:px-6 lg:px-8 py-8 text-center space-y-2">
+        <button
+          type="button"
+          onClick={() => navigate('/company/business-info')}
+          className="text-sm font-semibold text-gray-700 underline underline-offset-4"
+        >
+          카피드럼 사업자정보 &gt;
+        </button>
+        <p className="text-xs text-gray-500">© {new Date().getFullYear()} COPYDRUM. All rights reserved.</p>
       </div>
     </div>
   );

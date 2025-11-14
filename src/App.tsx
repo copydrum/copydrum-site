@@ -1,10 +1,24 @@
 
-import { BrowserRouter } from 'react-router-dom'
-import { AppRoutes } from './router'
-import { useEffect, Suspense } from 'react'
-import { RouteErrorBoundary } from './components/common/RouteErrorBoundary'
+import { BrowserRouter } from 'react-router-dom';
+import { AppRoutes } from './router';
+import { useEffect, Suspense, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
+import { RouteErrorBoundary } from './components/common/RouteErrorBoundary';
+import { supabase } from './lib/supabase';
+import { CASH_CHARGE_MODAL_EVENT } from './lib/cashChargeModal';
+import MobileHeader from './components/mobile/MobileHeader';
+import MobileMenuSidebar from './components/mobile/MobileMenuSidebar';
+import MobileBottomNav from './components/mobile/MobileBottomNav';
+import MobileSearchOverlay from './components/mobile/MobileSearchOverlay';
+import MobileCashChargeModal from './components/mobile/MobileCashChargeModal';
+import HreflangTags from './components/common/HreflangTags';
 
 function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+  const [isCashModalOpen, setIsCashModalOpen] = useState(false);
+
   useEffect(() => {
     // URL 해시에서 토큰 확인
     const hash = window.location.hash;
@@ -14,15 +28,90 @@ function App() {
     }
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchUser = async () => {
+      try {
+        const {
+          data: { user: currentUser },
+        } = await supabase.auth.getUser();
+        if (isMounted) {
+          setUser(currentUser ?? null);
+        }
+      } catch (error) {
+        console.error('앱 사용자 정보 로드 오류:', error);
+        if (isMounted) {
+          setUser(null);
+        }
+      }
+    };
+
+    fetchUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) {
+        return;
+      }
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleOpenCashCharge = () => setIsCashModalOpen(true);
+
+    window.addEventListener(CASH_CHARGE_MODAL_EVENT, handleOpenCashCharge);
+
+    return () => {
+      window.removeEventListener(CASH_CHARGE_MODAL_EVENT, handleOpenCashCharge);
+    };
+  }, []);
+
   return (
     <BrowserRouter basename={__BASE_PATH__}>
       <Suspense fallback={<div>로딩 중...</div>}>
         <RouteErrorBoundary>
-          <AppRoutes />
+          {/* SEO: hreflang 태그 */}
+          <HreflangTags />
+          
+          <MobileHeader
+            user={user}
+            onMenuToggle={() => setIsMobileMenuOpen(true)}
+            onSearchToggle={() => setIsMobileSearchOpen(true)}
+          />
+          <MobileMenuSidebar
+            user={user ?? null}
+            isOpen={isMobileMenuOpen}
+            onClose={() => setIsMobileMenuOpen(false)}
+          />
+          <MobileSearchOverlay
+            isOpen={isMobileSearchOpen}
+            onClose={() => setIsMobileSearchOpen(false)}
+          />
+          <MobileCashChargeModal
+            isOpen={isCashModalOpen}
+            onClose={() => setIsCashModalOpen(false)}
+            user={user ?? null}
+          />
+          <div className="min-h-screen bg-white pt-[108px] pb-[80px] md:pt-0 md:pb-0">
+            <AppRoutes />
+          </div>
+          <MobileBottomNav
+            user={user ?? null}
+            onSearchToggle={() => setIsMobileSearchOpen(true)}
+            onCashChargeToggle={() => setIsCashModalOpen(true)}
+          />
         </RouteErrorBoundary>
       </Suspense>
     </BrowserRouter>
-  )
+  );
 }
 
-export default App
+export default App;

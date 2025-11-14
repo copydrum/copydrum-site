@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../hooks/useCart';
 import { useAuthStore } from '../../stores/authStore';
 import { processCashPurchase } from '../../lib/cashPurchases';
 import { splitPurchasedSheetIds } from '../../lib/purchaseCheck';
-import { PaymentMethodSelector } from '../../components/payments';
+import { BankTransferInfoModal, PaymentMethodSelector } from '../../components/payments';
 import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
+import { openCashChargeModal } from '../../lib/cashChargeModal';
+import { useTranslation } from 'react-i18next';
+import { formatPrice as formatPriceWithCurrency } from '../../lib/priceFormatter';
 
 type PendingCartPurchase = {
   targetItemIds: string[];
@@ -28,7 +31,13 @@ export default function CartPage() {
   const [pendingPurchase, setPendingPurchase] = useState<PendingCartPurchase | null>(null);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [showBankTransferModal, setShowBankTransferModal] = useState(false);
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
+  const formatPriceValue = useCallback(
+    (price: number) => formatPriceWithCurrency({ amountKRW: price, language: i18n.language }).formatted,
+    [i18n.language],
+  );
 
   if (!user) {
     return (
@@ -189,10 +198,52 @@ export default function CartPage() {
     await handlePurchase(allItemIds);
   };
 
+  const completeOnlinePurchase = async (
+    method: 'card' | 'bank_transfer',
+    options?: { depositorName?: string },
+  ) => {
+    if (!user || !pendingPurchase) return;
+
+    const purchaseResult = await startSheetPurchase({
+      userId: user.id,
+      items: pendingPurchase.items,
+      amount: pendingPurchase.amount,
+      paymentMethod: method,
+      description: pendingPurchase.description,
+      buyerName: user.email ?? null,
+      buyerEmail: user.email ?? null,
+      returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
+      depositorName: options?.depositorName,
+    });
+
+    const removed = await removeSelectedItems(pendingPurchase.targetItemIds);
+    if (!removed) {
+      console.warn('결제 후 장바구니 업데이트에 실패했습니다.');
+    }
+
+    setSelectedItems(prev =>
+      prev.filter(id => !pendingPurchase.targetItemIds.includes(id)),
+    );
+
+    if (method === 'bank_transfer') {
+      setBankTransferInfo(purchaseResult.virtualAccountInfo ?? null);
+      alert('무통장입금 안내가 생성되었습니다.\n안내에 따라 입금 후 자동으로 구매가 완료됩니다.');
+    } else {
+      setBankTransferInfo(null);
+      alert('결제창이 열립니다. 결제를 완료해 주세요.');
+    }
+  };
+
   const handlePaymentMethodSelect = async (method: 'cash' | 'card' | 'bank') => {
     if (!user || !pendingPurchase) return;
 
     setShowPaymentSelector(false);
+
+    if (method === 'bank') {
+      setShowBankTransferModal(true);
+      return;
+    }
+
     setProcessing(true);
     setPaymentProcessing(true);
 
@@ -214,6 +265,7 @@ export default function CartPage() {
                 'ko-KR',
               )}P\n캐쉬를 충전한 뒤 다시 시도해주세요.`,
             );
+            openCashChargeModal();
           }
           return;
         }
@@ -232,33 +284,7 @@ export default function CartPage() {
         return;
       }
 
-      const purchaseResult = await startSheetPurchase({
-        userId: user.id,
-        items: pendingPurchase.items,
-        amount: pendingPurchase.amount,
-        paymentMethod: method === 'card' ? 'card' : 'bank_transfer',
-        description: pendingPurchase.description,
-        buyerName: user.email ?? null,
-        buyerEmail: user.email ?? null,
-        returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
-      });
-
-      const removed = await removeSelectedItems(pendingPurchase.targetItemIds);
-      if (!removed) {
-        console.warn('결제 후 장바구니 업데이트에 실패했습니다.');
-      }
-
-      setSelectedItems(prev =>
-        prev.filter(id => !pendingPurchase.targetItemIds.includes(id)),
-      );
-
-      if (method === 'bank') {
-        setBankTransferInfo(purchaseResult.virtualAccountInfo ?? null);
-        alert('무통장입금 안내가 생성되었습니다.\n안내에 따라 입금 후 자동으로 구매가 완료됩니다.');
-      } else {
-        setBankTransferInfo(null);
-        alert('결제창이 열립니다. 결제를 완료해 주세요.');
-      }
+      await completeOnlinePurchase('card');
     } catch (error) {
       console.error('장바구니 결제 처리 오류:', error);
       alert(error instanceof Error ? error.message : '결제 처리 중 오류가 발생했습니다.');
@@ -269,8 +295,23 @@ export default function CartPage() {
     }
   };
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('ko-KR').format(price);
+  const handleBankTransferConfirm = async (depositorName: string) => {
+    if (!user || !pendingPurchase) return;
+
+    setShowBankTransferModal(false);
+    setProcessing(true);
+    setPaymentProcessing(true);
+
+    try {
+      await completeOnlinePurchase('bank_transfer', { depositorName });
+    } catch (error) {
+      console.error('무통장입금 결제 처리 오류:', error);
+      alert(error instanceof Error ? error.message : '결제 처리 중 오류가 발생했습니다.');
+    } finally {
+      setProcessing(false);
+      setPaymentProcessing(false);
+      setPendingPurchase(null);
+    }
   };
 
   return (
@@ -300,7 +341,7 @@ export default function CartPage() {
               </div>
               <div>
                 <span className="font-medium text-gray-900">입금금액</span>{' '}
-                {new Intl.NumberFormat('ko-KR').format(bankTransferInfo.amount ?? 0)}원
+                {formatPriceValue(bankTransferInfo.amount ?? 0)}
               </div>
               {bankTransferInfo.expectedDepositor ? (
                 <div className="sm:col-span-2">
@@ -397,7 +438,7 @@ export default function CartPage() {
                     </div>
 
                     <div className="text-right">
-                      <p className="text-lg font-bold text-gray-900">{formatPrice(item.price)}원</p>
+                      <p className="text-lg font-bold text-gray-900">{formatPriceValue(item.price)}</p>
                     </div>
 
                     <button
@@ -417,7 +458,7 @@ export default function CartPage() {
                     선택상품 ({selectedItems.length}개)
                   </span>
                   <span className="text-2xl font-bold text-blue-600">
-                    {formatPrice(getTotalPrice(selectedItems))}원
+                    {formatPriceValue(getTotalPrice(selectedItems))}
                   </span>
                 </div>
                 
@@ -449,6 +490,17 @@ export default function CartPage() {
             </>
           )}
         </div>
+
+        <BankTransferInfoModal
+          open={showBankTransferModal}
+          amount={pendingPurchase?.amount ?? 0}
+          userName={(user?.user_metadata?.name as string | undefined) ?? user?.email ?? undefined}
+          onConfirm={handleBankTransferConfirm}
+          onClose={() => {
+            setShowBankTransferModal(false);
+            setShowPaymentSelector(true);
+          }}
+        />
 
         <PaymentMethodSelector
           open={showPaymentSelector}

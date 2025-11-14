@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
+import type { EventDiscountSheet } from '../../lib/eventDiscounts';
 import {
-  EventDiscountSheet,
   fetchEventDiscountById,
   formatRemainingTime,
   getRemainingTime,
@@ -15,8 +15,8 @@ import { processCashPurchase } from '../../lib/cashPurchases';
 import MainHeader from '../../components/common/MainHeader';
 import UserSidebar from '../../components/feature/UserSidebar';
 import { hasPurchasedSheet } from '../../lib/purchaseCheck';
-
-const formatCurrency = (value: number) => `₩${value.toLocaleString('ko-KR')}`;
+import { useTranslation } from 'react-i18next';
+import { formatPrice } from '../../lib/priceFormatter';
 
 const EventSaleDetailPage = () => {
   const { eventId } = useParams<{ eventId: string }>();
@@ -28,6 +28,11 @@ const EventSaleDetailPage = () => {
   const [isFavoriteSheet, setIsFavoriteSheet] = useState(false);
   const [favoriteProcessing, setFavoriteProcessing] = useState(false);
   const { user } = useAuthStore();
+  const { i18n } = useTranslation();
+  const formatCurrency = useCallback(
+    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
+    [i18n.language],
+  );
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -181,7 +186,7 @@ const EventSaleDetailPage = () => {
       <div className="min-h-screen bg-white">
         <MainHeader user={user} />
         <UserSidebar user={user} />
-        <div className="min-h-[calc(100vh-156px)] bg-gradient-to-b from-orange-50 to-white flex flex-col items-center justify-center text-gray-600 mr-64">
+        <div className="min-h-[calc(100vh-156px)] bg-gradient-to-b from-orange-50 to-white flex flex-col items-center justify-center text-gray-600 md:mr-64">
           <i className="ri-loader-4-line w-10 h-10 animate-spin text-red-500" />
           <p className="mt-4 font-medium">이벤트 정보를 불러오는 중입니다...</p>
         </div>
@@ -194,7 +199,7 @@ const EventSaleDetailPage = () => {
       <div className="min-h-screen bg-white">
         <MainHeader user={user} />
         <UserSidebar user={user} />
-        <div className="min-h-[calc(100vh-156px)] bg-gradient-to-b from-orange-50 to-white flex flex-col items-center justify-center text-gray-600 mr-64">
+        <div className="min-h-[calc(100vh-156px)] bg-gradient-to-b from-orange-50 to-white flex flex-col items-center justify-center text-gray-600 md:mr-64">
           <p className="text-lg font-semibold text-gray-700">{error || '이벤트 정보를 찾을 수 없습니다.'}</p>
           <button
             onClick={() => navigate('/event-sale')}
@@ -211,14 +216,14 @@ const EventSaleDetailPage = () => {
     <div className="min-h-screen bg-white">
       <MainHeader user={user} />
       <UserSidebar user={user} />
-      <div className="mr-64">
+      <div className="md:mr-64">
       <header className="bg-gradient-to-r from-red-500 via-orange-500 to-yellow-400 text-white">
-        <div className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-16 md:flex-row md:items-center">
+        <div className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-12 md:flex-row md:items-center md:py-16">
           <div className="flex-shrink-0 overflow-hidden rounded-3xl border-4 border-white/40 shadow-2xl">
             <img
               src={event.thumbnail_url || generateDefaultThumbnail(600, 600)}
               alt={event.title || '이벤트 악보'}
-              className="h-60 w-60 object-cover md:h-72 md:w-72"
+              className="h-48 w-48 object-cover md:h-72 md:w-72"
             />
           </div>
           <div className="flex-1 space-y-4">
@@ -226,13 +231,13 @@ const EventSaleDetailPage = () => {
               <span className="text-xl">🔥</span>
               100원 특가 이벤트 악보
             </span>
-            <h1 className="text-4xl font-black leading-tight md:text-5xl">{event.title}</h1>
-            <p className="text-lg font-medium text-white/90">{event.artist}</p>
-            <div className="flex flex-wrap items-center gap-4">
+            <h1 className="text-3xl font-black leading-tight md:text-5xl">{event.title}</h1>
+            <p className="text-base font-medium text-white/90 md:text-lg">{event.artist}</p>
+            <div className="flex flex-wrap items-center gap-3 md:gap-4">
               <span className="text-sm text-white/80 line-through">
                 정가 {formatCurrency(event.original_price)}
               </span>
-              <span className="rounded-full bg-white px-4 py-1 text-3xl font-extrabold text-red-500 shadow-lg">
+              <span className="rounded-full bg-white px-4 py-1 text-2xl font-extrabold text-red-500 shadow-lg md:text-3xl">
                 100원
               </span>
               {event.discount_percent !== null && (
@@ -245,13 +250,13 @@ const EventSaleDetailPage = () => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 py-12">
-        <div className="grid gap-10 md:grid-cols-[2fr,1fr]">
-          <section className="space-y-8">
-            <div className="rounded-3xl border border-orange-200 bg-white px-6 py-6 shadow-sm">
-              <div className="flex items-center justify-between gap-4">
+      <main className="mx-auto max-w-5xl px-6 py-10 md:py-12">
+        <div className="grid gap-8 md:grid-cols-[2fr,1fr] md:gap-10">
+          <section className="space-y-6 md:space-y-8">
+            <div className="rounded-3xl border border-orange-200 bg-white px-5 py-5 shadow-sm md:px-6 md:py-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900">이벤트 안내</h2>
+                  <h2 className="text-lg font-semibold text-gray-900 md:text-xl">이벤트 안내</h2>
                   <p className="text-sm text-gray-500">이벤트 기간 동안 100원에 해당 악보를 소장할 수 있습니다.</p>
                 </div>
                 <span
@@ -263,7 +268,7 @@ const EventSaleDetailPage = () => {
                 </span>
               </div>
 
-              <div className="mt-6 grid gap-6 sm:grid-cols-2">
+              <div className="mt-5 grid gap-6 sm:grid-cols-2">
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">이벤트 기간</p>
                   <p className="text-sm font-medium text-gray-700">
@@ -280,7 +285,7 @@ const EventSaleDetailPage = () => {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-gray-200 bg-white px-6 py-6 shadow-sm">
+            <div className="rounded-3xl border border-gray-200 bg-white px-5 py-5 shadow-sm md:px-6 md:py-6">
               <h3 className="text-lg font-semibold text-gray-900">이 악보의 특징</h3>
               <ul className="mt-4 space-y-2 text-sm text-gray-600">
                 <li className="flex items-start gap-2">
@@ -300,7 +305,7 @@ const EventSaleDetailPage = () => {
           </section>
 
           <aside className="space-y-6">
-            <div className="rounded-3xl border border-orange-200 bg-white px-6 py-6 shadow-sm">
+            <div className="rounded-3xl border border-orange-200 bg-white px-5 py-5 shadow-sm md:px-6 md:py-6">
               <h3 className="text-lg font-semibold text-gray-900">결제 정보</h3>
               <div className="mt-4 space-y-4">
                 <div className="flex justify-end">

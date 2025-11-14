@@ -96,13 +96,13 @@ const CustomOrderPage = () => {
       <UserSidebar user={user} />
 
       {/* Main Content - 로그인 시 사이드바 공간 확보 */}
-      <div className={user ? 'mr-64' : ''}>
+      <div className={user ? 'md:mr-64' : ''}>
         {/* Main Content */}
         <main className="max-w-4xl mx-auto px-4 py-12">
         {/* Hero Section */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">악보 주문제작</h1>
-          <div className="text-xl text-gray-600 max-w-2xl mx-auto space-y-2">
+        <div className="text-center mb-10 md:mb-12">
+          <h1 className="text-3xl font-bold text-gray-900 mb-3 md:text-4xl md:mb-4">악보 주문제작</h1>
+          <div className="text-base text-gray-600 max-w-2xl mx-auto space-y-2 md:text-xl">
             <p>원하시는 곡이 있으신가요?</p>
             <p>전문가가 직접 분석하고 정성껏 드럼 악보를 제작해드립니다.</p>
             <p>곡의 난이도와 구성에 따라 맞춤 견적을 안내드립니다.</p>
@@ -110,49 +110,49 @@ const CustomOrderPage = () => {
         </div>
 
         {/* Pricing Info */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-8 mb-12 border border-blue-100">
-          <h2 className="text-2xl font-bold text-gray-900 text-center mb-6">가격 안내</h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-emerald-100">
-              <div className="bg-emerald-100 text-emerald-800 text-center py-3 rounded-lg mb-4">
-                <h3 className="text-xl font-bold">C등급</h3>
-                <p className="text-lg font-semibold">1만원 이상</p>
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-10 border border-blue-100 md:p-8 md:mb-12">
+          <h2 className="text-xl font-bold text-gray-900 text-center mb-5 md:text-2xl md:mb-6">가격 안내</h2>
+          <div className="grid gap-5 md:grid-cols-3 md:gap-6">
+            <div className="bg-white rounded-lg p-5 shadow-sm border border-emerald-100 md:p-6">
+              <div className="bg-emerald-100 text-emerald-800 text-center py-3 rounded-lg mb-3 md:mb-4">
+                <h3 className="text-lg font-bold md:text-xl">C등급</h3>
+                <p className="text-base font-semibold md:text-lg">1만원 이상</p>
               </div>
-              <p className="text-gray-700 text-center text-sm leading-relaxed">
+              <p className="text-gray-700 text-center text-sm leading-relaxed md:text-base">
                 일반적인 가요, 팝, 성인가요 등의 5분이내의 곡
               </p>
             </div>
             
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-amber-100">
-              <div className="bg-amber-100 text-amber-800 text-center py-3 rounded-lg mb-4">
-                <h3 className="text-xl font-bold">B등급</h3>
-                <p className="text-lg font-semibold">3만원 이상</p>
+            <div className="bg-white rounded-lg p-5 shadow-sm border border-amber-100 md:p-6">
+              <div className="bg-amber-100 text-amber-800 text-center py-3 rounded-lg mb-3 md:mb-4">
+                <h3 className="text-lg font-bold md:text-xl">B등급</h3>
+                <p className="text-base font-semibold md:text-lg">3만원 이상</p>
               </div>
-              <p className="text-gray-700 text-center text-sm leading-relaxed">
+              <p className="text-gray-700 text-center text-sm leading-relaxed md:text-base">
                 중급 난이도보다 조금 높거나 5분이상의 곡
               </p>
             </div>
             
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-rose-100">
-              <div className="bg-rose-100 text-rose-800 text-center py-3 rounded-lg mb-4">
-                <h3 className="text-xl font-bold">A등급</h3>
-                <p className="text-lg font-semibold">5만원 이상</p>
+            <div className="bg-white rounded-lg p-5 shadow-sm border border-rose-100 md:p-6">
+              <div className="bg-rose-100 text-rose-800 text-center py-3 rounded-lg mb-3 md:mb-4">
+                <h3 className="text-lg font-bold md:text-xl">A등급</h3>
+                <p className="text-base font-semibold md:text-lg">5만원 이상</p>
               </div>
-              <p className="text-gray-700 text-center text-sm leading-relaxed">
+              <p className="text-gray-700 text-center text-sm leading-relaxed md:text-base">
                 고급 난이도의 곡
               </p>
             </div>
           </div>
-          <div className="text-center mt-6">
-            <p className="text-sm text-gray-600">
+          <div className="text-center mt-5 md:mt-6">
+            <p className="text-xs text-gray-600 md:text-sm">
               * 최종 가격은 곡의 난이도와 길이를 분석한 후 개별 견적으로 안내드립니다.
             </p>
           </div>
         </div>
 
         {/* Order Form */}
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">주문제작 신청서</h2>
+        <div className="bg-white rounded-lg shadow-lg p-6 md:p-8">
+          <h2 className="text-xl font-bold text-gray-900 mb-5 md:text-2xl md:mb-6">주문제작 신청서</h2>
           
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* User ID */}
@@ -175,7 +175,7 @@ const CustomOrderPage = () => {
             <div className="border-t pt-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">곡 정보</h3>
               
-              <div className="grid md:grid-cols-2 gap-6">
+              <div className="grid gap-5 md:grid-cols-2 md:gap-6">
                 <div>
                   <label htmlFor="songTitle" className="block text-sm font-medium text-gray-700 mb-2">
                     곡명 <span className="text-red-500">*</span>

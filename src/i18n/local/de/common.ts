@@ -1,0 +1,177 @@
+export default {
+  // Site name
+  'site.name': 'CopyDrum',
+  'site.title': 'CopyDrum - Schlagzeugnoten Download',
+  'site.description': 'Laden Sie hochwertige Schlagzeugnoten herunter. Noten für alle Genres verfügbar.',
+
+  // Navigation
+  'nav.home': 'Startseite',
+  'nav.categories': 'Notenkategorien',
+  'nav.customOrder': 'Individuelle Bestellung',
+  'nav.cart': 'Warenkorb',
+  'nav.mypage': 'Meine Seite',
+  'nav.myOrders': 'Meine Bestellungen',
+  'nav.admin': 'Administrator',
+  'nav.login': 'Anmelden',
+  'nav.register': 'Registrieren',
+  'nav.logout': 'Abmelden',
+  'nav.guide': 'Leitfaden',
+  'nav.eventSale': 'Veranstaltungsverkauf',
+  'nav.collections': 'Sammlungen',
+  'nav.freeSheets': 'Kostenlose Noten',
+  'nav.customerSupport': 'Kundensupport',
+  'nav.company.about': 'Über uns',
+  'nav.company.partnership': 'Partnerschaft',
+
+  // Search
+  'search.placeholder': 'Nach Titel, Künstler, Genre suchen...',
+  'search.button': 'Suchen',
+  'search.noResults': 'Keine Suchergebnisse gefunden.',
+
+  // Buttons
+  'button.addToCart': 'In den Warenkorb',
+  'button.purchase': 'Kaufen',
+  'button.download': 'Herunterladen',
+  'button.viewDetails': 'Details anzeigen',
+  'button.edit': 'Bearbeiten',
+  'button.delete': 'Löschen',
+  'button.cancel': 'Abbrechen',
+  'button.confirm': 'Bestätigen',
+  'button.save': 'Speichern',
+  'button.submit': 'Senden',
+  'button.back': 'Zurück',
+  'button.next': 'Weiter',
+  'button.previous': 'Vorherige',
+  'button.close': 'Schließen',
+  'button.apply': 'Anwenden',
+  'button.reset': 'Zurücksetzen',
+  'button.upload': 'Hochladen',
+  'button.select': 'Auswählen',
+
+  // Cart
+  'cart.title': 'Warenkorb',
+  'cart.empty': 'Ihr Warenkorb ist leer.',
+  'cart.total': 'Gesamt',
+  'cart.checkout': 'Zur Kasse',
+  'cart.continueShopping': 'Weiter einkaufen',
+  'cart.itemCount': '{{count}} Artikel',
+
+  // Product
+  'product.price': 'Preis',
+  'product.artist': 'Künstler',
+  'product.genre': 'Genre',
+  'product.difficulty': 'Schwierigkeit',
+  'product.duration': 'Dauer',
+  'product.description': 'Beschreibung',
+  'product.addedToCart': 'Zum Warenkorb hinzugefügt!',
+
+  // Payment
+  'payment.method': 'Zahlungsmethode',
+  'payment.card': 'Kreditkarte',
+  'payment.bank': 'Banküberweisung',
+  'payment.kakao': 'Kakao Pay',
+  'payment.paypal': 'PayPal',
+  'payment.processing': 'Zahlung wird bearbeitet...',
+  'payment.success': 'Zahlung erfolgreich!',
+  'payment.failed': 'Zahlung fehlgeschlagen. Bitte versuchen Sie es erneut.',
+
+  // Auth
+  'auth.email': 'E-Mail',
+  'auth.password': 'Passwort',
+  'auth.confirmPassword': 'Passwort bestätigen',
+  'auth.forgotPassword': 'Passwort vergessen?',
+  'auth.rememberMe': 'Angemeldet bleiben',
+  'auth.noAccount': 'Noch kein Konto?',
+  'auth.hasAccount': 'Bereits ein Konto?',
+  'auth.signIn': 'Anmelden',
+  'auth.signUp': 'Registrieren',
+  'auth.signOut': 'Abmelden',
+
+  // Messages
+  'message.loading': 'Lädt...',
+  'message.error': 'Ein Fehler ist aufgetreten.',
+  'message.success': 'Erfolg!',
+  'message.saved': 'Erfolgreich gespeichert.',
+  'message.deleted': 'Erfolgreich gelöscht.',
+  'message.updated': 'Erfolgreich aktualisiert.',
+  'message.confirmDelete': 'Möchten Sie dies wirklich löschen?',
+
+  // Footer
+  'footer.company': 'Unternehmen',
+  'footer.support': 'Support',
+  'footer.legal': 'Rechtliches',
+  'footer.followUs': 'Folgen Sie uns',
+  'footer.copyright': '© 2025 CopyDrum. Alle Rechte vorbehalten.',
+
+  // Common
+  'common.or': 'oder',
+  'common.and': 'und',
+  'common.all': 'Alle',
+  'common.new': 'Neu',
+  'common.popular': 'Beliebt',
+  'common.recommended': 'Empfohlen',
+  'common.free': 'Kostenlos',
+  'common.paid': 'Bezahlt',
+  'common.date': 'Datum',
+  'common.status': 'Status',
+  'common.action': 'Aktion',
+  'common.more': 'Mehr',
+  'common.less': 'Weniger',
+  'common.showMore': 'Mehr anzeigen',
+  'common.showLess': 'Weniger anzeigen',
+
+  // Auth misc
+  'auth.loginRequired': 'Anmeldung erforderlich.',
+
+  // Mobile - Header
+  'mobile.header.openMenu': 'Menü öffnen',
+  'mobile.header.openSearch': 'Suche öffnen',
+  'mobile.header.goHome': 'Zur {{site}}-Startseite',
+
+  // Navigation (additional)
+  'nav.cashCharge': 'Cash-Aufladung',
+
+  // Mobile - Menu Sidebar
+  'mobile.menu.greeting': 'Willkommen, {{name}}!',
+  'mobile.menu.close': 'Mobiles Menü schließen',
+
+  // Mobile - Search Overlay
+  'mobile.search.close': 'Suche schließen',
+  'mobile.search.topSheets': 'Top 5 beliebte Noten',
+  'mobile.search.noTopSheets': 'Keine beliebten Noten verfügbar.',
+  'mobile.search.suggestions': 'Empfohlene Suchbegriffe',
+  'mobile.search.clear': 'Suche löschen',
+
+  // Mobile - Cash Charge Modal
+  'mobile.cash.title': 'Cash-Aufladung',
+  'mobile.cash.close': 'Cash-Aufladung schließen',
+  'mobile.cash.currentBalance': 'Aktuelles Drum-Cash-Guthaben',
+  'mobile.cash.bankGuideTitle': 'Überweisungsanleitung',
+  'mobile.cash.bank': 'Bank',
+  'mobile.cash.accountNumber': 'Kontonummer',
+  'mobile.cash.accountHolder': 'Kontoinhaber',
+  'mobile.cash.amount': 'Betrag',
+  'mobile.cash.depositor': 'Einzahlername',
+  'mobile.cash.bankTransferInfo': 'Überweisungsinformationen',
+  'mobile.cash.transferAmount': 'Zu überweisender Betrag',
+  'mobile.cash.bankAccountInfo': 'Kontodaten',
+  'mobile.cash.depositorPlaceholder': 'Einzahlername eingeben',
+  'mobile.cash.depositorNote': '* Wenn sich Einzahler- und Mitgliedsname unterscheiden, bitte hier angeben.',
+  'mobile.cash.noticeTitle': 'Wichtige Hinweise',
+  'mobile.cash.notice1': 'Nach Zahlungseingang wird das Guthaben manuell hinzugefügt.',
+  'mobile.cash.notice2': 'Bei abweichendem Einzahlernamen kann sich die Bestätigung verzögern.',
+  'mobile.cash.notice3': 'Die Bestätigung kann 1–2 Werktage dauern.',
+  'mobile.cash.paymentUnavailable': 'Diese Zahlungsmethode ist in Vorbereitung.',
+  'mobile.cash.agreementText': 'Ich bestätige die Angaben und stimme den Bedingungen zu. Nach Abschluss wird Drum-Cash gutgeschrieben.',
+  'mobile.cash.loginDescription': 'Melden Sie sich an, um Drum-Cash aufzuladen.',
+  'mobile.cash.agreementRequired': 'Bitte stimmen Sie den Zahlungsbedingungen zu.',
+  'mobile.cash.enterDepositor': 'Bitte den Einzahlernamen eingeben.',
+  'mobile.cash.cardPending': 'Kartenzahlung befindet sich in Vorbereitung.',
+  'mobile.cash.bankTransferRequested': 'Bestellung eingegangen. Nach Zahlungseingang wird das Guthaben gutgeschrieben.',
+  'mobile.cash.error': 'Beim Aufladen ist ein Fehler aufgetreten.',
+  'mobile.cash.chargeAmount': 'Aufladebetrag',
+  'mobile.cash.noBonus': 'Kein Bonus',
+  'mobile.cash.bonusLabel': '+{{amount}} P Bonus ({{percent}})',
+  'mobile.cash.processing': 'Wird verarbeitet...',
+};
+

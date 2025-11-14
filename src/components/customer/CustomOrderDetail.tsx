@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { useTranslation } from 'react-i18next';
+import { formatPrice } from '@/lib/priceFormatter';
 
 type StatusValue = 'pending' | 'quoted' | 'payment_confirmed' | 'in_progress' | 'completed';
 
@@ -78,6 +80,11 @@ const formatDateTime = (value: string | null | undefined) => {
 
 export default function CustomOrderDetail({ orderId }: CustomOrderDetailProps) {
   const { user } = useAuthStore();
+  const { i18n } = useTranslation();
+  const formatCurrency = useCallback(
+    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
+    [i18n.language],
+  );
 
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -206,9 +213,10 @@ export default function CustomOrderDetail({ orderId }: CustomOrderDetailProps) {
   const canDownload = useMemo(() => {
     if (!order?.completed_pdf_url) return false;
 
-    const downloadLimit = order.max_download_count ?? 5;
+    const downloadLimit = order.max_download_count;
     const usedCount = order.download_count ?? 0;
-    if (usedCount >= downloadLimit) {
+    const hasLimit = typeof downloadLimit === 'number' && downloadLimit > 0;
+    if (hasLimit && usedCount >= downloadLimit) {
       return false;
     }
 
@@ -227,9 +235,10 @@ export default function CustomOrderDetail({ orderId }: CustomOrderDetailProps) {
     if (!order) return '';
     if (!order.completed_pdf_url) return '아직 다운로드 가능한 파일이 없습니다.';
 
-    const downloadLimit = order.max_download_count ?? 5;
+    const downloadLimit = order.max_download_count;
     const usedCount = order.download_count ?? 0;
-    if (usedCount >= downloadLimit) {
+    const hasLimit = typeof downloadLimit === 'number' && downloadLimit > 0;
+    if (hasLimit && usedCount >= downloadLimit) {
       return '다운로드 횟수를 모두 사용하셨습니다. 추가 다운로드가 필요하시면 고객센터에 문의해주세요.';
     }
 
@@ -242,6 +251,17 @@ export default function CustomOrderDetail({ orderId }: CustomOrderDetailProps) {
     }
 
     return '';
+  }, [order]);
+
+  const downloadUsageText = useMemo(() => {
+    if (!order) return '';
+
+    const usedCount = order.download_count ?? 0;
+    const limit = order.max_download_count;
+    if (typeof limit === 'number' && limit > 0) {
+      return `다운로드 ${usedCount}/${limit}회 사용`;
+    }
+    return `다운로드 ${usedCount}회 사용 (무제한)`;
   }, [order]);
 
   const handleDownload = async () => {
@@ -387,7 +407,7 @@ export default function CustomOrderDetail({ orderId }: CustomOrderDetailProps) {
             <div>
               <p className="font-semibold">제안된 견적 금액</p>
               <p className="text-xs">
-                {order.estimated_price.toLocaleString('ko-KR')}원 (부가세 포함)
+                {formatCurrency(order.estimated_price)} (부가세 포함)
               </p>
             </div>
           </div>
@@ -408,8 +428,7 @@ export default function CustomOrderDetail({ orderId }: CustomOrderDetailProps) {
                   {order.completed_pdf_filename ?? '완성된 악보.pdf'}
                 </p>
                 <p className="text-xs text-purple-700">
-                  다운로드 {order.download_count ?? 0}/{order.max_download_count ?? 5}회 사용 · 만료일{' '}
-                  {formatDateTime(order.download_expires_at)}
+                  {downloadUsageText} · 만료일 {formatDateTime(order.download_expires_at)}
                 </p>
                 {downloadRestrictionMessage && !canDownload ? (
                   <p className="mt-2 text-xs text-red-600">{downloadRestrictionMessage}</p>

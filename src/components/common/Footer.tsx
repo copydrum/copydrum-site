@@ -25,6 +25,7 @@ const supportLinks: FooterLink[] = [
 
 const companyLinks: FooterLink[] = [
   { label: '회사 소개', href: '/company/about' },
+  { label: '사업자 정보', href: '/company/business-info' },
   { label: '이용약관', href: '/guide#terms' },
   { label: '개인정보처리방침', href: '/guide#privacy' },
   { label: '파트너십', href: '/company/partnership' },

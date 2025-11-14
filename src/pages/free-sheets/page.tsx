@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { User } from '@supabase/supabase-js';
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import type { User } from '@supabase/supabase-js';
 import { Heart, Loader2, Play, Search } from 'lucide-react';
 
 import MainHeader from '../../components/common/MainHeader';
@@ -187,6 +187,9 @@ const FreeSheetsPage = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoriteLoadingIds, setFavoriteLoadingIds] = useState<Set<string>>(new Set());
+  const [selectedSheet, setSelectedSheet] = useState<FreeSheet | null>(null);
+  const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
+  const navigate = useNavigate();
 
   const loadSheets = useCallback(async () => {
     setLoading(true);
@@ -451,6 +454,50 @@ const FreeSheetsPage = () => {
     }
   };
 
+  const handleMobileSheetSelect = useCallback((sheet: FreeSheet) => {
+    setSelectedSheet(sheet);
+    setIsMobileDetailOpen(true);
+  }, []);
+
+  const closeMobileDetail = useCallback(() => {
+    setIsMobileDetailOpen(false);
+    setSelectedSheet(null);
+  }, []);
+
+  const handleSheetLinkClick = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>, sheet: FreeSheet) => {
+      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+        event.preventDefault();
+        handleMobileSheetSelect(sheet);
+      }
+    },
+    [handleMobileSheetSelect],
+  );
+
+  const handleOpenPdf = useCallback((sheet: FreeSheet) => {
+    if (!sheet.pdfUrl) {
+      alert('PDF 링크가 준비되지 않았습니다.');
+      return;
+    }
+    window.open(sheet.pdfUrl, '_blank', 'noopener,noreferrer');
+  }, []);
+
+  const handleOpenYoutube = useCallback((sheet: FreeSheet) => {
+    if (!sheet.youtubeUrl) {
+      alert('등록된 유튜브 영상이 없습니다.');
+      return;
+    }
+    window.open(sheet.youtubeUrl, '_blank', 'noopener,noreferrer');
+  }, []);
+
+  const handleNavigateToDetail = useCallback(
+    (sheet: FreeSheet) => {
+      closeMobileDetail();
+      navigate(`/sheet-detail/${sheet.id}`);
+    },
+    [closeMobileDetail, navigate],
+  );
+
   const filteredSheets = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
 
@@ -495,14 +542,14 @@ const FreeSheetsPage = () => {
       <MainHeader />
 
       <section className="bg-gradient-to-tr from-blue-600 via-indigo-600 to-sky-500 text-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
           <span className="inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-1 text-sm font-semibold tracking-wide text-white">
             FREE DRUM LESSONS
           </span>
           <h1 className="text-3xl font-bold leading-tight sm:text-4xl lg:text-5xl">
             무료 드럼레슨 악보
           </h1>
-          <p className="max-w-3xl text-base text-blue-100 sm:text-lg">
+          <p className="max-w-3xl text-sm text-blue-100 sm:text-base md:text-lg">
             드럼 레슨 카테고리의 모든 악보를 무료로 만나보세요!
             유튜브 레슨과 함께 연습하면 더욱 빠르게 실력이 향상됩니다.
             드럼 테크닉, 루디먼트, 드럼 솔로 등 다양한 학습 주제를 자유롭게 선택해보세요.
@@ -599,7 +646,11 @@ const FreeSheetsPage = () => {
                     key={sheet.id}
                     className="group relative flex flex-col overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
                   >
-                    <Link to={`/sheet-detail/${sheet.id}`} className="relative block">
+                    <Link
+                      to={`/sheet-detail/${sheet.id}`}
+                      className="relative block"
+                      onClick={(event) => handleSheetLinkClick(event, sheet)}
+                    >
                       <div
                         className="aspect-video w-full bg-gray-200 transition duration-300 group-hover:brightness-110"
                         style={{
@@ -678,6 +729,7 @@ const FreeSheetsPage = () => {
                       <Link
                         to={`/sheet-detail/${sheet.id}`}
                         className="mt-4 inline-flex items-center justify-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                        onClick={(event) => handleSheetLinkClick(event, sheet)}
                       >
                         무료 악보 보기
                       </Link>
@@ -689,6 +741,109 @@ const FreeSheetsPage = () => {
           )}
         </div>
       </section>
+
+      {selectedSheet && isMobileDetailOpen && (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/60 backdrop-blur-sm md:hidden">
+          <div className="w-full max-h-[90vh] overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-blue-600">무료 악보</p>
+                <h2 className="text-lg font-bold text-gray-900">{selectedSheet.title}</h2>
+                <p className="text-sm text-gray-500">{selectedSheet.artist}</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeMobileDetail}
+                aria-label="무료 악보 상세 닫기"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <i className="ri-close-line text-2xl" />
+              </button>
+            </div>
+
+            <div className="space-y-5">
+              <div className="overflow-hidden rounded-2xl border border-gray-100">
+                <img
+                  src={selectedSheet.thumbnailUrl}
+                  alt={selectedSheet.title}
+                  className="w-full object-cover"
+                  onError={(event) => {
+                    const img = event.target as HTMLImageElement;
+                    img.src = generateDefaultThumbnail(640, 480);
+                  }}
+                />
+              </div>
+
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                    {getDifficultyLabel(selectedSheet.difficulty)}
+                  </span>
+                  {selectedSheet.categories.map((category) => (
+                    <span
+                      key={category}
+                      className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600"
+                    >
+                      {category}
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
+                  <span>업로드 {formatRelativeDate(selectedSheet.createdAt)}</span>
+                  {selectedSheet.pageCount ? <span>{selectedSheet.pageCount} 페이지</span> : null}
+                  {selectedSheet.youtubeUrl ? <span>유튜브 레슨 포함</span> : null}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between rounded-2xl border border-gray-100 px-4 py-3">
+                <div className="text-sm text-gray-500">
+                  <p className="font-semibold text-gray-900">무료 다운로드</p>
+                  <p>PDF 악보와 함께 연습해보세요.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleFavorite(selectedSheet.id)}
+                  disabled={favoriteLoadingIds.has(selectedSheet.id)}
+                  className={`flex h-11 w-11 items-center justify-center rounded-full border transition-colors ${
+                    favoriteIds.has(selectedSheet.id)
+                      ? 'border-red-200 bg-red-50 text-red-500'
+                      : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                  } ${favoriteLoadingIds.has(selectedSheet.id) ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  aria-label={favoriteIds.has(selectedSheet.id) ? '찜 해제' : '찜하기'}
+                >
+                  <i className={`ri-heart-${favoriteIds.has(selectedSheet.id) ? 'fill' : 'line'} text-xl`} />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => handleOpenPdf(selectedSheet)}
+                  className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow transition hover:bg-blue-700"
+                >
+                  무료 악보 보기
+                </button>
+                {selectedSheet.youtubeUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenYoutube(selectedSheet)}
+                    className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-500 transition hover:bg-red-100"
+                  >
+                    유튜브 레슨 보기
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => handleNavigateToDetail(selectedSheet)}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                >
+                  상세 페이지로 이동
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

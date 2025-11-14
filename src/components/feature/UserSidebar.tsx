@@ -8,6 +8,8 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../hooks/useCart';
 import { startCashCharge } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
+import { useTranslation } from 'react-i18next';
+import { formatPrice } from '../../lib/priceFormatter';
 
 interface UserSidebarProps {
   user: User | null;
@@ -17,10 +19,12 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   const [userCash, setUserCash] = useState(0);
   const [showCashChargeModal, setShowCashChargeModal] = useState(false);
   const [chargeAmount, setChargeAmount] = useState(10000);
-  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank'>('card');
+  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank'>('bank');
   const [chargeAgreementChecked, setChargeAgreementChecked] = useState(false);
   const [chargeProcessing, setChargeProcessing] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
+  const [showDepositorInput, setShowDepositorInput] = useState(false);
+  const [depositorName, setDepositorName] = useState('');
   const [isKakaoChatReady, setIsKakaoChatReady] = useState(false);
 
   // 로그인 폼 상태
@@ -34,6 +38,15 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
+  const formatCurrency = useCallback(
+    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
+    [i18n.language],
+  );
+  const formatNumber = useCallback(
+    (value: number) => new Intl.NumberFormat(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US').format(value),
+    [i18n.language],
+  );
 
   const { cartItems } = useCart();
 
@@ -312,6 +325,9 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     setBankTransferInfo(null);
     setChargeAgreementChecked(false);
     setChargeProcessing(false);
+    setShowDepositorInput(false);
+    setDepositorName('');
+    setSelectedPayment('bank');
     setShowCashChargeModal(true);
   };
 
@@ -320,9 +336,11 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     setChargeAgreementChecked(false);
     setChargeProcessing(false);
     setBankTransferInfo(null);
+    setShowDepositorInput(false);
+    setDepositorName('');
   };
 
-  const handleChargeConfirm = async () => {
+  const handleChargeConfirm = () => {
     if (!user) {
       alert('로그인이 필요합니다.');
       return;
@@ -339,37 +357,56 @@ export default function UserSidebar({ user }: UserSidebarProps) {
       return;
     }
 
-    if (selectedPayment === 'kakaopay') {
-      alert('카카오페이는 준비 중입니다. 다른 결제 수단을 선택해 주세요.');
+    if (selectedPayment === 'card' || selectedPayment === 'kakaopay') {
+      alert('카드/카카오페이 결제는 준비 중입니다. 무통장입금을 이용해주세요.');
+      return;
+    }
+
+    if (selectedPayment === 'bank') {
+      setShowDepositorInput(true);
+      setBankTransferInfo(null);
+    }
+  };
+
+  const handleBankTransferConfirm = async () => {
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    if (!depositorName.trim()) {
+      alert('입금자명을 입력해 주세요.');
+      return;
+    }
+
+    const selectedOption = chargeOptions.find((option) => option.amount === chargeAmount);
+    if (!selectedOption) {
+      alert('선택한 충전 금액을 확인할 수 없습니다.');
       return;
     }
 
     setChargeProcessing(true);
 
     try {
-      const paymentMethod = selectedPayment === 'bank' ? 'bank_transfer' : 'card';
-      const description = `캐쉬 충전 ${selectedOption.amount.toLocaleString('ko-KR')}원`;
+      const description = `${selectedOption.label} (${formatCurrency(selectedOption.amount)})`;
       const result = await startCashCharge({
         userId: user.id,
         amount: selectedOption.amount,
         bonusAmount: selectedOption.bonus ?? 0,
-        paymentMethod,
+        paymentMethod: 'bank_transfer',
         description,
-        buyerName: user.email ?? null,
+        buyerName: user.user_metadata?.name ?? user.email ?? null,
         buyerEmail: user.email ?? null,
+        depositorName: depositorName.trim(),
         returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
       });
 
-      if (paymentMethod === 'bank_transfer') {
-        setBankTransferInfo(result.virtualAccountInfo ?? null);
-        await loadUserCash();
-        alert('무통장입금 안내가 생성되었습니다.\n안내에 따라 입금 후 자동으로 충전됩니다.');
-      } else {
-        setBankTransferInfo(null);
-        setShowCashChargeModal(false);
-      }
-
+      setBankTransferInfo(result.virtualAccountInfo ?? null);
+      setShowDepositorInput(false);
       setChargeAgreementChecked(false);
+      setDepositorName('');
+      await loadUserCash();
+      alert('주문이 접수되었습니다.\n입금 확인 후 관리자가 캐시 충전을 완료합니다.');
     } catch (error) {
       console.error('캐쉬 충전 오류:', error);
       alert(error instanceof Error ? error.message : '캐쉬 충전 중 오류가 발생했습니다.');
@@ -393,27 +430,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   );
 
   const handleKakaoChatClick = useCallback(() => {
-    const channelPublicId = '_Hbxezxl';
-    const channelUrl = `https://pf.kakao.com/${channelPublicId}/chat`;
-
-    try {
-      const kakao = window.Kakao;
-      if (kakao) {
-        if (!kakao.isInitialized()) {
-          kakao.init('f8269368f9d501a595c3f3d6d99e4ff5');
-        }
-        if (kakao.Channel) {
-          kakao.Channel.chat({
-            channelPublicId,
-          });
-          return;
-        }
-      }
-    } catch (error) {
-      console.error('카카오 채팅 상담 연결 중 오류:', error);
-    }
-
-    window.open(channelUrl, '_blank', 'noopener,noreferrer');
+    window.open('https://pf.kakao.com/_Hbxezxl/chat', '_blank', 'noopener,noreferrer');
   }, []);
 
   const sidebarMenuItems = useMemo(
@@ -478,7 +495,14 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   ];
 
   const paymentMethods = [
-    { id: 'card', name: '신용카드', icon: 'ri-bank-card-line', color: 'text-blue-600' },
+    {
+      id: 'card',
+      name: '신용카드',
+      icon: 'ri-bank-card-line',
+      color: 'text-blue-600',
+      disabled: true,
+      badge: '준비 중',
+    },
     {
       id: 'kakaopay',
       name: '카카오페이',
@@ -490,38 +514,36 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     { id: 'bank', name: '무통장입금', icon: 'ri-bank-line', color: 'text-green-600' },
   ] as const;
 
-  // 사용자 캐쉬 로드
-  useEffect(() => {
-    const loadUserCash = async () => {
-      if (!user) {
+  const loadUserCash = useCallback(async () => {
+    if (!user) {
+      setUserCash(0);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('credits')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        console.error('캐쉬 조회 오류:', error);
         setUserCash(0);
         return;
       }
 
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('credits')
-          .eq('id', user.id)
-          .single();
-
-        if (error) {
-          console.error('캐쉬 조회 오류:', error);
-          // 프로필이 없으면 기본값 0 사용
-          setUserCash(0);
-          return;
-        }
-
-        // credits가 null이거나 undefined인 경우 0으로 설정
-        setUserCash(data?.credits || 0);
-      } catch (error) {
-        console.error('캐쉬 로드 오류:', error);
-        setUserCash(0);
-      }
-    };
-
-    loadUserCash();
+      setUserCash(data?.credits || 0);
+    } catch (error) {
+      console.error('캐쉬 로드 오류:', error);
+      setUserCash(0);
+    }
   }, [user]);
+
+  // 사용자 캐쉬 로드
+  useEffect(() => {
+    void loadUserCash();
+  }, [loadUserCash]);
 
   useEffect(() => {
     const ensureKakaoSdk = () => {
@@ -573,7 +595,8 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   // 로그인하지 않은 경우 로그인 사이드바 표시
   if (!user) {
     return (
-      <div className="fixed top-0 right-0 h-full w-64 bg-white shadow-2xl z-50 border-l border-gray-200">
+      <div className="hidden md:block">
+        <div className="fixed top-0 right-0 h-full w-64 bg-white shadow-2xl z-50 border-l border-gray-200">
         {/* 헤더 */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white flex flex-col items-center justify-center" style={{ height: '156px' }}>
           <h2 className="text-lg font-bold text-center">로그인</h2>
@@ -750,12 +773,13 @@ export default function UserSidebar({ user }: UserSidebarProps) {
             </div>
           </div>
         </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <>
+    <div className="hidden md:block">
       {/* 사이드바 - 항상 표시, 더 좁은 너비 */}
       <div className="fixed top-0 right-0 h-full w-64 bg-white shadow-2xl z-50 border-l border-gray-200">
         {/* 헤더 */}
@@ -775,7 +799,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
 
           <div className="bg-white/20 rounded-lg p-3">
             <p className="text-xs text-blue-100">보유 악보캐쉬</p>
-            <p className="text-xl font-bold">₩ {userCash.toLocaleString()}</p>
+            <p className="text-xl font-bold">{formatCurrency(userCash)}</p>
           </div>
         </div>
 
@@ -817,25 +841,22 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                   <div className="pt-2 pb-2">
                     <button
                       onClick={handleKakaoChatClick}
-                      className="group w-full flex items-center gap-3 rounded-xl border border-yellow-300 bg-[#FEE500] px-3 py-3 shadow-sm transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
+                      className="group w-full rounded-2xl border border-yellow-300 bg-gradient-to-r from-[#FEE500] to-[#FFD43B] p-3 shadow-sm transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
                     >
-                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-black/5">
-                        <img
-                          src="/kakao.svg"
-                          alt="카카오톡 채널"
-                          className="h-8 w-auto"
-                          loading="lazy"
-                        />
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-black/85 text-[#FEE500]">
+                          <i className="ri-kakao-talk-fill text-lg"></i>
+                        </div>
+                        <span className="flex-1 text-center text-sm font-semibold text-gray-900">카카오 채팅 상담</span>
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/35 text-gray-900 transition-transform group-hover:translate-x-0.5">
+                          <i className="ri-arrow-right-up-line text-base"></i>
+                        </div>
                       </div>
-                      <div className="flex flex-1 flex-col items-start text-left">
-                        <span className="text-sm font-semibold text-gray-900">카카오 채팅 상담</span>
-                        {!isKakaoChatReady && (
-                          <span className="text-xs text-gray-800/70">
-                            클릭하면 카카오톡 상담으로 이동합니다.
-                          </span>
-                        )}
-                      </div>
-                      <i className="ri-external-link-line text-base text-gray-900 transition-transform group-hover:translate-x-0.5"></i>
+                      {!isKakaoChatReady && (
+                        <p className="mt-3 text-xs font-medium text-gray-900/80">
+                          클릭하면 새 창에서 카카오톡 상담이 열립니다.
+                        </p>
+                      )}
                     </button>
                   </div>
                 )}
@@ -862,10 +883,72 @@ export default function UserSidebar({ user }: UserSidebarProps) {
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6 flex items-center">
                 <i className="ri-coins-line text-yellow-600 text-lg mr-2"></i>
                 <span className="text-sm text-gray-700">보유 악보캐쉬</span>
-                <span className="ml-auto font-bold text-yellow-600">{userCash.toLocaleString()} P</span>
+                <span className="ml-auto font-bold text-yellow-600">{formatNumber(userCash)} P</span>
               </div>
 
-              {bankTransferInfo ? (
+              {showDepositorInput ? (
+                <div className="space-y-5">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">입금하실 금액</span>
+                      <span className="text-lg font-bold text-blue-600">
+                        {formatCurrency(chargeAmount)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg px-4 py-3 space-y-2 border border-gray-200">
+                    <div className="flex items-center justify-between text-xs text-gray-600">
+                      <span>은행</span>
+                      <span className="font-semibold text-gray-900">농협</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-gray-600">
+                      <span>계좌번호</span>
+                      <span className="font-semibold text-gray-900">106-02-303742</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-gray-600">
+                      <span>예금주</span>
+                      <span className="font-semibold text-gray-900">강만수</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-gray-900">
+                      입금자명 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={depositorName}
+                      onChange={(event) => setDepositorName(event.target.value)}
+                      placeholder="입금자명을 입력하세요"
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-xs text-gray-500">
+                      회원명과 입금자가 다르면 확인이 지연될 수 있으니 정확히 입력해주세요.
+                    </p>
+                  </div>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 text-xs text-gray-700 space-y-1">
+                    <p>• 입금 확인 후 관리자가 수동으로 캐시 충전을 완료합니다.</p>
+                    <p>• 입금 확인까지 영업일 기준 1~2일 소요될 수 있습니다.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setShowDepositorInput(false);
+                        setDepositorName('');
+                      }}
+                      className="flex-1 border border-gray-300 text-gray-700 py-2.5 px-4 rounded-lg hover:bg-gray-50 font-medium text-sm transition-colors"
+                    >
+                      이전
+                    </button>
+                    <button
+                      onClick={handleBankTransferConfirm}
+                      disabled={chargeProcessing}
+                      className="flex-1 bg-blue-600 text-white py-2.5 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-70 font-medium text-sm transition-colors"
+                    >
+                      {chargeProcessing ? '처리 중...' : '확인'}
+                    </button>
+                  </div>
+                </div>
+              ) : bankTransferInfo ? (
                 <div className="space-y-5">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <h3 className="text-sm font-semibold text-blue-800 mb-3">무통장입금 안내</h3>
@@ -882,7 +965,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                       </li>
                       <li>
                         <span className="font-medium text-gray-900">입금금액</span>{' '}
-                        {new Intl.NumberFormat('ko-KR').format(bankTransferInfo.amount ?? chargeAmount)}원
+                        {formatCurrency(bankTransferInfo.amount ?? chargeAmount)}
                       </li>
                       {bankTransferInfo.expectedDepositor ? (
                         <li>
@@ -932,7 +1015,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                           {option.bonus > 0 && (
                             <div className="mt-1">
                               <span className="text-xs text-gray-500">
-                                +{option.bonus.toLocaleString()} 적립
+                                +{formatNumber(option.bonus)} 적립
                               </span>
                               <span className="ml-1 bg-red-500 text-white text-xs px-1 py-0.5 rounded">
                                 {option.bonusPercent}
@@ -1025,6 +1108,6 @@ export default function UserSidebar({ user }: UserSidebarProps) {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

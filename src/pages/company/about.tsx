@@ -33,7 +33,7 @@ export default function CompanyAboutPage() {
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <MainHeader user={user} />
       <UserSidebar user={user} />
-      <div className={user ? 'mr-64' : ''}>
+      <div className={user ? 'md:mr-64' : ''}>
         <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-20">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <h1 className="text-4xl font-bold mb-4">COPYDRUM 소개</h1>
@@ -128,4 +128,5 @@ export default function CompanyAboutPage() {
     </div>
   );
 }
+
 

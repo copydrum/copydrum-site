@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
 import UserSidebar from '../../components/feature/UserSidebar';
+import MainHeader from '../../components/common/MainHeader';
+import type { EventDiscountSheet } from '../../lib/eventDiscounts';
 import {
-  EventDiscountSheet,
   fetchEventDiscountList,
   formatRemainingTime,
   getRemainingTime,
@@ -12,8 +13,8 @@ import {
   purchaseEventDiscount,
 } from '../../lib/eventDiscounts';
 import { fetchUserFavorites, toggleFavorite } from '../../lib/favorites';
-
-const formatCurrency = (value: number) => `₩${value.toLocaleString('ko-KR')}`;
+import { useTranslation } from 'react-i18next';
+import { formatPrice } from '../../lib/priceFormatter';
 
 const getStartCountdownLabel = (event: EventDiscountSheet, now: Date) => {
   const start = new Date(event.event_start).getTime();
@@ -33,11 +34,15 @@ const EventSalePage = () => {
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(() => new Date());
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoriteLoadingIds, setFavoriteLoadingIds] = useState<Set<string>>(new Set());
+  const { i18n } = useTranslation();
+  const formatCurrency = useCallback(
+    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
+    [i18n.language],
+  );
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -305,126 +310,45 @@ const EventSalePage = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="bg-blue-700 mr-64" style={{ height: '156px' }}>
-        <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto h-full flex flex-col justify-between">
-          <div className="flex items-center relative py-4">
-            <div className="flex items-center -ml-4 absolute left-0">
-              <img
-                src="/logo.png"
-                alt="카피드럼"
-                className="h-12 w-auto mr-3 cursor-pointer"
-                onClick={() => navigate('/')}
-              />
-              <h1
-                className="text-2xl font-bold text-white cursor-pointer"
-                style={{ fontFamily: '"Noto Sans KR", "Malgun Gothic", sans-serif' }}
-                onClick={() => navigate('/')}
-              >
-                카피드럼
-              </h1>
-            </div>
-
-            <div className="flex-1 max-w-2xl mx-auto">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="곡명, 아티스트, 장르로 검색..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && searchQuery.trim()) {
-                      navigate(`/categories?search=${encodeURIComponent(searchQuery.trim())}`);
-                    }
-                  }}
-                  className="w-full px-6 py-3 text-base border-0 rounded-full focus:outline-none pr-12 bg-blue-50 placeholder-gray-400 text-gray-900"
-                />
-                <button
-                  onClick={() => {
-                    if (searchQuery.trim()) {
-                      navigate(`/categories?search=${encodeURIComponent(searchQuery.trim())}`);
-                    }
-                  }}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-blue-700 transition-colors duration-200"
-                >
-                  <i className="ri-search-line text-xl"></i>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <nav className="flex items-center justify-center space-x-8 pb-4">
-            <a
-              href="/categories"
-              className="text-white hover:text-purple-300 hover:underline font-semibold text-lg whitespace-nowrap transition-all duration-200"
-            >
-              악보카테고리
-            </a>
-            <a
-              href="/free-sheets"
-              className="text-white hover:text-purple-300 hover:underline font-semibold text-lg whitespace-nowrap transition-all duration-200"
-            >
-              무료악보
-            </a>
-            <a
-              href="/collections"
-              className="text-white hover:text-purple-300 hover:underline font-semibold text-lg whitespace-nowrap transition-all duration-200"
-            >
-              악보모음집
-            </a>
-            <a
-              href="/event-sale"
-              className="text-white hover:text-purple-300 hover:underline font-semibold text-lg whitespace-nowrap transition-all duration-200"
-            >
-              이벤트 할인악보
-            </a>
-            <a
-              href="/custom-order"
-              className="text-white hover:text-purple-300 hover:underline font-semibold text-lg whitespace-nowrap transition-all duration-200"
-            >
-              주문제작
-            </a>
-          </nav>
-        </div>
-      </div>
-
+      <MainHeader user={user} />
       <UserSidebar user={user} />
 
-      <div className="mr-64">
-        <div className="min-h-[calc(100vh-156px)] bg-gradient-to-b from-orange-100/60 via-white to-white pb-12">
-          <header className="relative overflow-hidden bg-gradient-to-r from-red-500 via-orange-500 to-yellow-400 py-20 text-white">
+      <div className="md:mr-64">
+        <div className="min-h-[calc(100vh-156px)] bg-gradient-to-b from-orange-100/60 via-white to-white pb-10 md:pb-12">
+          <header className="relative overflow-hidden bg-gradient-to-r from-red-500 via-orange-500 to-yellow-400 py-14 text-white sm:py-16 md:py-20">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.25),_rgba(255,59,48,0))]" />
             <div className="relative mx-auto flex max-w-6xl flex-col items-center gap-6 px-6 text-center">
               <span className="inline-flex items-center gap-3 rounded-full bg-white/20 px-5 py-2 text-sm font-semibold backdrop-blur">
                 <span className="text-xl">🔥</span>
                 단 100원으로 인기 드럼 악보 소장!
               </span>
-              <h1 className="text-4xl font-black leading-tight sm:text-5xl">
+              <h1 className="text-3xl font-black leading-tight sm:text-4xl md:text-5xl">
                 100원 특가 악보 EVENT
               </h1>
-              <p className="max-w-3xl text-lg font-medium text-white/90 sm:text-xl">
+              <p className="max-w-3xl text-base font-medium text-white/90 sm:text-lg md:text-xl">
                 한정 기간 동안만 제공되는 초특가 드럼 악보를 놓치지 마세요. 인기 곡을 100원에 소장하고, 오늘 바로 연주에 도전해보세요.
               </p>
             </div>
           </header>
 
-          <main className="mx-auto max-w-6xl px-6 py-16">
-        <section className="mb-16 text-center">
-          <div className="inline-flex items-center gap-3 rounded-full bg-white px-6 py-3 text-lg font-semibold text-orange-600 shadow-lg">
-            <span className="text-2xl">⏰</span> 실시간으로 갱신되는 타이머를 확인하세요!
+          <main className="mx-auto max-w-6xl px-6 py-12 md:py-16">
+        <section className="mb-12 text-center md:mb-16">
+          <div className="inline-flex items-center gap-3 rounded-full bg-white px-5 py-2.5 text-base font-semibold text-orange-600 shadow-lg sm:px-6 sm:py-3 sm:text-lg">
+            <span className="text-xl sm:text-2xl">⏰</span> 실시간으로 갱신되는 타이머를 확인하세요!
           </div>
         </section>
 
         {loading ? (
-          <div className="py-32 text-center text-gray-500">
+          <div className="py-20 text-center text-gray-500 md:py-32">
             <i className="ri-loader-4-line w-10 h-10 animate-spin text-red-500" />
             <p className="mt-3 font-medium">이벤트 정보를 불러오는 중입니다...</p>
           </div>
         ) : (
           <>
             <section className="space-y-8">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900">진행 중인 100원 특가</h2>
+                  <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">진행 중인 100원 특가</h2>
                   <p className="text-sm text-gray-500">현재 바로 구매 가능한 이벤트 악보입니다.</p>
                 </div>
                 <span className="rounded-full bg-red-50 px-4 py-2 text-sm font-semibold text-red-500">
@@ -433,21 +357,21 @@ const EventSalePage = () => {
               </div>
 
               {activeEvents.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-orange-300 bg-white/60 px-8 py-16 text-center text-gray-500">
+                <div className="rounded-3xl border border-dashed border-orange-300 bg-white/60 px-6 py-12 text-center text-gray-500 md:px-8 md:py-16">
                   현재 진행 중인 이벤트가 없습니다. 아래 예정된 이벤트를 확인해보세요!
                 </div>
               ) : (
-                <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
                   {activeEvents.map(renderEventCard)}
                 </div>
               )}
             </section>
 
             {scheduledEvents.length > 0 && (
-              <section className="mt-20 space-y-8">
-                <div className="flex items-center justify-between gap-4">
+              <section className="mt-16 space-y-8 md:mt-20">
+                <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900">예정된 이벤트</h2>
+                    <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">예정된 이벤트</h2>
                     <p className="text-sm text-gray-500">곧 시작될 이벤트를 미리 확인하고 알림을 준비하세요.</p>
                   </div>
                   <span className="rounded-full bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-500">
@@ -455,7 +379,7 @@ const EventSalePage = () => {
                   </span>
                 </div>
 
-                <div className="grid gap-8 md:grid-cols-2">
+                <div className="grid gap-6 md:grid-cols-2 md:gap-8">
                   {scheduledEvents.map((event) => (
                     <article
                       key={event.id}
@@ -505,9 +429,9 @@ const EventSalePage = () => {
             )}
 
             {endedEvents.length > 0 && (
-              <section className="mt-20 space-y-6">
-                <h2 className="text-xl font-semibold text-gray-800">종료된 이벤트</h2>
-                <div className="grid gap-6 md:grid-cols-2">
+              <section className="mt-16 space-y-6 md:mt-20">
+                <h2 className="text-lg font-semibold text-gray-800 md:text-xl">종료된 이벤트</h2>
+                <div className="grid gap-5 md:grid-cols-2 md:gap-6">
                   {endedEvents.slice(0, 4).map((event) => (
                     <div
                       key={event.id}

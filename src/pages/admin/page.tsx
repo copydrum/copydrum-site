@@ -37,6 +37,9 @@ import {
   Pie,
   Cell,
 } from 'recharts';
+import { languages } from '../../i18n/languages';
+
+const PURCHASE_LOG_ENABLED = import.meta.env.VITE_ENABLE_PURCHASE_LOGS === 'true';
 
 // 공통 로그인 경로 상수
 const LOGIN_PATH = '/login';
@@ -99,6 +102,8 @@ interface OrderItem {
   sheet_title?: string | null;
   price: number | null;
   created_at: string | null;
+  download_attempt_count?: number | null;
+  last_downloaded_at?: string | null;
   drum_sheets?: OrderItemSheet | null;
 }
 
@@ -167,7 +172,7 @@ const formatDateToYMD = (date: Date) => {
 };
 
 const getRangeForQuickKey = (key: CopyrightQuickRangeKey) => {
-  const now = new Date();
+    const now = new Date();
   const start = new Date(now);
   const end = new Date(now);
 
@@ -546,7 +551,37 @@ interface Collection {
   category_ids?: string[]; // 여러 카테고리 선택을 위한 배열
   created_at: string;
   updated_at: string;
+  title_translations?: Record<string, string> | null;
+  description_translations?: Record<string, string> | null;
 }
+
+type CollectionFormState = {
+  title: string;
+  description: string;
+  thumbnail_url: string;
+  original_price: number;
+  sale_price: number;
+  discount_percentage: number;
+  is_active: boolean;
+  category_id: string;
+  category_ids: string[];
+  title_translations: Record<string, string>;
+  description_translations: Record<string, string>;
+};
+
+const createEmptyCollectionFormState = (): CollectionFormState => ({
+  title: '',
+  description: '',
+  thumbnail_url: '',
+  original_price: 0,
+  sale_price: 0,
+  discount_percentage: 0,
+  is_active: true,
+  category_id: '',
+  category_ids: [],
+  title_translations: {},
+  description_translations: {},
+});
 
 interface CollectionSheet {
   id: string;
@@ -554,6 +589,161 @@ interface CollectionSheet {
   drum_sheet_id: string;
   drum_sheets?: DrumSheet;
 }
+
+type CollectionTranslationField = 'title' | 'description';
+type CollectionFormStateSetter = React.Dispatch<React.SetStateAction<CollectionFormState>>;
+
+const translationStateKeyMap: Record<CollectionTranslationField, 'title_translations' | 'description_translations'> = {
+  title: 'title_translations',
+  description: 'description_translations',
+};
+
+const buildInitialTranslations = (
+  existing: Record<string, string> | null | undefined,
+  fallback: string | null | undefined,
+): Record<string, string> => {
+  const safeFallback = fallback ?? '';
+  const initial: Record<string, string> = {};
+
+  languages.forEach(({ code }) => {
+    if (existing?.[code]) {
+      initial[code] = existing[code] ?? '';
+    } else if (code === 'ko') {
+      initial[code] = safeFallback;
+    } else {
+      initial[code] = '';
+    }
+  });
+
+  if (!initial.ko) {
+    initial.ko = safeFallback;
+  }
+
+  return initial;
+};
+
+const updateCollectionTranslation = (
+  setState: CollectionFormStateSetter,
+  lang: string,
+  field: CollectionTranslationField,
+  value: string,
+) => {
+  setState((prev) => {
+    const translationKey = translationStateKeyMap[field];
+    const updatedTranslations = { ...(prev[translationKey] ?? {}) };
+    updatedTranslations[lang] = value;
+
+    const nextState: CollectionFormState = {
+      ...prev,
+      [translationKey]: updatedTranslations,
+    };
+
+    if (lang === 'ko') {
+      nextState[field] = value;
+    }
+
+    return nextState;
+  });
+};
+
+const copyKoreanTranslationsToAll = (setState: CollectionFormStateSetter) => {
+  setState((prev) => {
+    const { title, description } = prev;
+    const titleTranslations = { ...(prev.title_translations ?? {}) };
+    const descriptionTranslations = { ...(prev.description_translations ?? {}) };
+
+    languages.forEach(({ code }) => {
+      titleTranslations[code] = title;
+      descriptionTranslations[code] = description;
+    });
+
+    return {
+      ...prev,
+      title_translations: titleTranslations,
+      description_translations: descriptionTranslations,
+    };
+  });
+};
+
+const renderTranslationEditor = (
+  formState: CollectionFormState,
+  activeLang: string,
+  setActiveLang: React.Dispatch<React.SetStateAction<string>>,
+  onChange: (lang: string, field: CollectionTranslationField, value: string) => void,
+  onCopyKoreanToAll: () => void,
+) => {
+  const currentLanguage = languages.find((lang) => lang.code === activeLang) ?? languages[0];
+  const resolvedLang = currentLanguage.code;
+
+  const getFieldValue = (field: CollectionTranslationField) => {
+    if (resolvedLang === 'ko') {
+      return formState[field];
+    }
+    const translationKey = translationStateKeyMap[field];
+    return formState[translationKey]?.[resolvedLang] ?? '';
+  };
+
+  return (
+    <div className="space-y-4 border border-gray-200 rounded-xl p-4 bg-gray-50">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {languages.map((lang) => (
+            <button
+              key={lang.code}
+              type="button"
+              onClick={() => setActiveLang(lang.code)}
+              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                activeLang === lang.code ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-200'
+              }`}
+            >
+              <span className="mr-1" aria-hidden="true">
+                {lang.flagEmoji}
+              </span>
+              {lang.nativeName}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={onCopyKoreanToAll}
+          className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 font-medium"
+        >
+          한국어 내용을 전체 언어에 복사
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            제목 ({currentLanguage.nativeName})
+          </label>
+          <input
+            type="text"
+            value={getFieldValue('title')}
+            onChange={(e) => onChange(resolvedLang, 'title', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            placeholder="제목을 입력하세요"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            설명 ({currentLanguage.nativeName})
+          </label>
+          <textarea
+            value={getFieldValue('description')}
+            onChange={(e) => onChange(resolvedLang, 'description', e.target.value)}
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            placeholder="설명을 입력하세요"
+          />
+        </div>
+      </div>
+      <p className="text-xs text-gray-500">
+        언어별 제목과 설명을 입력하면 해당 언어 사이트에서 노출됩니다. 입력하지 않은 언어는 한국어(기본값)으로 노출됩니다.
+      </p>
+    </div>
+  );
+};
 
 interface EventSheetCandidate {
   id: string;
@@ -611,7 +801,6 @@ const formatCurrency = (value: number | null | undefined) => {
   const amount = value ?? 0;
   return `₩${amount.toLocaleString()}`;
 };
-
 const extractPaymentLabelFromDescription = (value: string | null | undefined) => {
   if (!value) return '미확인';
   const match = value.match(/\(([^)]+)\)/);
@@ -659,7 +848,6 @@ const createDefaultEventForm = (): EventFormState => {
     is_active: true,
   };
 };
-
 const AdminPage: React.FC = () => {
   const { user, setUser } = useAuthStore();
   const [activeMenu, setActiveMenu] = useState('dashboard');
@@ -818,28 +1006,10 @@ const AdminPage: React.FC = () => {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [isAddingCollection, setIsAddingCollection] = useState(false);
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
-  const [newCollection, setNewCollection] = useState({
-    title: '',
-    description: '',
-    thumbnail_url: '',
-    original_price: 0,
-    sale_price: 0,
-    discount_percentage: 0,
-    is_active: true,
-    category_id: '',
-    category_ids: [] as string[]
-  });
-  const [editingCollectionData, setEditingCollectionData] = useState({
-    title: '',
-    description: '',
-    thumbnail_url: '',
-    original_price: 0,
-    sale_price: 0,
-    discount_percentage: 0,
-    is_active: true,
-    category_id: '',
-    category_ids: [] as string[]
-  });
+  const [newCollection, setNewCollection] = useState<CollectionFormState>(createEmptyCollectionFormState());
+  const [editingCollectionData, setEditingCollectionData] = useState<CollectionFormState>(createEmptyCollectionFormState());
+  const [newCollectionActiveLang, setNewCollectionActiveLang] = useState<string>('ko');
+  const [editingCollectionActiveLang, setEditingCollectionActiveLang] = useState<string>('ko');
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [collectionSheets, setCollectionSheets] = useState<CollectionSheet[]>([]);
   const [availableSheets, setAvailableSheets] = useState<DrumSheet[]>([]);
@@ -1228,7 +1398,6 @@ const AdminPage: React.FC = () => {
       setLoading(false);
     }
   };
-
   const loadMembers = async () => {
     try {
       // 먼저 총 개수 확인
@@ -1453,7 +1622,6 @@ const AdminPage: React.FC = () => {
       alert('캐쉬 수정 중 오류가 발생했습니다.');
     }
   };
-
   const fetchCashHistory = async (memberId: string, page = 1) => {
     setCashHistoryLoading(true);
     try {
@@ -1645,6 +1813,8 @@ const AdminPage: React.FC = () => {
             sheet_title,
             price,
             created_at,
+            download_attempt_count,
+            last_downloaded_at,
             drum_sheets (
               id,
               title,
@@ -1861,7 +2031,6 @@ const AdminPage: React.FC = () => {
       setOrderActionLoading(null);
     }
   };
-
   const handleConfirmBankDeposit = async () => {
     if (!selectedOrder) {
       return;
@@ -1881,8 +2050,8 @@ const AdminPage: React.FC = () => {
       return;
     }
 
-    const normalizedStatus = (selectedOrder.status ?? '').toLowerCase();
-    if (normalizedStatus !== 'awaiting_deposit' && normalizedStatus !== 'pending') {
+    const normalizedPaymentStatus = (selectedOrder.payment_status ?? '').toLowerCase();
+    if (normalizedPaymentStatus !== 'awaiting_deposit' && normalizedPaymentStatus !== 'pending') {
       alert('입금 대기 상태의 주문만 수동 확인할 수 있습니다.');
       return;
     }
@@ -1895,6 +2064,14 @@ const AdminPage: React.FC = () => {
     setOrderActionLoading('confirm');
 
     try {
+      console.log('[입금확인] 처리 시작', {
+        orderId: selectedOrder.id,
+        paymentMethod: selectedOrder.payment_method,
+        paymentStatus: selectedOrder.payment_status,
+        metadata: selectedOrder.metadata,
+        orderItems: selectedOrder.order_items?.length ?? 0,
+      });
+
       const nowIso = new Date().toISOString();
       const manualTransactionId =
         selectedOrder.transaction_id && selectedOrder.transaction_id.trim().length > 0
@@ -1907,6 +2084,8 @@ const AdminPage: React.FC = () => {
         (selectedOrder.order_items?.length ?? 0) === 0;
 
       if (isCashCharge) {
+        console.log('[입금확인] 캐시 충전 처리 분기');
+        // 캐시 충전 처리
         const chargeAmount = Math.max(0, selectedOrder.total_amount ?? 0);
         const bonusAmount = Number(selectedOrder.metadata?.bonusAmount ?? 0);
 
@@ -1921,6 +2100,8 @@ const AdminPage: React.FC = () => {
 
         const currentCredits = profile?.credits ?? 0;
         const newCredits = currentCredits + chargeAmount + bonusAmount;
+
+        console.log('[입금확인] 캐시 업데이트', { currentCredits, newCredits, chargeAmount, bonusAmount });
 
         const { error: updateProfileError } = await supabase
           .from('profiles')
@@ -1949,21 +2130,55 @@ const AdminPage: React.FC = () => {
         }
 
         await loadCashOverview();
+        console.log('[입금확인] 캐시 처리 완료');
+      } else if (selectedOrder.order_items && selectedOrder.order_items.length > 0) {
+        console.log('[입금확인] 악보 구매 처리 분기');
+        if (PURCHASE_LOG_ENABLED) {
+          // 악보 구매 처리 (선택 기능)
+          const purchaseRecords = selectedOrder.order_items.map((item: any) => ({
+            user_id: selectedOrder.user_id,
+            drum_sheet_id: item.drum_sheet_id,
+            order_id: selectedOrder.id,
+            price_paid: item.price ?? 0,
+          }));
+
+          const { error: purchasesError } = await supabase
+            .from('purchases')
+            .insert(purchaseRecords);
+
+          if (purchasesError) {
+            if (purchasesError.code === 'PGRST205') {
+              console.warn('purchases 테이블이 없어 구매 내역 기록을 건너뜁니다.', purchasesError);
+            } else {
+              console.error('악보 구매 내역 생성 실패:', purchasesError);
+              throw new Error('악보 구매 내역 생성에 실패했습니다.');
+            }
+          }
+        }
+      } else {
+        console.warn('[입금확인] 처리 가능한 분기가 없습니다.', selectedOrder);
       }
+
+      console.log('[입금확인] 주문 상태 업데이트 시도', selectedOrder.id);
 
       const { error: orderUpdateError } = await supabase
         .from('orders')
         .update({
           status: 'completed',
           payment_status: 'paid',
+          raw_status: 'payment_confirmed',
           payment_confirmed_at: nowIso,
           transaction_id: manualTransactionId,
         })
         .eq('id', selectedOrder.id);
 
       if (orderUpdateError) {
-        throw orderUpdateError;
+        console.error('[입금확인] 주문 상태 업데이트 실패', orderUpdateError);
+        alert('주문 상태 업데이트에 실패했습니다. 콘솔 로그를 개발자에게 전달해 주세요.');
+        return;
       }
+
+      console.log('[입금확인] 주문 상태 업데이트 성공');
 
       const { error: paymentLogError } = await supabase
         .from('payment_transactions')
@@ -1978,7 +2193,10 @@ const AdminPage: React.FC = () => {
         console.warn('결제 로그 업데이트 실패:', paymentLogError);
       }
 
+      console.log('[입금확인] payment_transactions 업데이트 완료');
+
       await loadOrders();
+      console.log('[입금확인] 주문 목록 갱신 완료');
       alert('입금 확인 처리가 완료되었습니다.');
       handleCloseOrderDetail();
     } catch (error: any) {
@@ -2046,7 +2264,6 @@ const AdminPage: React.FC = () => {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
-
   const loadCopyrightReport = useCallback(
     async (rangeOverride?: { start: string; end: string }) => {
       const appliedStart = rangeOverride?.start ?? copyrightStartDate;
@@ -2491,7 +2708,6 @@ const AdminPage: React.FC = () => {
   const handleAnalyticsRefresh = () => {
     void loadAnalyticsData(analyticsPeriod);
   };
-
   const handleDirectSalesExport = async () => {
     if (directSalesData.length === 0) {
       alert('다운로드할 데이터가 없습니다. 먼저 조회를 실행해주세요.');
@@ -2843,7 +3059,6 @@ const AdminPage: React.FC = () => {
       });
     }
   };
-
   const handleEditEventDiscount = (event: EventDiscountSheet) => {
     setEditingEventId(event.id);
     setSelectedEventSheet({
@@ -3068,7 +3283,6 @@ const AdminPage: React.FC = () => {
     const totalPrice = calculateTotalPrice(updated);
     setNewCollection({ ...newCollection, original_price: totalPrice });
   };
-
   const handleAddCollection = async () => {
     if (!newCollection.title) {
       alert('제목은 필수입니다.');
@@ -3084,6 +3298,11 @@ const AdminPage: React.FC = () => {
 
     try {
       const discount = calculateDiscountPercentage(newCollection.original_price, newCollection.sale_price);
+      const titleTranslations = buildInitialTranslations(newCollection.title_translations, newCollection.title);
+      const descriptionTranslations = buildInitialTranslations(
+        newCollection.description_translations,
+        newCollection.description,
+      );
 
       // category_ids 처리: 빈 배열이면 null, 있으면 배열로
       const categoryIds = newCollection.category_ids && newCollection.category_ids.length > 0 
@@ -3102,7 +3321,9 @@ const AdminPage: React.FC = () => {
         discount_percentage: discount,
         is_active: newCollection.is_active,
         category_id: categoryId,
-        category_ids: categoryIds
+        category_ids: categoryIds,
+        title_translations: titleTranslations,
+        description_translations: descriptionTranslations,
       };
 
       // 모음집 생성
@@ -3135,17 +3356,8 @@ const AdminPage: React.FC = () => {
 
       alert('모음집이 추가되었습니다.');
       setIsAddingCollection(false);
-      setNewCollection({
-        title: '',
-        description: '',
-        thumbnail_url: '',
-        original_price: 0,
-        sale_price: 0,
-        discount_percentage: 0,
-        is_active: true,
-        category_id: '',
-        category_ids: []
-      });
+      setNewCollection(createEmptyCollectionFormState());
+      setNewCollectionActiveLang('ko');
       setSelectedSheetsForNewCollection([]);
       setCollectionSheetSearchTerm('');
       setCollectionArtistSearchTerm('');
@@ -3169,6 +3381,14 @@ const AdminPage: React.FC = () => {
       const discount = editingCollectionData.original_price > 0 && editingCollectionData.sale_price > 0
         ? Math.round(((editingCollectionData.original_price - editingCollectionData.sale_price) / editingCollectionData.original_price) * 100)
         : 0;
+      const titleTranslations = buildInitialTranslations(
+        editingCollectionData.title_translations,
+        editingCollectionData.title,
+      );
+      const descriptionTranslations = buildInitialTranslations(
+        editingCollectionData.description_translations,
+        editingCollectionData.description,
+      );
 
       // category_ids 처리: 빈 배열이면 null, 있으면 배열로
       const categoryIds = editingCollectionData.category_ids && editingCollectionData.category_ids.length > 0 
@@ -3187,7 +3407,9 @@ const AdminPage: React.FC = () => {
         discount_percentage: discount,
         is_active: editingCollectionData.is_active,
         category_id: categoryId,
-        category_ids: categoryIds
+        category_ids: categoryIds,
+        title_translations: titleTranslations,
+        description_translations: descriptionTranslations,
       };
 
       const { error } = await supabase
@@ -3202,6 +3424,8 @@ const AdminPage: React.FC = () => {
 
       alert('모음집이 수정되었습니다.');
       setEditingCollection(null);
+      setEditingCollectionData(createEmptyCollectionFormState());
+      setEditingCollectionActiveLang('ko');
       loadCollections();
     } catch (error: any) {
       console.error('모음집 수정 오류:', error);
@@ -3605,7 +3829,6 @@ const AdminPage: React.FC = () => {
       return 0;
     }
   };
-
   // PDF 파일 업로드 및 미리보기 생성
   const handlePdfUpload = async (file: File) => {
     setIsUploadingPdf(true);
@@ -3671,7 +3894,6 @@ const AdminPage: React.FC = () => {
       setIsUploadingPdf(false);
     }
   };
-
   const handleAddSheet = async () => {
     if (!newSheet.title || !newSheet.artist || !newSheet.category_id) {
       alert('제목, 아티스트, 카테고리는 필수입니다.');
@@ -4320,7 +4542,6 @@ const AdminPage: React.FC = () => {
 
     return matchesSearch && matchesStatus && matchesPayment && matchesStart && matchesEnd;
   });
-
   const statusPriority: Record<OrderStatus, number> = {
     completed: 0,
     payment_confirmed: 1,
@@ -4376,7 +4597,6 @@ const AdminPage: React.FC = () => {
   ).length;
   const totalInquiryCount = customerInquiries.length;
   const pendingInquiryCount = customerInquiries.filter((inquiry) => inquiry.status === 'pending').length;
-
   // 렌더링 함수들
   const renderDashboard = () => {
     const periodOptions: Array<{ value: DashboardAnalyticsPeriod; label: string }> = [
@@ -4819,7 +5039,6 @@ const AdminPage: React.FC = () => {
       </div>
     );
   };
-
   const renderCashManagement = () => {
     const historyTotalPages = Math.max(1, Math.ceil(cashHistoryTotal / cashHistoryPageSize));
 
@@ -5297,7 +5516,6 @@ const AdminPage: React.FC = () => {
       </div>
     );
   };
-
   const renderMemberManagement = () => (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -5706,7 +5924,6 @@ const AdminPage: React.FC = () => {
       alert('일괄 수정 중 오류가 발생했습니다.');
     }
   };
-
   const renderSheetManagement = () => (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -6243,7 +6460,7 @@ const AdminPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-707 mb-1">난이도</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">난이도</label>
                 <select
                   value={newSheet.difficulty}
                   onChange={(e) => setNewSheet({ ...newSheet, difficulty: e.target.value })}
@@ -6255,7 +6472,7 @@ const AdminPage: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-707 mb-1">가격</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">가격</label>
                 <input
                   type="number"
                   value={newSheet.price}
@@ -6313,7 +6530,6 @@ const AdminPage: React.FC = () => {
           </div>
         </div>
       )}
-
       {/* 악보 수정 모달 */}
       {editingSheet && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
@@ -6854,13 +7070,19 @@ const AdminPage: React.FC = () => {
       )}
     </div>
   );
-
   const renderCollectionManagement = () => (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">악보모음집 관리</h2>
         <button
-          onClick={() => setIsAddingCollection(true)}
+          onClick={() => {
+            setNewCollection(createEmptyCollectionFormState());
+            setNewCollectionActiveLang('ko');
+            setSelectedSheetsForNewCollection([]);
+            setCollectionSheetSearchTerm('');
+            setCollectionArtistSearchTerm('');
+            setIsAddingCollection(true);
+          }}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
         >
           <i className="ri-add-line w-4 h-4"></i>
@@ -6933,8 +7155,14 @@ const AdminPage: React.FC = () => {
                             discount_percentage: collection.discount_percentage,
                             is_active: collection.is_active,
                             category_id: collection.category_id || '',
-                            category_ids: collection.category_ids || (collection.category_id ? [collection.category_id] : [])
+                            category_ids: collection.category_ids || (collection.category_id ? [collection.category_id] : []),
+                            title_translations: buildInitialTranslations(collection.title_translations, collection.title),
+                            description_translations: buildInitialTranslations(
+                              collection.description_translations,
+                              collection.description || ''
+                            ),
                           });
+                          setEditingCollectionActiveLang('ko');
                         }}
                         className="text-blue-600 hover:text-blue-900 transition-colors"
                         title="수정"
@@ -6974,76 +7202,62 @@ const AdminPage: React.FC = () => {
           <div className="bg-white rounded-xl p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">새 모음집 추가</h3>
             <div className="space-y-4">
-              {/* 기본 정보 */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">제목 *</label>
-                  <input
-                    type="text"
-                    value={newCollection.title}
-                    onChange={(e) => setNewCollection({ ...newCollection, title: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">카테고리 (중복 선택 가능)</label>
-                  <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2 bg-gray-50">
-                    {categories.length === 0 ? (
-                      <p className="text-sm text-gray-500">카테고리가 없습니다.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {categories.map((category) => (
-                          <label key={category.id} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-1 rounded">
-                            <input
-                              type="checkbox"
-                              checked={newCollection.category_ids.includes(category.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setNewCollection({
-                                    ...newCollection,
-                                    category_ids: [...newCollection.category_ids, category.id]
-                                  });
-                                } else {
-                                  setNewCollection({
-                                    ...newCollection,
-                                    category_ids: newCollection.category_ids.filter(id => id !== category.id)
-                                  });
-                                }
-                              }}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <span className="text-sm text-gray-700">{category.name}</span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {newCollection.category_ids.length > 0 && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      선택됨: {newCollection.category_ids.length}개
-                    </p>
+              {renderTranslationEditor(
+                newCollection,
+                newCollectionActiveLang,
+                setNewCollectionActiveLang,
+                (lang, field, value) => updateCollectionTranslation(setNewCollection, lang, field, value),
+                () => copyKoreanTranslationsToAll(setNewCollection)
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">카테고리 (중복 선택 가능)</label>
+                <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2 bg-gray-50">
+                  {categories.length === 0 ? (
+                    <p className="text-sm text-gray-500">카테고리가 없습니다.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {categories.map((category) => (
+                        <label key={category.id} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-1 rounded">
+                          <input
+                            type="checkbox"
+                            checked={newCollection.category_ids.includes(category.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setNewCollection({
+                                  ...newCollection,
+                                  category_ids: [...newCollection.category_ids, category.id],
+                                });
+                              } else {
+                                setNewCollection({
+                                  ...newCollection,
+                                  category_ids: newCollection.category_ids.filter((id) => id !== category.id),
+                                });
+                              }
+                            }}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">{category.name}</span>
+                        </label>
+                      ))}
+                    </div>
                   )}
                 </div>
+                {newCollection.category_ids.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    선택됨: {newCollection.category_ids.length}개
+                  </p>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 URL</label>
-                  <input
-                    type="text"
-                    value={newCollection.thumbnail_url}
-                    onChange={(e) => setNewCollection({ ...newCollection, thumbnail_url: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="https://..."
-                  />
-                </div>
-              </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">설명</label>
-                <textarea
-                  value={newCollection.description}
-                  onChange={(e) => setNewCollection({ ...newCollection, description: e.target.value })}
-                  rows={2}
+                <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 URL</label>
+                <input
+                  type="text"
+                  value={newCollection.thumbnail_url}
+                  onChange={(e) => setNewCollection({ ...newCollection, thumbnail_url: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="https://..."
                 />
               </div>
 
@@ -7238,6 +7452,8 @@ const AdminPage: React.FC = () => {
               <button
                 onClick={() => {
                   setIsAddingCollection(false);
+                  setNewCollection(createEmptyCollectionFormState());
+                  setNewCollectionActiveLang('ko');
                   setSelectedSheetsForNewCollection([]);
                   setCollectionSheetSearchTerm('');
                   setCollectionArtistSearchTerm('');
@@ -7273,15 +7489,13 @@ const AdminPage: React.FC = () => {
           <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">모음집 수정</h3>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">제목 *</label>
-                <input
-                  type="text"
-                  value={editingCollectionData.title}
-                  onChange={(e) => setEditingCollectionData({ ...editingCollectionData, title: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+              {renderTranslationEditor(
+                editingCollectionData,
+                editingCollectionActiveLang,
+                setEditingCollectionActiveLang,
+                (lang, field, value) => updateCollectionTranslation(setEditingCollectionData, lang, field, value),
+                () => copyKoreanTranslationsToAll(setEditingCollectionData)
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">카테고리 (중복 선택 가능)</label>
                 <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2 bg-gray-50">
@@ -7320,15 +7534,6 @@ const AdminPage: React.FC = () => {
                     선택됨: {editingCollectionData.category_ids.length}개
                   </p>
                 )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">설명</label>
-                <textarea
-                  value={editingCollectionData.description}
-                  onChange={(e) => setEditingCollectionData({ ...editingCollectionData, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 URL</label>
@@ -7374,7 +7579,10 @@ const AdminPage: React.FC = () => {
             </div>
             <div className="flex justify-end space-x-3 mt-6">
               <button
-                onClick={() => setEditingCollection(null)}
+                onClick={() => {
+                  setEditingCollection(null);
+                  setEditingCollectionActiveLang('ko');
+                }}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
               >
                 취소
@@ -7466,7 +7674,6 @@ const AdminPage: React.FC = () => {
       )}
     </div>
   );
-
   const renderOrderDetailModal = () => {
     if (!isOrderDetailModalOpen || !selectedOrder) {
       return null;
@@ -7479,6 +7686,8 @@ const AdminPage: React.FC = () => {
       : '';
     const isBankTransfer = ['bank_transfer', 'virtual_account'].includes(paymentKey);
     const itemCount = selectedOrder.order_items?.length ?? 0;
+    const totalDownloadAttempts =
+      selectedOrder.order_items?.reduce((sum, item) => sum + (item.download_attempt_count ?? 0), 0) ?? 0;
     const normalizedSelectedStatus = (selectedOrder.status ?? '').toLowerCase() as OrderStatus | '';
     const isRefundable = normalizedSelectedStatus
       ? REFUNDABLE_STATUSES.includes(normalizedSelectedStatus as OrderStatus)
@@ -7533,6 +7742,9 @@ const AdminPage: React.FC = () => {
                 <p className="text-xs font-medium uppercase tracking-wider text-teal-700">구매 악보 수</p>
                 <p className="mt-2 text-2xl font-semibold text-teal-900">{itemCount.toLocaleString('ko-KR')}개</p>
                 <p className="mt-1 text-xs text-teal-700">다운로드 가능한 악보 개수</p>
+                <p className="mt-1 text-xs text-teal-700">
+                  총 다운로드 시도 {totalDownloadAttempts.toLocaleString('ko-KR')}회
+                </p>
               </div>
               <div className="rounded-xl bg-purple-50 p-4">
                 <p className="text-xs font-medium uppercase tracking-wider text-purple-700">최근 업데이트</p>
@@ -7614,6 +7826,16 @@ const AdminPage: React.FC = () => {
                               <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
                                 <span>구매가 {formatCurrency(item.price ?? sheet?.price ?? 0)}</span>
                                 {item.created_at ? <span>구매일 {formatDateTime(item.created_at)}</span> : null}
+                                <span className="inline-flex items-center gap-1 text-gray-600">
+                                  <i className="ri-download-2-line text-gray-400"></i>
+                                  다운로드 {item.download_attempt_count ?? 0}회
+                                </span>
+                                <span className="inline-flex items-center gap-1 text-gray-600">
+                                  <i className="ri-history-line text-gray-400"></i>
+                                  {item.last_downloaded_at
+                                    ? `최근 ${formatDateTime(item.last_downloaded_at)}`
+                                    : '다운로드 이력 없음'}
+                                </span>
                               </div>
                             </div>
                           </li>
@@ -7663,7 +7885,7 @@ const AdminPage: React.FC = () => {
                     </>
                   ) : (
                     <p className="mt-2 text-sm text-gray-600">
-                      이 주문은 {paymentLabel}로 결제되었습니다. 무통장입금 자동 확인 설정은 ‘설정 &gt; 결제 정보’에서
+                      이 주문은 {paymentLabel}로 결제되었습니다. 무통장입금 자동 확인 설정은 '설정 &gt; 결제 정보'에서
                       관리할 수 있습니다.
                     </p>
                   )}
@@ -8021,6 +8243,16 @@ const AdminPage: React.FC = () => {
                                             <span>가격 {formatCurrency(item.price)}</span>
                                             {item.created_at ? <span>구매일 {formatDate(item.created_at)}</span> : null}
                                             {item.sheet_id ? <span>ID {item.sheet_id}</span> : null}
+                                            <span className="inline-flex items-center gap-1 text-gray-600">
+                                              <i className="ri-download-2-line text-gray-400"></i>
+                                              다운로드 {item.download_attempt_count ?? 0}회
+                                            </span>
+                                            <span className="inline-flex items-center gap-1 text-gray-600">
+                                              <i className="ri-history-line text-gray-400"></i>
+                                              {item.last_downloaded_at
+                                                ? `최근 ${formatDateTime(item.last_downloaded_at)}`
+                                                : '다운로드 이력 없음'}
+                                            </span>
                                           </div>
                                         </div>
                                       </div>
@@ -8043,7 +8275,6 @@ const AdminPage: React.FC = () => {
       {renderOrderDetailModal()}
     </div>
   );
-
   const renderCustomOrderManagement = () => (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -8193,7 +8424,6 @@ const AdminPage: React.FC = () => {
       ) : null}
     </div>
   );
-
   const renderEventDiscountManagement = () => {
     const activeCount = eventDiscounts.filter((item) => item.status === 'active').length;
     const scheduledCount = eventDiscounts.filter((item) => item.status === 'scheduled').length;
@@ -8463,7 +8693,7 @@ const AdminPage: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-2 text-sm">
                       <span className="text-gray-600">정가</span>
                       <span className="font-semibold text-gray-900">{formatCurrency(eventForm.original_price)}</span>
-                      <span className="text-gray-400">→</span>
+                      <span className="text-gray-400">{'→'}</span>
                       <span className="text-red-600 font-bold">{formatCurrency(DEFAULT_EVENT_PRICE)}</span>
                       {discountPercent > 0 && (
                         <span className="px-2 py-0.5 text-xs font-semibold text-red-600 bg-red-100 rounded-full">
@@ -8507,8 +8737,14 @@ const AdminPage: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">이벤트 가격</label>
                     <div className="grid grid-cols-1 gap-2 text-sm text-gray-600">
                       <p>
-                        정가 <span className="font-semibold text-gray-900">{formatCurrency(eventForm.original_price)}</span> →
-                        이벤트가 <span className="font-semibold text-red-600">{formatCurrency(DEFAULT_EVENT_PRICE)}</span>
+                        정가{' '}
+                        <span className="font-semibold text-gray-900">
+                          {formatCurrency(eventForm.original_price)}
+                        </span>{' '}
+                        → 이벤트가{' '}
+                        <span className="font-semibold text-red-600">
+                          {formatCurrency(DEFAULT_EVENT_PRICE)}
+                        </span>
                       </p>
                       <p className="text-xs text-gray-500">
                         할인가는 100원으로 고정되며, 할인율은 정가 기준으로 자동 계산됩니다.
@@ -8541,7 +8777,6 @@ const AdminPage: React.FC = () => {
       </div>
     );
   };
-
   const renderSettings = () => {
     if (isLoadingSettings) {
       return (
@@ -8984,6 +9219,60 @@ const AdminPage: React.FC = () => {
               {renderFooter('notification')}
             </form>
           );
+        case 'translation':
+          return (
+            <form
+              className="space-y-6"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleSaveSettings('translation');
+              }}
+            >
+              <div className="grid gap-6">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700" htmlFor="setting-default-language">
+                      기본 언어
+                    </label>
+                    <select
+                      id="setting-default-language"
+                      value={siteSettings.translation.defaultLanguage}
+                      onChange={(event) => updateTranslationSetting('defaultLanguage', event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    >
+                      {Object.entries(languages).map(([code, name]) => (
+                        <option key={code} value={code}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700" htmlFor="setting-available-languages">
+                      지원 언어
+                    </label>
+                    <select
+                      id="setting-available-languages"
+                      multiple
+                      value={siteSettings.translation.availableLanguages}
+                      onChange={(event) => {
+                        const selectedOptions = Array.from(event.target.selectedOptions, (option) => option.value);
+                        updateTranslationSetting('availableLanguages', selectedOptions);
+                      }}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    >
+                      {Object.entries(languages).map(([code, name]) => (
+                        <option key={code} value={code}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              {renderFooter('translation')}
+            </form>
+          );
         default:
           return null;
       }
@@ -9053,7 +9342,6 @@ const AdminPage: React.FC = () => {
       </div>
     );
   };
-
   const renderAnalytics = () => {
     const periodOptions: { value: AnalyticsPeriod; label: string }[] = [
       { value: 'today', label: '오늘' },
@@ -9521,7 +9809,6 @@ const AdminPage: React.FC = () => {
       </div>
     );
   };
-
   const renderCopyrightReport = () => {
     const totalPurchases = copyrightReportData.reduce(
       (sum, row) => sum + row.purchaseCount,

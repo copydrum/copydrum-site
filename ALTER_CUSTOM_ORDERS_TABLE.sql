@@ -8,6 +8,26 @@ ALTER TABLE public.custom_orders
   ADD COLUMN IF NOT EXISTS requirements TEXT,
   ADD COLUMN IF NOT EXISTS admin_reply TEXT;
 
+ALTER TABLE public.custom_orders
+  ALTER COLUMN status SET DEFAULT 'pending';
+
+ALTER TABLE public.custom_orders
+  DROP CONSTRAINT IF EXISTS custom_orders_status_check;
+
+ALTER TABLE public.custom_orders
+  ADD CONSTRAINT custom_orders_status_check CHECK (
+    status IN (
+      'pending',
+      'quoted',
+      'payment_confirmed',
+      'in_progress',
+      'completed',
+      'cancelled'
+    )
+  );
+
+
+
 
 
 

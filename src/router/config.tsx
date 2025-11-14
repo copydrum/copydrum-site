@@ -1,5 +1,5 @@
 
-import { RouteObject } from 'react-router-dom';
+import type { RouteObject } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 
 const HomePage = lazy(() => import('../pages/home/page'));
@@ -26,6 +26,7 @@ const FreeSheetsPage = lazy(() => import('../pages/free-sheets/page'));
 const NotFoundPage = lazy(() => import('../pages/NotFound'));
 const CompanyAboutPage = lazy(() => import('../pages/company/about'));
 const PartnershipPage = lazy(() => import('../pages/company/partnership'));
+const BusinessInfoPage = lazy(() => import('../pages/company/business-info'));
 
 // 로딩 컴포넌트
 const LoadingSpinner = () => (
@@ -243,6 +244,14 @@ const routes: RouteObject[] = [
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <CompanyAboutPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/company/business-info',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <BusinessInfoPage />
       </Suspense>
     ),
   },

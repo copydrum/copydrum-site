@@ -14,9 +14,12 @@ import { fetchEventDiscountBySheetId, isEventActive, purchaseEventDiscount } fro
 import { processCashPurchase } from '../../lib/cashPurchases';
 import { isFavorite, toggleFavorite } from '../../lib/favorites';
 import { hasPurchasedSheet } from '../../lib/purchaseCheck';
-import { PaymentMethodSelector } from '../../components/payments';
+import { BankTransferInfoModal, PaymentMethodSelector } from '../../components/payments';
 import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
+import { openCashChargeModal } from '../../lib/cashChargeModal';
+import { useTranslation } from 'react-i18next';
+import { formatPrice } from '../../lib/priceFormatter';
 
 interface DrumSheet {
   id: string;
@@ -52,9 +55,11 @@ export default function SheetDetailPage() {
   const [showPaymentSelector, setShowPaymentSelector] = useState(false);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
+  const [showBankTransferModal, setShowBankTransferModal] = useState(false);
   const eventIsActive = eventDiscount ? isEventActive(eventDiscount) : false;
   const displayPrice = sheet ? (eventDiscount && eventIsActive ? eventDiscount.discount_price : sheet.price) : 0;
-  const formatCurrency = (value: number) => `₩${value.toLocaleString('ko-KR')}`;
+  const { i18n } = useTranslation();
+  const formatCurrency = (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted;
 
   useEffect(() => {
     checkAuth();
@@ -183,6 +188,35 @@ export default function SheetDetailPage() {
     return Math.max(0, basePrice ?? 0);
   };
 
+  const completeOnlinePurchase = async (
+    method: 'card' | 'bank_transfer',
+    options?: { depositorName?: string },
+  ) => {
+    if (!user || !sheet) return;
+
+    const price = getSheetPrice();
+
+    const result = await startSheetPurchase({
+      userId: user.id,
+      items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
+      amount: price,
+      paymentMethod: method,
+      description: `악보 구매: ${sheet.title}`,
+      buyerName: user.email ?? null,
+      buyerEmail: user.email ?? null,
+      returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
+      depositorName: options?.depositorName,
+    });
+
+    if (method === 'bank_transfer') {
+      setBankTransferInfo(result.virtualAccountInfo ?? null);
+      alert('무통장입금 안내가 생성되었습니다.\n입금 후 자동으로 구매가 완료됩니다.');
+    } else {
+      setBankTransferInfo(null);
+      alert('결제창이 열립니다. 결제를 완료해 주세요.');
+    }
+  };
+
   const handlePurchase = async () => {
     if (!user) {
       navigate('/auth/login');
@@ -210,6 +244,12 @@ export default function SheetDetailPage() {
     if (!user || !sheet) return;
 
     setShowPaymentSelector(false);
+
+    if (method === 'bank') {
+      setShowBankTransferModal(true);
+      return;
+    }
+
     setPurchasing(true);
     setPaymentProcessing(true);
 
@@ -232,6 +272,7 @@ export default function SheetDetailPage() {
                 'ko-KR',
               )}P\n캐쉬를 충전한 뒤 다시 시도해주세요.`,
             );
+            openCashChargeModal();
           }
           return;
         }
@@ -253,29 +294,29 @@ export default function SheetDetailPage() {
         return;
       }
 
-      if (method === 'card' || method === 'bank') {
-        const purchaseItems = [{ sheetId: sheet.id, sheetTitle: sheet.title, price }];
-        const result = await startSheetPurchase({
-          userId: user.id,
-          items: purchaseItems,
-          amount: price,
-          paymentMethod: method === 'card' ? 'card' : 'bank_transfer',
-          description: `악보 구매: ${sheet.title}`,
-          buyerName: user.email ?? null,
-          buyerEmail: user.email ?? null,
-          returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
-        });
-
-        if (method === 'bank') {
-          setBankTransferInfo(result.virtualAccountInfo ?? null);
-          alert('무통장입금 안내가 생성되었습니다.\n입금 후 자동으로 구매가 완료됩니다.');
-        } else {
-          setBankTransferInfo(null);
-          alert('결제창이 열립니다. 결제를 완료해 주세요.');
-        }
+      if (method === 'card') {
+        await completeOnlinePurchase('card');
       }
     } catch (error) {
       console.error('구매 오류:', error);
+      alert(error instanceof Error ? error.message : '구매 중 오류가 발생했습니다.');
+    } finally {
+      setPurchasing(false);
+      setPaymentProcessing(false);
+    }
+  };
+
+  const handleBankTransferConfirm = async (depositorName: string) => {
+    if (!user || !sheet) return;
+
+    setShowBankTransferModal(false);
+    setPurchasing(true);
+    setPaymentProcessing(true);
+
+    try {
+      await completeOnlinePurchase('bank_transfer', { depositorName });
+    } catch (error) {
+      console.error('무통장입금 구매 오류:', error);
       alert(error instanceof Error ? error.message : '구매 중 오류가 발생했습니다.');
     } finally {
       setPurchasing(false);
@@ -435,7 +476,7 @@ export default function SheetDetailPage() {
       <UserSidebar user={user} />
 
       {/* Main Content - 로그인 시 사이드바 공간 확보 */}
-      <div className={user ? 'mr-64' : ''}>
+      <div className={user ? 'md:mr-64' : ''}>
         {/* Back Button */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <button
@@ -855,6 +896,17 @@ export default function SheetDetailPage() {
       <div className="mt-16">
         <Footer />
       </div>
+
+      <BankTransferInfoModal
+        open={showBankTransferModal}
+        amount={getSheetPrice()}
+        userName={(user?.user_metadata?.name as string | undefined) ?? user?.email ?? undefined}
+        onConfirm={handleBankTransferConfirm}
+        onClose={() => {
+          setShowBankTransferModal(false);
+          setShowPaymentSelector(true);
+        }}
+      />
 
       <PaymentMethodSelector
         open={showPaymentSelector}

@@ -25,7 +25,7 @@ const CustomOrderDetailPage = () => {
       <MainHeader user={user} />
       <UserSidebar user={user} />
 
-      <div className={user ? 'mr-64' : ''}>
+      <div className={user ? 'md:mr-64' : ''}>
         <main className="max-w-4xl mx-auto px-4 py-12">
           <div className="mb-6 flex items-center justify-between">
             <div>

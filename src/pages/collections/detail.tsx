@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
@@ -7,6 +7,9 @@ import MainHeader from '../../components/common/MainHeader';
 import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
 import { processCashPurchase } from '../../lib/cashPurchases';
 import { splitPurchasedSheetIds } from '../../lib/purchaseCheck';
+import { useTranslation } from 'react-i18next';
+import { getTranslatedText } from '../../lib/translationHelpers';
+import { formatPrice } from '../../lib/priceFormatter';
 
 interface Collection {
   id: string;
@@ -20,6 +23,8 @@ interface Collection {
   category_id?: string | null;
   category_ids?: string[] | null;
   created_at?: string;
+  title_translations?: Record<string, string> | null;
+  description_translations?: Record<string, string> | null;
 }
 
 interface Category {
@@ -45,8 +50,6 @@ interface CollectionSheet {
 
 const genreList = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버', '드럼레슨'];
 
-const formatCurrency = (value: number) => `₩${value.toLocaleString('ko-KR')}`;
-
 export default function CollectionDetailPage() {
   const { collectionId } = useParams<{ collectionId: string }>();
   const navigate = useNavigate();
@@ -57,6 +60,12 @@ export default function CollectionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [purchasing, setPurchasing] = useState(false);
+  const { i18n } = useTranslation();
+  const currentLanguage = i18n.language;
+  const formatCurrency = useCallback(
+    (value: number) => formatPrice({ amountKRW: value, language: currentLanguage }).formatted,
+    [currentLanguage],
+  );
 
   useEffect(() => {
     const getUser = async () => {
@@ -89,7 +98,7 @@ export default function CollectionDetailPage() {
       try {
         const { data: collectionData, error: collectionError } = await supabase
           .from('collections')
-          .select('id, title, description, thumbnail_url, original_price, sale_price, discount_percentage, is_active, category_id, category_ids, created_at')
+          .select('id, title, description, thumbnail_url, original_price, sale_price, discount_percentage, is_active, category_id, category_ids, created_at, title_translations, description_translations')
           .eq('id', collectionId)
           .maybeSingle();
 
@@ -174,6 +183,22 @@ export default function CollectionDetailPage() {
 
     loadCollectionDetail();
   }, [collectionId]);
+
+  const translatedTitle = useMemo(() => {
+    if (!collection) return '';
+    return getTranslatedText(collection.title_translations, currentLanguage, collection.title);
+  }, [collection, currentLanguage]);
+
+  const translatedDescription = useMemo(() => {
+    if (!collection) return '';
+    return getTranslatedText(
+      collection.description_translations,
+      currentLanguage,
+      collection.description ?? '',
+    );
+  }, [collection, currentLanguage]);
+
+  const hasTranslatedDescription = translatedDescription.trim().length > 0;
 
   const sheetsWithDetails = useMemo(() => {
     return collectionSheets
@@ -311,16 +336,18 @@ export default function CollectionDetailPage() {
     }
   };
 
+  const isActiveCollection = collection.is_active;
+
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white pb-24 md:pb-0">
       {/* Top Header */}
       <MainHeader user={user} />
 
       {/* User Sidebar */}
       <UserSidebar user={user} />
 
-      <div className={user ? 'mr-64' : ''}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className={user ? 'md:mr-64' : ''}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-6">
           <button
             onClick={() => navigate('/collections')}
             className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 cursor-pointer"
@@ -330,14 +357,14 @@ export default function CollectionDetailPage() {
           </button>
         </div>
 
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
-          <div className="grid gap-10 lg:grid-cols-[2fr,1fr]">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 md:pb-16">
+          <div className="grid gap-8 lg:grid-cols-[2fr,1fr] lg:gap-10">
             <div className="space-y-8">
               <article className="rounded-3xl border border-gray-100 bg-white shadow-sm overflow-hidden">
                 <div className="relative aspect-[16/9] bg-gray-100">
                   <img
                     src={collection.thumbnail_url || generateDefaultThumbnail(800, 600)}
-                    alt={collection.title}
+                    alt={translatedTitle}
                     className="h-full w-full object-cover"
                     onError={(event) => {
                       const target = event.target as HTMLImageElement;
@@ -350,15 +377,17 @@ export default function CollectionDetailPage() {
                     </div>
                   )}
                 </div>
-                <div className="px-8 py-10 space-y-6">
+                <div className="px-6 py-8 space-y-6 md:px-8 md:py-10">
                   <div className="space-y-4">
                     <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-600">
                       <i className="ri-album-line" />
                       악보 모음집
                     </span>
-                    <h2 className="text-3xl font-bold text-gray-900">{collection.title}</h2>
-                    {collection.description && (
-                      <p className="text-gray-600 leading-relaxed whitespace-pre-line">{collection.description}</p>
+                    <h2 className="text-2xl font-bold text-gray-900 md:text-3xl">{translatedTitle}</h2>
+                    {hasTranslatedDescription && (
+                      <p className="text-gray-600 leading-relaxed whitespace-pre-line text-sm md:text-base">
+                        {translatedDescription}
+                      </p>
                     )}
                   </div>
 
@@ -377,20 +406,22 @@ export default function CollectionDetailPage() {
 
                   <div className="rounded-2xl bg-blue-50 px-5 py-4">
                     <p className="text-sm font-semibold text-blue-600">포함된 악보 수</p>
-                    <p className="mt-2 text-3xl font-extrabold text-blue-700">{sheetsWithDetails.length}곡</p>
+                    <p className="mt-2 text-2xl font-extrabold text-blue-700 md:text-3xl">
+                      {sheetsWithDetails.length}곡
+                    </p>
                   </div>
                 </div>
               </article>
 
               <section className="rounded-3xl border border-gray-100 bg-white shadow-sm">
-                <header className="border-b border-gray-100 px-8 py-6">
-                  <h3 className="text-xl font-semibold text-gray-900">포함된 악보</h3>
+                <header className="border-b border-gray-100 px-6 py-5 md:px-8 md:py-6">
+                  <h3 className="text-lg font-semibold text-gray-900 md:text-xl">포함된 악보</h3>
                   <p className="mt-1 text-sm text-gray-500">모음집에 포함된 모든 악보를 확인하고 원하는 악보를 바로 살펴보세요.</p>
                 </header>
 
                 <div className="divide-y divide-gray-100">
                   {sheetsWithDetails.length === 0 ? (
-                    <div className="px-8 py-12 text-center text-gray-500">
+                    <div className="px-6 py-10 text-center text-gray-500 md:px-8 md:py-12">
                       <i className="ri-inbox-line text-4xl text-gray-300 mb-3" />
                       <p className="text-sm">아직 모음집에 포함된 악보가 없습니다.</p>
                     </div>
@@ -404,7 +435,7 @@ export default function CollectionDetailPage() {
                       return (
                         <div
                           key={item.id}
-                          className="flex flex-col sm:flex-row sm:items-center gap-4 px-8 py-6 transition hover:bg-gray-50 cursor-pointer"
+                          className="flex flex-col sm:flex-row sm:items-center gap-4 px-6 py-5 transition hover:bg-gray-50 cursor-pointer md:px-8 md:py-6"
                           onClick={() => navigate(`/sheet-detail/${sheet.id}`)}
                         >
                           <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -444,7 +475,7 @@ export default function CollectionDetailPage() {
             </div>
 
             <aside className="space-y-6">
-              <div className="rounded-3xl border border-blue-100 bg-blue-50 px-6 py-8 shadow-sm">
+              <div className="rounded-3xl border border-blue-100 bg-blue-50 px-5 py-6 shadow-sm md:px-6 md:py-8">
                 <h3 className="text-lg font-semibold text-blue-900">모음집 가격 정보</h3>
                 <div className="mt-5 space-y-4">
                   <div className="flex items-center justify-between text-sm text-blue-800">
@@ -453,7 +484,7 @@ export default function CollectionDetailPage() {
                   </div>
                   <div className="flex items-center justify-between text-sm text-blue-800">
                     <span>모음집 판매가</span>
-                    <span className="text-2xl font-bold text-blue-700">{displayPriceLabel}</span>
+                    <span className="text-xl font-bold text-blue-700 md:text-2xl">{displayPriceLabel}</span>
                   </div>
                   {savings > 0 && (
                     <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-blue-600">
@@ -464,12 +495,12 @@ export default function CollectionDetailPage() {
                 </div>
 
                 {/* 구매 버튼 */}
-                {collection.is_active ? (
+                {isActiveCollection ? (
                   <div className="mt-6 space-y-3">
                     <button
                       onClick={handlePurchase}
                       disabled={purchasing}
-                      className="w-full bg-blue-600 text-white py-4 px-6 rounded-2xl hover:bg-blue-700 font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer transition-colors shadow-lg"
+                      className="w-full bg-blue-600 text-white py-3 px-5 rounded-2xl hover:bg-blue-700 font-semibold text-base disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer transition-colors shadow-lg md:py-4 md:px-6 md:text-lg"
                     >
                       {purchasing ? '처리 중...' : '바로구매'}
                     </button>
@@ -485,7 +516,7 @@ export default function CollectionDetailPage() {
                 )}
               </div>
 
-              <div className="rounded-3xl border border-gray-100 bg-white px-6 py-6 shadow-sm space-y-4">
+              <div className="rounded-3xl border border-gray-100 bg-white px-5 py-5 shadow-sm space-y-4 md:px-6 md:py-6">
                 <h4 className="text-lg font-semibold text-gray-900">다른 페이지 탐색</h4>
                 <div className="space-y-3">
                   <button
@@ -511,6 +542,37 @@ export default function CollectionDetailPage() {
             </aside>
           </div>
         </section>
+      </div>
+
+      {/* Mobile Sticky Purchase Bar */}
+      <div className="md:hidden">
+        {isActiveCollection ? (
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-4px_12px_rgba(15,23,42,0.15)] backdrop-blur">
+            <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-blue-600">모음집 가격</p>
+                <p className="text-lg font-bold text-gray-900">{displayPriceLabel}</p>
+                {savings > 0 ? (
+                  <p className="text-[11px] text-green-600">개별 구매 대비 {formatCurrency(savings)} 절약</p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={handlePurchase}
+                disabled={purchasing}
+                className={`flex flex-1 items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow transition ${
+                  purchasing ? 'opacity-60' : 'hover:bg-blue-700'
+                }`}
+              >
+                {purchasing ? '처리 중...' : '바로구매'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-red-200 bg-white px-4 py-3 text-center text-sm font-semibold text-red-500 shadow-[0_-4px_12px_rgba(248,113,113,0.25)]">
+            현재 비활성화된 모음집입니다.
+          </div>
+        )}
       </div>
     </div>
   );

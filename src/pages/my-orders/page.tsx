@@ -171,6 +171,7 @@ const MyOrdersPage = () => {
         virtual_account_info,
         order_items (
           id,
+          drum_sheet_id,
           price,
           created_at,
           drum_sheets (
@@ -209,7 +210,7 @@ const MyOrdersPage = () => {
       virtual_account_info: (order.virtual_account_info ?? null) as VirtualAccountInfo | null,
       order_items: (order.order_items ?? []).map((item: any) => ({
         id: item.id,
-        sheet_id: item.drum_sheets?.id ?? '',
+        sheet_id: item.drum_sheet_id ?? item.drum_sheets?.id ?? '',
         price: item.price ?? null,
         created_at: item.created_at ?? null,
         drum_sheets: item.drum_sheets
@@ -613,7 +614,7 @@ const MyOrdersPage = () => {
       <UserSidebar user={user} />
 
       {/* 메인 컨텐츠 */}
-      <div className={user ? 'mr-64' : ''}>
+      <div className={user ? 'md:mr-64' : ''}>
         <div className="bg-gray-50 py-8">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-8">

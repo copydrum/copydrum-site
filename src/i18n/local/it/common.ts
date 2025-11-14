@@ -1,0 +1,177 @@
+export default {
+  // Site name
+  'site.name': 'CopyDrum',
+  'site.title': 'CopyDrum - Download Spartiti per Batteria',
+  'site.description': 'Scarica spartiti per batteria di alta qualità. Spartiti per batteria per tutti i generi disponibili.',
+
+  // Navigation
+  'nav.home': 'Home',
+  'nav.categories': 'Categorie Spartiti',
+  'nav.customOrder': 'Ordine Personalizzato',
+  'nav.cart': 'Carrello',
+  'nav.mypage': 'La Mia Pagina',
+  'nav.myOrders': 'I Miei Ordini',
+  'nav.admin': 'Amministratore',
+  'nav.login': 'Accedi',
+  'nav.register': 'Registrati',
+  'nav.logout': 'Esci',
+  'nav.guide': 'Guida',
+  'nav.eventSale': 'Vendita Evento',
+  'nav.collections': 'Collezioni',
+  'nav.freeSheets': 'Spartiti Gratuiti',
+  'nav.customerSupport': 'Supporto Clienti',
+  'nav.company.about': 'Chi Siamo',
+  'nav.company.partnership': 'Partnership',
+
+  // Search
+  'search.placeholder': 'Cerca per canzone, artista, genere...',
+  'search.button': 'Cerca',
+  'search.noResults': 'Nessun risultato trovato.',
+
+  // Buttons
+  'button.addToCart': 'Aggiungi al Carrello',
+  'button.purchase': 'Acquista',
+  'button.download': 'Scarica',
+  'button.viewDetails': 'Vedi Dettagli',
+  'button.edit': 'Modifica',
+  'button.delete': 'Elimina',
+  'button.cancel': 'Annulla',
+  'button.confirm': 'Conferma',
+  'button.save': 'Salva',
+  'button.submit': 'Invia',
+  'button.back': 'Indietro',
+  'button.next': 'Avanti',
+  'button.previous': 'Precedente',
+  'button.close': 'Chiudi',
+  'button.apply': 'Applica',
+  'button.reset': 'Reimposta',
+  'button.upload': 'Carica',
+  'button.select': 'Seleziona',
+
+  // Cart
+  'cart.title': 'Carrello della Spesa',
+  'cart.empty': 'Il tuo carrello è vuoto.',
+  'cart.total': 'Totale',
+  'cart.checkout': 'Procedi al Pagamento',
+  'cart.continueShopping': 'Continua gli Acquisti',
+  'cart.itemCount': '{{count}} articolo/i',
+
+  // Product
+  'product.price': 'Prezzo',
+  'product.artist': 'Artista',
+  'product.genre': 'Genere',
+  'product.difficulty': 'Difficoltà',
+  'product.duration': 'Durata',
+  'product.description': 'Descrizione',
+  'product.addedToCart': 'Aggiunto al carrello!',
+
+  // Payment
+  'payment.method': 'Metodo di Pagamento',
+  'payment.card': 'Carta di Credito',
+  'payment.bank': 'Bonifico Bancario',
+  'payment.kakao': 'Kakao Pay',
+  'payment.paypal': 'PayPal',
+  'payment.processing': 'Elaborazione pagamento...',
+  'payment.success': 'Pagamento riuscito!',
+  'payment.failed': 'Pagamento fallito. Riprova.',
+
+  // Auth
+  'auth.email': 'Email',
+  'auth.password': 'Password',
+  'auth.confirmPassword': 'Conferma Password',
+  'auth.forgotPassword': 'Password Dimenticata?',
+  'auth.rememberMe': 'Ricordami',
+  'auth.noAccount': 'Non hai un account?',
+  'auth.hasAccount': 'Hai già un account?',
+  'auth.signIn': 'Accedi',
+  'auth.signUp': 'Registrati',
+  'auth.signOut': 'Esci',
+
+  // Messages
+  'message.loading': 'Caricamento...',
+  'message.error': 'Si è verificato un errore.',
+  'message.success': 'Successo!',
+  'message.saved': 'Salvato con successo.',
+  'message.deleted': 'Eliminato con successo.',
+  'message.updated': 'Aggiornato con successo.',
+  'message.confirmDelete': 'Sei sicuro di voler eliminare questo?',
+
+  // Footer
+  'footer.company': 'Azienda',
+  'footer.support': 'Supporto',
+  'footer.legal': 'Legale',
+  'footer.followUs': 'Seguici',
+  'footer.copyright': '© 2025 CopyDrum. Tutti i diritti riservati.',
+
+  // Common
+  'common.or': 'o',
+  'common.and': 'e',
+  'common.all': 'Tutti',
+  'common.new': 'Nuovo',
+  'common.popular': 'Popolare',
+  'common.recommended': 'Consigliato',
+  'common.free': 'Gratuito',
+  'common.paid': 'A Pagamento',
+  'common.date': 'Data',
+  'common.status': 'Stato',
+  'common.action': 'Azione',
+  'common.more': 'Altro',
+  'common.less': 'Meno',
+  'common.showMore': 'Mostra Altro',
+  'common.showLess': 'Mostra Meno',
+
+  // Auth misc
+  'auth.loginRequired': 'È necessario effettuare l’accesso.',
+
+  // Mobile - Header
+  'mobile.header.openMenu': 'Apri menu',
+  'mobile.header.openSearch': 'Apri ricerca',
+  'mobile.header.goHome': 'Vai alla home di {{site}}',
+
+  // Navigation (additional)
+  'nav.cashCharge': 'Ricarica cash',
+
+  // Mobile - Menu Sidebar
+  'mobile.menu.greeting': 'Benvenuto, {{name}}!',
+  'mobile.menu.close': 'Chiudi menu mobile',
+
+  // Mobile - Search Overlay
+  'mobile.search.close': 'Chiudi ricerca',
+  'mobile.search.topSheets': 'Top 5 spartiti popolari',
+  'mobile.search.noTopSheets': 'Nessuno spartito popolare da mostrare.',
+  'mobile.search.suggestions': 'Ricerche suggerite',
+  'mobile.search.clear': 'Cancella ricerca',
+
+  // Mobile - Cash Charge Modal
+  'mobile.cash.title': 'Ricarica cash',
+  'mobile.cash.close': 'Chiudi ricarica',
+  'mobile.cash.currentBalance': 'Saldo Drum Cash',
+  'mobile.cash.bankGuideTitle': 'Guida al bonifico bancario',
+  'mobile.cash.bank': 'Banca',
+  'mobile.cash.accountNumber': 'Numero di conto',
+  'mobile.cash.accountHolder': 'Intestatario',
+  'mobile.cash.amount': 'Importo',
+  'mobile.cash.depositor': 'Nome del versante',
+  'mobile.cash.bankTransferInfo': 'Informazioni sul bonifico',
+  'mobile.cash.transferAmount': 'Importo da versare',
+  'mobile.cash.bankAccountInfo': 'Dati bancari',
+  'mobile.cash.depositorPlaceholder': 'Inserisci il nome del versante',
+  'mobile.cash.depositorNote': '* Se il nome del versante è diverso da quello del membro, indicarlo qui.',
+  'mobile.cash.noticeTitle': 'Note importanti',
+  'mobile.cash.notice1': 'Dopo la conferma, l’amministratore aggiungerà il cash manualmente.',
+  'mobile.cash.notice2': 'Un nome del versante diverso può ritardare la conferma.',
+  'mobile.cash.notice3': 'La conferma può richiedere 1–2 giorni lavorativi.',
+  'mobile.cash.paymentUnavailable': 'Questo metodo di pagamento è in preparazione.',
+  'mobile.cash.agreementText': 'Confermo i dettagli del pagamento e accetto i termini. Il cash sarà accreditato al termine.',
+  'mobile.cash.loginDescription': 'Accedi per ricaricare il tuo Drum Cash.',
+  'mobile.cash.agreementRequired': 'Accetta i termini di pagamento.',
+  'mobile.cash.enterDepositor': 'Inserisci il nome del versante.',
+  'mobile.cash.cardPending': 'Il pagamento con carta è in preparazione.',
+  'mobile.cash.bankTransferRequested': 'Ordine ricevuto. Il cash sarà accreditato dopo la conferma del bonifico.',
+  'mobile.cash.error': 'Si è verificato un errore durante la ricarica.',
+  'mobile.cash.chargeAmount': 'Importo ricarica',
+  'mobile.cash.noBonus': 'Nessun bonus',
+  'mobile.cash.bonusLabel': '+{{amount}} P bonus ({{percent}})',
+  'mobile.cash.processing': 'Elaborazione...',
+};
+

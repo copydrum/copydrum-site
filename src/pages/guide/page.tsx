@@ -194,7 +194,7 @@ export default function GuidePage() {
     <div className="min-h-screen bg-white">
       <MainHeader user={user} />
       <UserSidebar user={user} />
-      <div className={user ? 'mr-64' : ''}>
+      <div className={user ? 'md:mr-64' : ''}>
         <section className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white py-20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <span className="inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium bg-white/15 mb-6">

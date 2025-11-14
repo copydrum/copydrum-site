@@ -80,10 +80,11 @@ const CustomOrdersPage = () => {
   const handleDownload = async (order: any) => {
     if (!order.completed_pdf_url) return;
 
-    const maxDownload = order.max_download_count ?? 5;
+    const maxDownload = order.max_download_count;
     const usedCount = order.download_count ?? 0;
-    if (usedCount >= maxDownload) {
-      alert('다운로드 횟수를 초과했습니다. 고객센터에 문의해주세요.');
+    const hasLimit = typeof maxDownload === 'number' && maxDownload > 0;
+    if (hasLimit && usedCount >= maxDownload) {
+      alert('다운로드 횟수를 모두 사용했습니다. 고객센터에 문의해주세요.');
       return;
     }
 

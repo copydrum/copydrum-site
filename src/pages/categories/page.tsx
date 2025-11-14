@@ -13,9 +13,12 @@ import { fetchUserFavorites, toggleFavorite } from '../../lib/favorites';
 import MainHeader from '../../components/common/MainHeader';
 import { processCashPurchase } from '../../lib/cashPurchases';
 import { hasPurchasedSheet } from '../../lib/purchaseCheck';
-import { PaymentMethodSelector } from '../../components/payments';
+import { BankTransferInfoModal, PaymentMethodSelector } from '../../components/payments';
 import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
+import { openCashChargeModal } from '../../lib/cashChargeModal';
+import { useTranslation } from 'react-i18next';
+import { formatPrice } from '../../lib/priceFormatter';
 
 interface Category {
   id: string;
@@ -39,6 +42,7 @@ interface DrumSheet {
   thumbnail_url?: string;
   album_name?: string;
   page_count?: number;
+  youtube_url?: string | null;
 }
 
 const CategoriesPage: React.FC = () => {
@@ -77,6 +81,10 @@ const CategoriesPage: React.FC = () => {
   const [pendingPurchaseSheet, setPendingPurchaseSheet] = useState<DrumSheet | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
+  const [showBankTransferModal, setShowBankTransferModal] = useState(false);
+  const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
+  const [selectedTopSheetId, setSelectedTopSheetId] = useState<string | null>(null);
+  const { i18n } = useTranslation();
 
   // 장르 목록 (순서대로)
   const genreList = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
@@ -186,6 +194,39 @@ const CategoriesPage: React.FC = () => {
     }
   };
 
+  const completeOnlinePurchase = async (
+    method: 'card' | 'bank_transfer',
+    options?: { depositorName?: string },
+  ) => {
+    if (!user || !pendingPurchaseSheet) return;
+
+    const sheet = pendingPurchaseSheet;
+    const price = Math.max(
+      0,
+      (getEventForSheet(sheet.id)?.discount_price ?? sheet.price) ?? 0,
+    );
+
+    const result = await startSheetPurchase({
+      userId: user.id,
+      items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
+      amount: price,
+      paymentMethod: method,
+      description: `악보 바로구매: ${sheet.title}`,
+      buyerName: user.email ?? null,
+      buyerEmail: user.email ?? null,
+      returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
+      depositorName: options?.depositorName,
+    });
+
+    if (method === 'bank_transfer') {
+      setBankTransferInfo(result.virtualAccountInfo ?? null);
+      alert('무통장입금 안내가 생성되었습니다.\n입금 후 자동으로 구매가 완료됩니다.');
+    } else {
+      setBankTransferInfo(null);
+      alert('결제창이 열립니다. 결제를 완료해 주세요.');
+    }
+  };
+
   const handlePurchaseMethodSelect = async (method: 'cash' | 'card' | 'bank') => {
     if (!user || !pendingPurchaseSheet) return;
 
@@ -195,6 +236,12 @@ const CategoriesPage: React.FC = () => {
     const price = Math.max(0, (event?.discount_price ?? sheet.price) ?? 0);
 
     setShowPaymentSelector(false);
+
+    if (method === 'bank') {
+      setShowBankTransferModal(true);
+      return;
+    }
+
     setPaymentProcessing(true);
 
     try {
@@ -214,6 +261,7 @@ const CategoriesPage: React.FC = () => {
                 'ko-KR',
               )}P\n캐쉬를 충전한 뒤 다시 시도해주세요.`,
             );
+            openCashChargeModal();
           }
           return;
         }
@@ -231,26 +279,27 @@ const CategoriesPage: React.FC = () => {
         return;
       }
 
-      const result = await startSheetPurchase({
-        userId: user.id,
-        items: [{ sheetId, sheetTitle: sheet.title, price }],
-        amount: price,
-        paymentMethod: method === 'card' ? 'card' : 'bank_transfer',
-        description: `악보 바로구매: ${sheet.title}`,
-        buyerName: user.email ?? null,
-        buyerEmail: user.email ?? null,
-        returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
-      });
-
-      if (method === 'bank') {
-        setBankTransferInfo(result.virtualAccountInfo ?? null);
-        alert('무통장입금 안내가 생성되었습니다.\n입금 후 자동으로 구매가 완료됩니다.');
-      } else {
-        setBankTransferInfo(null);
-        alert('결제창이 열립니다. 결제를 완료해 주세요.');
-      }
+      await completeOnlinePurchase('card');
     } catch (error) {
       console.error('주문 처리 오류:', error);
+      alert(error instanceof Error ? error.message : '구매 중 오류가 발생했습니다.');
+    } finally {
+      setPaymentProcessing(false);
+      setBuyingSheetId(null);
+      setPendingPurchaseSheet(null);
+    }
+  };
+
+  const handleBankTransferConfirm = async (depositorName: string) => {
+    if (!user || !pendingPurchaseSheet) return;
+
+    setShowBankTransferModal(false);
+    setPaymentProcessing(true);
+
+    try {
+      await completeOnlinePurchase('bank_transfer', { depositorName });
+    } catch (error) {
+      console.error('무통장입금 주문 처리 오류:', error);
       alert(error instanceof Error ? error.message : '구매 중 오류가 발생했습니다.');
     } finally {
       setPaymentProcessing(false);
@@ -298,6 +347,16 @@ const CategoriesPage: React.FC = () => {
     loadFavorites();
   }, [loadFavorites]);
 
+  useEffect(() => {
+    if (!loading) {
+      if (topSheets.length === 0) {
+        setSelectedTopSheetId(null);
+      } else if (selectedTopSheetId && !topSheets.some((sheet) => sheet.id === selectedTopSheetId)) {
+        setSelectedTopSheetId(null);
+      }
+    }
+  }, [loading, topSheets, selectedTopSheetId]);
+
   const loadCategories = async () => {
     try {
       const { data, error } = await supabase
@@ -340,7 +399,7 @@ const CategoriesPage: React.FC = () => {
         
         const { data, error } = await supabase
           .from('drum_sheets')
-          .select('id, title, artist, difficulty, price, category_id, tempo, pdf_url, preview_image_url, is_featured, created_at, thumbnail_url, album_name, page_count, categories (name)')
+          .select('id, title, artist, difficulty, price, category_id, tempo, pdf_url, preview_image_url, youtube_url, is_featured, created_at, thumbnail_url, album_name, page_count, categories (name)')
           .order('created_at', { ascending: false })
           .range(from, to)
           .limit(pageSize);
@@ -545,7 +604,10 @@ const CategoriesPage: React.FC = () => {
   };
 
   // Helper function to remove spaces and convert to lowercase for fuzzy search
-  const formatCurrency = (value: number) => `₩${value.toLocaleString('ko-KR')}`;
+  const formatCurrency = useCallback(
+    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
+    [i18n.language],
+  );
 
   const normalizeString = (str: string): string => {
     return str.replace(/\s+/g, '').toLowerCase();
@@ -655,15 +717,419 @@ const CategoriesPage: React.FC = () => {
   const selectedSheetIsFavorite = selectedSheet ? favoriteIds.has(selectedSheet.id) : false;
   const selectedSheetFavoriteLoading = selectedSheet ? favoriteLoadingIds.has(selectedSheet.id) : false;
 
+  const handleMobileSheetSelect = (sheet: DrumSheet) => {
+    setSelectedSheet(sheet);
+    setIsMobileDetailOpen(true);
+  };
+
+  const closeMobileDetail = () => {
+    setIsMobileDetailOpen(false);
+    setSelectedSheet(null);
+  };
+
+  const handlePreviewOpen = (sheet: DrumSheet) => {
+    const previewUrl = sheet.preview_image_url || sheet.pdf_url;
+    if (!previewUrl) {
+      alert('미리보기를 제공하지 않는 악보입니다.');
+      return;
+    }
+    window.open(previewUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleYoutubeOpen = (sheet: DrumSheet) => {
+    if (!sheet.youtube_url) {
+      alert('등록된 유튜브 영상이 없습니다.');
+      return;
+    }
+    const href = sheet.youtube_url.startsWith('http')
+      ? sheet.youtube_url
+      : `https://www.youtube.com/watch?v=${sheet.youtube_url}`;
+    window.open(href, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <div className="min-h-screen bg-white">
+      <div className="hidden md:block">
       <MainHeader user={user} />
+      </div>
 
-      {/* User Sidebar - 로그인 시 항상 표시 */}
+      {/* User Sidebar - 데스크톱 전용 */}
+      <div className="hidden lg:block">
       <UserSidebar user={user} />
+      </div>
 
-      {/* Main Content - 사이드바 공간 확보 */}
-      <div className="mr-64">
+      {/* Mobile Layout */}
+      <div className="md:hidden pt-[76px] pb-[96px] space-y-6">
+        <div className="px-4 space-y-6">
+          {bankTransferInfo ? (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-blue-900">무통장입금 안내</h3>
+                <button
+                  type="button"
+                  onClick={() => setBankTransferInfo(null)}
+                  className="text-blue-600 hover:text-blue-800 text-xs"
+                >
+                  닫기
+                </button>
+              </div>
+              <div className="mt-3 space-y-2">
+                <div>
+                  <span className="font-medium text-gray-900">은행</span> {bankTransferInfo.bankName}
+                </div>
+                <div>
+                  <span className="font-medium text-gray-900">계좌번호</span> {bankTransferInfo.accountNumber}
+                </div>
+                <div>
+                  <span className="font-medium text-gray-900">예금주</span> {bankTransferInfo.depositor}
+                </div>
+                <div>
+                  <span className="font-medium text-gray-900">입금금액</span>{' '}
+                                    {formatCurrency(bankTransferInfo.amount ?? 0)}
+                </div>
+                {bankTransferInfo.expectedDepositor ? (
+                  <div>
+                    <span className="font-medium text-gray-900">입금자명</span>{' '}
+                    <span className="text-blue-600 font-semibold">{bankTransferInfo.expectedDepositor}</span>
+                  </div>
+                ) : null}
+                {bankTransferInfo.message ? (
+                  <p className="text-xs text-gray-600">{bankTransferInfo.message}</p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="space-y-4">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {genreList.map((genre) => {
+                const category = categories.find((cat) => cat.name === genre);
+                const categoryId = category?.id || '';
+                const isSelected = selectedCategory === categoryId;
+                return (
+                  <button
+                    key={genre}
+                    type="button"
+                    onClick={() => handleCategorySelect(categoryId)}
+                    className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                      isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 text-gray-600'
+                    }`}
+                  >
+                    {genre}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Mobile Top 5 */}
+          {!loading && topSheets.length > 0 && (
+            <div className="px-4 space-y-3">
+              <h2 className="text-lg font-bold text-gray-900">TOP 5</h2>
+              <div className="space-y-2">
+                {topSheets.map((sheet, index) => {
+                  const isActive = sheet.id === selectedTopSheetId;
+                  const eventInfo = getEventForSheet(sheet.id);
+                  const displayPrice = getDisplayPrice(sheet);
+                  return (
+                    <div key={sheet.id} className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedTopSheetId((prev) => (prev === sheet.id ? null : sheet.id));
+                        }}
+                        className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 transition ${
+                          isActive ? 'border-blue-200 bg-blue-50' : 'border-gray-100 bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="text-sm font-semibold text-gray-500">{index + 1}</span>
+                      <div className="min-w-0 text-left">
+                        <p className="truncate text-sm font-bold text-gray-900">{sheet.title}</p>
+                        <p className="truncate text-xs text-gray-500">{sheet.artist}</p>
+                      </div>
+                        </div>
+                        <i className={`ri-arrow-${isActive ? 'up' : 'down'}-s-line text-gray-400 text-lg`} />
+                      </button>
+                      {isActive && (
+                        <div className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm space-y-3">
+                          <div className="flex items-center gap-3">
+                            <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border border-gray-200">
+                              <img
+                                src={getThumbnailUrl(sheet)}
+                                alt={sheet.title}
+                                className="h-full w-full object-cover"
+                                onError={(event) => {
+                                  const img = event.target as HTMLImageElement;
+                                  img.src = generateDefaultThumbnail(320, 320);
+                                }}
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1 text-left">
+                              <p className="truncate text-sm font-bold text-gray-900">{sheet.title}</p>
+                              <p className="truncate text-xs text-gray-500">{sheet.artist}</p>
+                              <p className="truncate text-xs text-gray-400">{sheet.album_name || '앨범 정보 없음'}</p>
+                            </div>
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {sheet.categories?.name || '기타'} · {sheet.difficulty || '난이도 정보 없음'}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1 text-right">
+                              {eventInfo ? (
+                                <>
+                                  <span className="text-xs text-gray-400 line-through">
+                                    {formatCurrency(sheet.price)}
+                                  </span>
+                                  <span className="text-lg font-extrabold text-blue-600">
+                                    {formatCurrency(displayPrice)}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-lg font-extrabold text-blue-600">
+                                  {formatCurrency(displayPrice)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleAddToCart(sheet.id)}
+                              className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                            >
+                              장바구니
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleBuyNow(sheet.id)}
+                              className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700"
+                            >
+                              바로구매
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Sheets List */}
+          <div className="space-y-4">
+            {loading && (
+              <div className="py-16 text-center text-gray-500">
+                <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-b-2 border-blue-500" />
+                악보를 불러오는 중입니다...
+              </div>
+            )}
+
+            {!loading && paginatedSheets.length === 0 && (
+              <div className="py-16 text-center text-gray-500">
+                <i className="ri-file-music-line mb-4 text-4xl text-gray-300" />
+                <p className="font-semibold text-gray-600">검색 결과가 없습니다.</p>
+              </div>
+            )}
+
+            {!loading &&
+              paginatedSheets.map((sheet) => {
+                const eventInfo = getEventForSheet(sheet.id);
+                const displayPrice = getDisplayPrice(sheet);
+                return (
+                  <button
+                    key={sheet.id}
+                    type="button"
+                    onClick={() => handleMobileSheetSelect(sheet)}
+                    className="flex w-full items-start gap-4 rounded-3xl border border-gray-100 bg-white p-4 text-left shadow-sm transition hover:bg-gray-50"
+                  >
+                    <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-2xl border border-gray-200">
+                      <img
+                        src={getThumbnailUrl(sheet)}
+                        alt={sheet.title}
+                        className="h-full w-full object-cover"
+                        onError={(event) => {
+                          const img = event.target as HTMLImageElement;
+                          img.src = generateDefaultThumbnail(400, 400);
+                        }}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className="truncate text-sm font-bold text-gray-900">{sheet.title}</p>
+                      <p className="truncate text-xs text-gray-500">{sheet.artist}</p>
+                      <p className="truncate text-xs text-gray-400">{sheet.album_name || '앨범 정보 없음'}</p>
+                      <div className="pt-1 text-sm font-semibold text-blue-600">
+                        {eventInfo ? (
+                          <>
+                            <span className="mr-2 text-xs text-gray-400 line-through">
+                              {formatCurrency(sheet.price)}
+                            </span>
+                            {formatCurrency(displayPrice)}
+                          </>
+                        ) : (
+                          formatCurrency(displayPrice)
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+          </div>
+
+          {/* Mobile Pagination */}
+          {!loading && totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-gray-500 disabled:opacity-50"
+                disabled={currentPage === 1}
+              >
+                <i className="ri-arrow-left-s-line text-lg" />
+              </button>
+              <span className="text-sm text-gray-600">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-gray-500 disabled:opacity-50"
+                disabled={currentPage === totalPages}
+              >
+                <i className="ri-arrow-right-s-line text-lg" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile Detail Bottom Sheet */}
+      {selectedSheet && isMobileDetailOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex items-end bg-black/60 backdrop-blur-sm">
+          <div className="w-full rounded-t-3xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">{selectedSheet.title}</h3>
+              <button
+                type="button"
+                onClick={closeMobileDetail}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <i className="ri-close-fill text-2xl" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="overflow-hidden rounded-2xl">
+                <img
+                  src={getThumbnailUrl(selectedSheet)}
+                  alt={selectedSheet.title}
+                  className="w-full object-cover"
+                  onError={(event) => {
+                    const img = event.target as HTMLImageElement;
+                    img.src = generateDefaultThumbnail(640, 480);
+                  }}
+                />
+              </div>
+              <div className="space-y-2 text-sm text-gray-600">
+                <p className="font-semibold text-gray-900">{selectedSheet.artist}</p>
+                {selectedSheet.album_name && <p>앨범: {selectedSheet.album_name}</p>}
+                {selectedSheet.difficulty && <p>난이도: {selectedSheet.difficulty}</p>}
+                {selectedSheet.page_count ? <p>페이지: {selectedSheet.page_count}p</p> : null}
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-1 text-right">
+                  {selectedEventInfo ? (
+                    <>
+                      <span className="text-sm text-gray-400 line-through">
+                        {formatCurrency(selectedSheet.price)}
+                      </span>
+                      <span className="text-2xl font-extrabold text-red-500">
+                        {formatCurrency(selectedDisplayPrice)}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-2xl font-extrabold text-blue-600">
+                      {formatCurrency(selectedDisplayPrice)}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleFavorite(selectedSheet.id)}
+                  disabled={selectedSheetFavoriteLoading}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${
+                    selectedSheetIsFavorite
+                      ? 'border-red-200 bg-red-50 text-red-500'
+                      : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                  } ${selectedSheetFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                >
+                  <i className={`ri-heart-${selectedSheetIsFavorite ? 'fill' : 'line'} text-xl`} />
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(selectedSheet.preview_image_url || selectedSheet.pdf_url) && (
+                  <button
+                    type="button"
+                    onClick={() => handlePreviewOpen(selectedSheet)}
+                    className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                  >
+                    악보 미리보기
+                  </button>
+                )}
+                {selectedSheet.youtube_url && (
+                  <button
+                    type="button"
+                    onClick={() => handleYoutubeOpen(selectedSheet)}
+                    className="flex-1 rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white shadow transition hover:bg-red-600"
+                  >
+                    유튜브 재생
+                  </button>
+                )}
+              </div>
+              {bankTransferInfo ? (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700">
+                  <h4 className="font-semibold text-blue-900 mb-2">무통장입금 안내</h4>
+                  <div className="space-y-1">
+                    <p>은행: {bankTransferInfo.bankName}</p>
+                    <p>계좌번호: {bankTransferInfo.accountNumber}</p>
+                    <p>예금주: {bankTransferInfo.depositor}</p>
+                    <p>입금금액: {formatCurrency(bankTransferInfo.amount ?? 0)}</p>
+                  </div>
+                </div>
+              ) : null}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleAddToCart(selectedSheet.id);
+                    closeMobileDetail();
+                  }}
+                  className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                >
+                  장바구니
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleBuyNow(selectedSheet.id)}
+                  className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow hover:bg-blue-700"
+                >
+                  바로 구매
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate(`/sheet-detail/${selectedSheet.id}`)}
+                className="w-full rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              >
+                상세 페이지로 이동
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Layout */}
+      <div className="hidden md:block md:mr-0 lg:mr-64">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         {bankTransferInfo ? (
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
@@ -689,7 +1155,7 @@ const CategoriesPage: React.FC = () => {
               </div>
               <div>
                 <span className="font-medium text-gray-900">입금금액</span>{' '}
-                {new Intl.NumberFormat('ko-KR').format(bankTransferInfo.amount ?? 0)}원
+                {formatCurrency(bankTransferInfo.amount ?? 0)}
               </div>
               {bankTransferInfo.expectedDepositor ? (
                 <div className="sm:col-span-2">
@@ -1381,6 +1847,24 @@ const CategoriesPage: React.FC = () => {
         )}
         </div>
       </div>
+
+      <BankTransferInfoModal
+        open={showBankTransferModal}
+        amount={
+          pendingPurchaseSheet
+            ? Math.max(
+                0,
+                (getEventForSheet(pendingPurchaseSheet.id)?.discount_price ?? pendingPurchaseSheet.price) ?? 0,
+              )
+            : 0
+        }
+        userName={(user?.user_metadata?.name as string | undefined) ?? user?.email ?? undefined}
+        onConfirm={handleBankTransferConfirm}
+        onClose={() => {
+          setShowBankTransferModal(false);
+          setShowPaymentSelector(true);
+        }}
+      />
 
       <PaymentMethodSelector
         open={showPaymentSelector}

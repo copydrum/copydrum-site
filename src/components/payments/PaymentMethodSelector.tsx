@@ -1,4 +1,6 @@
-import { Fragment } from 'react';
+import { Fragment, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { formatPrice } from '../../lib/priceFormatter';
 
 type PaymentMethod = 'cash' | 'card' | 'bank';
 
@@ -23,14 +25,16 @@ const paymentMethodOptions: PaymentMethodOption[] = [
   {
     id: 'card',
     name: '카드 결제',
-    description: 'KG 이니시스를 통해 카드 결제가 진행됩니다.',
+    description: '준비 중입니다.',
     icon: 'ri-bank-card-line',
     color: 'text-blue-600',
+    disabled: true,
+    badge: '준비중',
   },
   {
     id: 'bank',
     name: '무통장입금',
-    description: '입금 확인 후 자동으로 구매가 완료됩니다.',
+    description: '입금 확인 후 관리자가 수동으로 구매를 완료합니다.',
     icon: 'ri-bank-line',
     color: 'text-green-600',
   },
@@ -53,9 +57,13 @@ export const PaymentMethodSelector = ({
   allowCash = true,
   disabledMethods = [],
 }: PaymentMethodSelectorProps) => {
-  if (!open) return null;
+  const { i18n } = useTranslation();
+  const formatCurrency = useCallback(
+    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
+    [i18n.language],
+  );
 
-  const formatPrice = (value: number) => `₩${value.toLocaleString('ko-KR')}`;
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4">
@@ -63,7 +71,7 @@ export const PaymentMethodSelector = ({
         <div className="border-b border-gray-200 px-5 py-4">
           <h2 className="text-lg font-semibold text-gray-900">결제수단 선택</h2>
           <p className="mt-1 text-sm text-gray-600">
-            결제 금액 <span className="font-semibold text-gray-900">{formatPrice(amount)}</span>
+            결제 금액 <span className="font-semibold text-gray-900">{formatCurrency(amount)}</span>
           </p>
         </div>
 
@@ -71,7 +79,7 @@ export const PaymentMethodSelector = ({
           <div className="space-y-3">
             {paymentMethodOptions.map((option) => {
               const isDisabled =
-                disabledMethods.includes(option.id) || (option.id === 'cash' && !allowCash);
+                option.disabled || disabledMethods.includes(option.id) || (option.id === 'cash' && !allowCash);
               return (
                 <button
                   key={option.id}
@@ -120,4 +128,5 @@ export const PaymentMethodSelector = ({
     </div>
   );
 };
+
 

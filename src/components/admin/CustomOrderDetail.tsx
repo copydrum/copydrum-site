@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 
-type StatusOptionValue = 'pending' | 'quoted' | 'payment_confirmed' | 'in_progress' | 'completed';
+type StatusOptionValue = 'pending' | 'quoted' | 'payment_confirmed' | 'in_progress' | 'completed' | 'cancelled';
 
 interface StatusOption {
   value: StatusOptionValue;
@@ -53,8 +53,10 @@ interface CustomOrderDetailProps {
 const STATUS_OPTIONS: StatusOption[] = [
   { value: 'pending', label: '견적중', description: '견적 검토 중입니다' },
   { value: 'quoted', label: '결제대기', description: '입금 대기 중입니다' },
+  { value: 'payment_confirmed', label: '입금확인', description: '입금이 확인되었습니다' },
   { value: 'in_progress', label: '작업중', description: '악보 제작 중입니다' },
   { value: 'completed', label: '작업완료', description: '제작이 완료되었습니다' },
+  { value: 'cancelled', label: '취소됨', description: '주문이 취소되었습니다' },
 ];
 
 const formatDateTime = (value: string | null | undefined) => {
@@ -316,7 +318,7 @@ export default function CustomOrderDetail({ orderId, onClose, onUpdated }: Custo
           completed_pdf_url: publicUrl,
           completed_pdf_filename: pdfFile.name,
           download_count: 0,
-          max_download_count: order.max_download_count ?? 5,
+          max_download_count: order.max_download_count ?? null,
           download_expires_at: expiresAt.toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -333,7 +335,7 @@ export default function CustomOrderDetail({ orderId, onClose, onUpdated }: Custo
               completed_pdf_url: publicUrl,
               completed_pdf_filename: pdfFile.name,
               download_count: 0,
-              max_download_count: prev.max_download_count ?? 5,
+              max_download_count: prev.max_download_count ?? null,
               download_expires_at: expiresAt.toISOString(),
               updated_at: new Date().toISOString(),
             }
@@ -377,6 +379,14 @@ export default function CustomOrderDetail({ orderId, onClose, onUpdated }: Custo
   }
 
   const statusMeta = getStatusMeta(order.status);
+  const downloadUsageText = (() => {
+    const usedCount = order.download_count ?? 0;
+    const limit = order.max_download_count;
+    if (typeof limit === 'number' && limit > 0) {
+      return `다운로드 ${usedCount}/${limit}회 사용`;
+    }
+    return `다운로드 ${usedCount}회 사용 (무제한)`;
+  })();
 
   return (
     <div className="flex h-full flex-col">
@@ -518,8 +528,7 @@ export default function CustomOrderDetail({ orderId, onClose, onUpdated }: Custo
                     <div>
                       <p className="font-semibold">{order.completed_pdf_filename}</p>
                       <p className="text-xs text-green-700">
-                        다운로드 {order.download_count ?? 0}/{order.max_download_count ?? 5}회 · 만료{' '}
-                        {formatDateTime(order.download_expires_at)}
+                        {downloadUsageText} · 만료 {formatDateTime(order.download_expires_at)}
                       </p>
                     </div>
                   </div>

@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import UserSidebar from '../../components/feature/UserSidebar';
 import MainHeader from '../../components/common/MainHeader';
 import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
+import { useTranslation } from 'react-i18next';
+import { getTranslatedText } from '../../lib/translationHelpers';
+import { formatPrice as formatPriceWithCurrency } from '../../lib/priceFormatter';
 
 interface Collection {
   id: string;
@@ -20,6 +23,8 @@ interface Collection {
   category_id?: string | null;
   category_ids?: string[] | null;
   categories?: string[]; // 모음집에 포함된 악보들의 카테고리 ID 목록
+  title_translations?: Record<string, string> | null;
+  description_translations?: Record<string, string> | null;
 }
 
 interface Category {
@@ -46,6 +51,8 @@ export default function CollectionsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
+  const currentLanguage = i18n.language;
 
   // 장르 목록 (순서대로) - 마지막에 드럼레슨 추가
   const genreList = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버', '드럼레슨'];
@@ -105,7 +112,7 @@ export default function CollectionsPage() {
       // 활성화된 모음집만 조회
       const { data, error } = await supabase
         .from('collections')
-        .select('id, title, description, thumbnail_url, original_price, sale_price, discount_percentage, is_active, created_at, category_id, category_ids')
+        .select('id, title, description, thumbnail_url, original_price, sale_price, discount_percentage, is_active, created_at, category_id, category_ids, title_translations, description_translations')
         .eq('is_active', true)
         .order('created_at', { ascending: false });
 
@@ -181,9 +188,10 @@ export default function CollectionsPage() {
     return generateDefaultThumbnail(400, 400);
   };
 
-  const formatPrice = (price: number): string => {
-    return new Intl.NumberFormat('ko-KR').format(price);
-  };
+  const formatCurrency = useCallback(
+    (price: number): string => formatPriceWithCurrency({ amountKRW: price, language: currentLanguage }).formatted,
+    [currentLanguage],
+  );
 
   // 선택된 카테고리에 해당하는 모음집 필터링
   const filteredCollections = selectedCategory
@@ -212,20 +220,20 @@ export default function CollectionsPage() {
       <UserSidebar user={user} />
 
       {/* Main Content */}
-      <div className="mr-64">
+      <div className="md:mr-64">
         {/* Hero Section */}
-        <section className="bg-gradient-to-r from-blue-600 to-purple-600 py-16">
+        <section className="bg-gradient-to-r from-blue-600 to-purple-600 py-12 md:py-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-4xl font-bold text-white mb-4">악보 모음집</h2>
-            <p className="text-xl text-blue-100">테마별로 엄선한 특별한 드럼 악보 컬렉션을 만나보세요.</p>
+            <h2 className="text-3xl font-bold text-white mb-3 md:text-4xl md:mb-4">악보 모음집</h2>
+            <p className="text-base text-blue-100 md:text-xl">테마별로 엄선한 특별한 드럼 악보 컬렉션을 만나보세요.</p>
           </div>
         </section>
 
         {/* Collections Grid */}
-        <section className="py-16">
+        <section className="py-12 md:py-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* 장르 필터 */}
-            <div className="mb-8">
+            <div className="mb-6 md:mb-8">
               <div className="flex flex-wrap gap-2 justify-center">
                 <button
                   onClick={() => setSelectedCategory('')}
@@ -254,80 +262,97 @@ export default function CollectionsPage() {
             </div>
 
             {filteredCollections.length === 0 ? (
-              <div className="text-center py-16">
+              <div className="text-center py-12 md:py-16">
                 <i className="ri-inbox-line text-6xl text-gray-300 mb-4"></i>
                 <p className="text-gray-500 text-lg">
                   {selectedCategory ? '선택한 장르에 해당하는 모음집이 없습니다.' : '등록된 모음집이 없습니다.'}
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {filteredCollections.map((collection) => (
-                  <div
-                    key={collection.id}
-                    onClick={() => navigate(`/collections/${collection.id}`)}
-                    className="group bg-white rounded-xl shadow-md overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-2"
-                  >
-                    {/* Thumbnail */}
-                    <div className="relative aspect-video overflow-hidden bg-gray-200">
-                      <img
-                        src={getThumbnailUrl(collection)}
-                        alt={collection.title}
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                        onError={(e) => {
-                          const img = e.target as HTMLImageElement;
-                          img.src = generateDefaultThumbnail(400, 400);
-                        }}
-                      />
-                      {collection.discount_percentage > 0 && (
-                        <div className="absolute top-4 right-4 bg-red-500 text-white px-3 py-1 rounded-full font-bold text-sm">
-                          {collection.discount_percentage}% 할인
-                        </div>
-                      )}
-                    </div>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8 lg:grid-cols-3">
+                {filteredCollections.map((collection) => {
+                  const translatedTitle = getTranslatedText(
+                    collection.title_translations,
+                    currentLanguage,
+                    collection.title,
+                  );
+                  const translatedDescription = getTranslatedText(
+                    collection.description_translations,
+                    currentLanguage,
+                    collection.description ?? '',
+                  );
+                  const hasDescription = translatedDescription.trim().length > 0;
 
-                    {/* Content */}
-                    <div className="p-6">
-                      <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
-                        {collection.title}
-                      </h3>
-                      {collection.description && (
-                        <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-                          {collection.description}
-                        </p>
-                      )}
-                      
-                      {/* Sheet Count */}
-                      <div className="flex items-center text-gray-500 text-sm mb-4">
-                        <i className="ri-file-music-line mr-2"></i>
-                        <span>{collection.sheet_count || 0}개의 악보</span>
-                      </div>
-
-                      {/* Price */}
-                      <div className="flex items-center justify-between">
-                        {collection.sale_price > 0 ? (
-                          <div className="flex items-center space-x-2">
-                            {collection.original_price > collection.sale_price && (
-                              <span className="text-gray-400 line-through text-sm">
-                                {formatPrice(collection.original_price)}원
-                              </span>
-                            )}
-                            <span className="text-2xl font-bold text-blue-600">
-                              {formatPrice(collection.sale_price)}원
-                            </span>
+                  return (
+                    <div
+                      key={collection.id}
+                      onClick={() => navigate(`/collections/${collection.id}`)}
+                      className="group bg-white rounded-xl shadow-md overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-2"
+                    >
+                      {/* Thumbnail */}
+                      <div className="relative aspect-video overflow-hidden bg-gray-200">
+                        <img
+                          src={getThumbnailUrl(collection)}
+                          alt={translatedTitle}
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                          onError={(e) => {
+                            const img = e.target as HTMLImageElement;
+                            img.src = generateDefaultThumbnail(400, 400);
+                          }}
+                        />
+                        {collection.discount_percentage > 0 && (
+                          <div className="absolute top-4 right-4 bg-red-500 text-white px-3 py-1 rounded-full font-bold text-sm">
+                            {collection.discount_percentage}% 할인
                           </div>
-                        ) : (
-                          <span className="text-2xl font-bold text-gray-900">
-                            {collection.original_price > 0 ? `${formatPrice(collection.original_price)}원` : '무료'}
-                          </span>
                         )}
-                        <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold">
-                          자세히 보기
-                        </button>
+                      </div>
+
+                      {/* Content */}
+                      <div className="p-6">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                            모음집
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {new Date(collection.created_at).toLocaleDateString()}
+                          </div>
+                        </div>
+
+                        <h3 className="text-xl font-bold text-gray-900 mb-2 line-clamp-1">{translatedTitle}</h3>
+                        {hasDescription && (
+                          <p className="text-gray-600 text-sm mb-4 line-clamp-3 leading-relaxed">
+                            {translatedDescription}
+                          </p>
+                        )}
+
+                        <div className="flex items-center justify-between mt-6">
+                          <div>
+                            {collection.sale_price > 0 ? (
+                              <div className="text-lg font-bold text-blue-600">
+                                {formatCurrency(collection.sale_price)}
+                              </div>
+                            ) : (
+                              <div className="text-lg font-bold text-blue-600">
+                                {collection.original_price > 0
+                                  ? formatCurrency(collection.original_price)
+                                  : '무료'}
+                              </div>
+                            )}
+                            {collection.discount_percentage > 0 && (
+                              <div className="text-xs text-gray-500 line-through">
+                                {formatCurrency(collection.original_price)}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center space-x-2 text-sm text-gray-500">
+                            <i className="ri-music-2-line"></i>
+                            <span>{collection.sheet_count ?? 0}곡</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

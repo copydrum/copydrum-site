@@ -194,28 +194,36 @@ export default function CustomerSupport() {
     }
   };
 
+  const handleOpenKakaoChannel = useCallback(() => {
+    window.open('https://pf.kakao.com/_Hbxezxl/chat', '_blank', 'noopener,noreferrer');
+  }, []);
+
   return (
-    <div className="min-h-screen bg-white">
-      <MainHeader user={user} />
-      <UserSidebar user={user} />
-      <div className={user ? 'mr-64' : ''}>
+    <div className="min-h-screen bg-white pb-24 md:pb-0">
+      <div className="hidden md:block">
+        <MainHeader user={user} />
+      </div>
+      <div className="hidden lg:block">
+        <UserSidebar user={user} />
+      </div>
+      <div className={`${user ? 'md:mr-64' : ''} pt-0 md:pt-0`}>
         {/* Hero Section */}
-        <section className="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl font-bold mb-4">고객센터</h1>
-          <p className="text-xl text-blue-100">
+        <section className="bg-gradient-to-r from-blue-600 to-blue-800 text-white pt-24 pb-12 md:py-16">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-3 md:space-y-4">
+          <h1 className="text-3xl font-bold md:text-4xl">고객센터</h1>
+          <p className="text-sm text-blue-100 md:text-xl">
             궁금한 점이 있으시면 언제든지 문의해주세요. 빠르고 정확한 답변을 드리겠습니다.
           </p>
         </div>
         </section>
 
         {/* Tab Navigation */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-center mb-8">
-          <div className="bg-gray-100 rounded-lg p-1 flex">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        <div className="flex justify-center mb-6 md:mb-8">
+          <div className="bg-gray-100 rounded-xl p-1 flex gap-1">
             <button
               onClick={() => handleTabChange('faq')}
-              className={`px-6 py-3 rounded-md font-medium transition-colors whitespace-nowrap cursor-pointer ${
+              className={`px-4 py-2 md:px-6 md:py-3 rounded-lg font-medium transition-colors whitespace-nowrap cursor-pointer text-sm md:text-base ${
                 activeTab === 'faq'
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
@@ -239,23 +247,23 @@ export default function CustomerSupport() {
         {/* FAQ Section */}
         {activeTab === 'faq' && (
           <div className="max-w-4xl mx-auto">
-            <div className="space-y-8">
+            <div className="space-y-6 md:space-y-8">
               {faqs.map((category, categoryIndex) => (
-                <div key={categoryIndex} className="bg-white rounded-lg shadow-sm border border-gray-200">
-                  <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900">{category.category}</h3>
+                <div key={categoryIndex} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-3 md:px-6 md:py-4 border-b border-gray-200">
+                    <h3 className="text-base font-semibold text-gray-900 md:text-lg">{category.category}</h3>
                   </div>
                   <div className="divide-y divide-gray-200">
                     {category.items.map((faq, faqIndex) => (
-                      <div key={faqIndex} className="p-6">
-                        <h4 className="text-md font-medium text-gray-900 mb-3 flex items-start">
-                          <span className="bg-blue-100 text-blue-600 text-xs px-2 py-1 rounded-full mr-3 mt-0.5 flex-shrink-0">
+                      <div key={faqIndex} className="p-4 md:p-6">
+                        <h4 className="text-sm font-medium text-gray-900 mb-3 flex items-start md:text-base">
+                          <span className="bg-blue-100 text-blue-600 text-[11px] px-2 py-1 rounded-full mr-3 mt-0.5 flex-shrink-0">
                             Q
                           </span>
                           {faq.question}
                         </h4>
-                        <div className="ml-8">
-                          <p className="text-gray-600 leading-relaxed">{faq.answer}</p>
+                        <div className="ml-7 md:ml-8">
+                          <p className="text-sm text-gray-600 leading-relaxed md:text-base">{faq.answer}</p>
                         </div>
                       </div>
                     ))}
@@ -269,16 +277,16 @@ export default function CustomerSupport() {
         {/* Contact Form Section */}
         {activeTab === 'contact' && (
           <div className="max-w-2xl mx-auto">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">문의하기</h2>
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8">
+              <div className="text-center mb-6 md:mb-8">
+                <h2 className="text-xl font-bold text-gray-900 md:text-2xl md:mb-2">문의하기</h2>
                 <p className="text-gray-600">
                   궁금한 점이나 문제가 있으시면 아래 양식을 작성해 주세요. 빠른 시일 내에 답변드리겠습니다.
                 </p>
               </div>
 
-              <form id="customer-inquiry" data-readdy-form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <form id="customer-inquiry" data-readdy-form onSubmit={handleSubmit} className="space-y-5 md:space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
                   <div>
                     <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
                       이름 *
@@ -348,7 +356,7 @@ export default function CustomerSupport() {
                   />
                 </div>
 
-                <div>
+                <div className="space-y-1">
                   <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">
                     문의 내용 *
                   </label>
@@ -368,13 +376,18 @@ export default function CustomerSupport() {
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 font-medium transition-colors whitespace-nowrap cursor-pointer disabled:bg-blue-300 disabled:cursor-not-allowed"
-                >
-                  {submitting ? '전송 중...' : '문의 보내기'}
-                </button>
+                <div className="space-y-3">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 font-medium transition-colors whitespace-nowrap cursor-pointer disabled:bg-blue-300 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? '전송 중...' : '문의 보내기'}
+                  </button>
+                  <p className="text-xs text-gray-400 text-center">
+                    접수하신 문의는 영업일 기준 24시간 이내에 답변드리겠습니다.
+                  </p>
+                </div>
               </form>
             </div>
           </div>
@@ -382,45 +395,58 @@ export default function CustomerSupport() {
       </div>
 
       {/* Contact Info */}
-      <section className="bg-gray-50 py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">연락처 정보</h2>
-            <p className="text-lg text-gray-600">다양한 방법으로 문의하실 수 있습니다</p>
+      <section className="bg-gray-50 py-12 md:py-16">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 md:space-y-12">
+          <div className="text-center md:text-left">
+            <h2 className="text-2xl font-bold text-gray-900 md:text-3xl">연락처 정보</h2>
+            <p className="mt-2 text-sm text-gray-600 md:text-lg">다양한 방법으로 문의하실 수 있습니다</p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i className="ri-mail-line text-blue-600 text-2xl"></i>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3 md:gap-8">
+            <div className="flex items-start gap-4 rounded-2xl bg-white p-5 shadow-sm md:flex-col md:items-center md:text-center">
+              <div className="w-14 h-14 md:w-16 md:h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-xl md:text-2xl">
+                <i className="ri-mail-line" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">이메일 문의</h3>
-              <p className="text-gray-600 mb-2">copydrum@hanmail.net</p>
-              <p className="text-sm text-gray-500">24시간 접수, 1일 내 답변</p>
+              <div className="md:space-y-2">
+                <h3 className="text-base font-semibold text-gray-900 md:text-lg">이메일 문의</h3>
+                <p className="text-sm text-gray-600">copydrum@hanmail.net</p>
+                <p className="text-xs text-gray-500 md:text-sm">24시간 접수, 1일 내 답변</p>
+              </div>
             </div>
             
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i className="ri-time-line text-blue-600 text-2xl"></i>
+            <div className="flex items-start gap-4 rounded-2xl bg-white p-5 shadow-sm md:flex-col md:items-center md:text-center">
+              <div className="w-14 h-14 md:w-16 md:h-16 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-600 text-xl md:text-2xl">
+                <i className="ri-kakao-talk-fill" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">운영시간</h3>
-              <p className="text-gray-600 mb-2">평일 09:00 - 17:00</p>
-              <p className="text-sm text-gray-500">주말 및 공휴일 휴무</p>
+              <div className="md:space-y-2">
+                <h3 className="text-base font-semibold text-gray-900 md:text-lg">카카오톡 상담</h3>
+                <p className="text-sm text-gray-600">실시간 채팅 상담을 이용할 수 있습니다.</p>
+                <button
+                  onClick={handleOpenKakaoChannel}
+                  className="mt-3 inline-flex items-center px-4 py-2 border border-transparent text-xs font-semibold rounded-lg text-gray-900 bg-yellow-400 hover:bg-yellow-500 shadow-sm transition-colors md:text-sm"
+                >
+                  카카오톡 상담 바로가기
+                </button>
+              </div>
             </div>
             
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i className="ri-chat-3-line text-blue-600 text-2xl"></i>
+            <div className="flex items-start gap-4 rounded-2xl bg-white p-5 shadow-sm md:flex-col md:items-center md:text-center">
+              <div className="w-14 h-14 md:w-16 md:h-16 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 text-xl md:text-2xl">
+                <i className="ri-time-line" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">실시간 채팅</h3>
-              <p className="text-gray-600 mb-2">웹사이트 우하단 채팅버튼</p>
-              <p className="text-sm text-gray-500">운영시간 내 실시간 상담</p>
+              <div className="md:space-y-2">
+                <h3 className="text-base font-semibold text-gray-900 md:text-lg">운영 시간</h3>
+                <p className="text-sm text-gray-600">평일 09:00 - 17:00</p>
+                <p className="text-xs text-gray-500 md:text-sm">주말 및 공휴일 휴무</p>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <Footer />
+      <div className="hidden md:block">
+        <Footer />
+      </div>
       </div>
     </div>
   );

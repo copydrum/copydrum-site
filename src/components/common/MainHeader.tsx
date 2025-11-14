@@ -1,27 +1,36 @@
-import { useState, type KeyboardEvent, type ChangeEvent } from 'react';
+import { useMemo, useState, type KeyboardEvent, type ChangeEvent } from 'react';
 import { createSearchParams, useNavigate } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
+import { useTranslation } from 'react-i18next';
+import LanguageSelector from './LanguageSelector';
 
 interface MainHeaderProps {
   user?: User | null;
 }
 
-interface NavItem {
-  label: string;
-  href: string;
-}
-
-const navItems: NavItem[] = [
-  { label: '악보카테고리', href: '/categories' },
-  { label: '무료악보', href: '/free-sheets' },
-  { label: '악보모음집', href: '/collections' },
-  { label: '이벤트 할인악보', href: '/event-sale' },
-  { label: '주문제작', href: '/custom-order' },
-];
-
 export default function MainHeader({ user }: MainHeaderProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
+  const { t } = useTranslation();
+
+  const navItems = useMemo(
+    () => [
+      { label: t('nav.categories'), href: '/categories' },
+      { label: t('nav.freeSheets'), href: '/free-sheets' },
+      { label: t('nav.collections'), href: '/collections' },
+      { label: t('nav.eventSale'), href: '/event-sale' },
+      { label: t('nav.customOrder'), href: '/custom-order' },
+    ],
+    [t],
+  );
+
+  const containerClassName = useMemo(() => {
+    const classes = ['hidden', 'md:block', 'bg-blue-700'];
+    if (user) {
+      classes.push('md:mr-64');
+    }
+    return classes.join(' ');
+  }, [user]);
 
   const handleSearch = () => {
     const trimmed = searchQuery.trim();
@@ -43,10 +52,13 @@ export default function MainHeader({ user }: MainHeaderProps) {
   };
 
   return (
-    <div className={`bg-blue-700 ${user ? 'mr-64' : ''}`} style={{ height: '156px' }}>
-      <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto h-full flex flex-col justify-between">
+    <div className={containerClassName}>
+      <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex flex-col gap-4 py-4">
+        <div className="flex justify-end">
+          <LanguageSelector />
+        </div>
         {/* Logo, Search & Cart Row */}
-        <div className="flex items-center relative py-4">
+        <div className="flex items-center relative">
           {/* Logo */}
           <div className="flex items-center -ml-4 absolute left-0">
             <img
@@ -69,7 +81,7 @@ export default function MainHeader({ user }: MainHeaderProps) {
             <div className="relative">
               <input
                 type="text"
-                placeholder="곡명, 아티스트, 장르로 검색..."
+              placeholder={t('search.placeholder')}
                 value={searchQuery}
                 onChange={handleChange}
                 onKeyDown={handleKeyPress}
@@ -86,7 +98,7 @@ export default function MainHeader({ user }: MainHeaderProps) {
         </div>
 
         {/* Navigation Menu */}
-        <nav className="flex items-center justify-center space-x-8 pb-4">
+        <nav className="flex items-center justify-center space-x-8 pb-2">
           {navItems.map((item) => (
             <a
               key={item.href}

@@ -33,11 +33,19 @@ export const requestSignedDownloadUrl = async ({
   orderItemId: string;
   accessToken: string;
 }): Promise<string> => {
-  const response = await fetch('/functions/v1/download', {
+  const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('다운로드 설정이 잘못되었습니다. 관리자에게 문의해주세요.');
+  }
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/download`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
+      apikey: supabaseAnonKey,
     },
     body: JSON.stringify({ orderId, orderItemId }),
   });

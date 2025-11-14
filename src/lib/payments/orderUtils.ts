@@ -96,7 +96,7 @@ export const createOrderWithItems = async ({
     const orderItems = items.map((item) => ({
       order_id: orderId,
       drum_sheet_id: item.sheetId,
-      sheet_title: item.title ?? null,
+      sheet_title: item.sheetTitle ?? '제목 미확인',
       price: Math.max(0, Math.round(item.price)),
     }));
 

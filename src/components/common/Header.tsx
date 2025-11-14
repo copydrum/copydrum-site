@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
+import LanguageSelector from './LanguageSelector';
 
 interface HeaderProps {
   user?: User | null;
 }
 
 export default function Header({ user: propUser }: HeaderProps) {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [user, setUser] = useState<User | null>(propUser || null);
   const [customOrderCategoryId, setCustomOrderCategoryId] = useState<string | null>(null);
@@ -92,49 +95,60 @@ export default function Header({ user: propUser }: HeaderProps) {
     return location.pathname === '/custom-order';
   };
 
+  const containerClassName = `hidden md:block bg-blue-700${user ? ' md:mr-64' : ''}`;
+
   return (
-    <div className={`bg-blue-700 ${user ? 'mr-64' : ''}`}>
+    <div className={containerClassName}>
       <div className="mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+        {/* Top Utility Row */}
+        <div className="flex justify-end pt-4">
+          <LanguageSelector />
+        </div>
+
         {/* Logo, Search Row */}
-        <div className="flex items-center justify-between py-4">
+        <div className="flex items-center justify-between gap-6 py-4">
           {/* Logo */}
-          <div className="flex items-center">
-            <img 
-              src="/logo.png" 
-              alt="카피드럼" 
-              className="h-12 w-auto mr-3 cursor-pointer"
-              onClick={() => navigate('/')}
-            />
-            <h1 
-              className="text-2xl font-bold text-white cursor-pointer"
-              style={{ fontFamily: '"Noto Sans KR", "Malgun Gothic", sans-serif' }}
-              onClick={() => navigate('/')}
-            >
-              카피드럼
-            </h1>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center">
+              <img 
+                src="/logo.png" 
+                alt="카피드럼" 
+                className="h-12 w-auto mr-3 cursor-pointer"
+                onClick={() => navigate('/')}
+              />
+              <h1 
+                className="text-2xl font-bold text-white cursor-pointer"
+                style={{ fontFamily: '"Noto Sans KR", "Malgun Gothic", sans-serif' }}
+                onClick={() => navigate('/')}
+              >
+                카피드럼
+              </h1>
+            </div>
           </div>
 
           {/* Search Bar */}
-          <div className="flex-1 max-w-2xl mx-8">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="곡명, 아티스트, 장르로 검색..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    handleSearch();
-                  }
-                }}
-                className="w-full px-6 py-3 text-base border-0 rounded-full focus:outline-none pr-12 bg-blue-50 placeholder-gray-400 text-gray-900"
-              />
-              <button 
-                onClick={handleSearch}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-blue-700 cursor-pointer transition-colors duration-200"
-              >
-                <i className="ri-search-line text-xl"></i>
-              </button>
+          <div className="flex flex-1 justify-end">
+            <div className="flex-1 max-w-2xl">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder={t('search.placeholder')}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSearch();
+                    }
+                  }}
+                  className="w-full px-6 py-3 text-base border-0 rounded-full focus:outline-none pr-12 bg-blue-50 placeholder-gray-400 text-gray-900"
+                />
+                <button 
+                  onClick={handleSearch}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-blue-700 cursor-pointer transition-colors duration-200"
+                >
+                  <i className="ri-search-line text-xl"></i>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -147,7 +161,7 @@ export default function Header({ user: propUser }: HeaderProps) {
               isActive('/') ? 'text-white' : 'text-white hover:text-blue-200'
             }`}
           >
-            홈
+            {t('nav.home')}
           </a>
           <a 
             href="/categories" 
@@ -155,7 +169,7 @@ export default function Header({ user: propUser }: HeaderProps) {
               isActive('/categories') ? 'text-white' : 'text-white hover:text-blue-200'
             }`}
           >
-            악보 카테고리
+            {t('nav.categories')}
           </a>
           <a 
             href={customOrderLink} 
@@ -163,7 +177,7 @@ export default function Header({ user: propUser }: HeaderProps) {
               isCustomOrderActive() ? 'text-white' : 'text-white hover:text-blue-200'
             }`}
           >
-            주문제작
+            {t('nav.customOrder')}
           </a>
         </nav>
       </div>

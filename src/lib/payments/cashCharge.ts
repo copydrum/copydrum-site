@@ -5,7 +5,8 @@ import {
   submitInicisPaymentForm,
 } from './inicis';
 import type { PaymentIntentResponse, PaymentStatus, VirtualAccountInfo } from './types';
-import { createPayactionVirtualAccount } from './payaction';
+import { updateOrderPaymentStatus } from './paymentService';
+import { supabase } from '../supabase';
 
 type SupportedChargeMethod = 'card' | 'bank_transfer';
 
@@ -46,6 +47,8 @@ export const startCashCharge = async ({
   depositorName,
   returnUrl,
 }: StartCashChargeParams): Promise<StartCashChargeResult> => {
+  const trimmedDepositorName = depositorName?.trim();
+
   const { orderId, orderNumber } = await createPendingOrder({
     userId,
     amount,
@@ -59,30 +62,35 @@ export const startCashCharge = async ({
   });
 
   if (paymentMethod === 'bank_transfer') {
-    const resolvedDepositor =
-      depositorName ??
-      (orderNumber ? `CD${orderNumber.slice(-6)}` : undefined);
+    // 페이액션 연동 제거, 간단한 무통장 입금 처리
+    // 입금자명 저장
+    if (trimmedDepositorName) {
+      await updateOrderPaymentStatus(orderId, 'awaiting_deposit', {
+        depositorName: trimmedDepositorName,
+      });
+    }
 
-    const intent = await createPayactionVirtualAccount({
-      userId,
+    // 고정 계좌 정보 반환
+    const bankInfo: VirtualAccountInfo = {
+      bankName: '농협',
+      accountNumber: '106-02-303742',
+      accountHolder: '강만수',
       amount,
-      description,
-      method: 'bank_transfer',
-      orderId,
-      bonusAmount,
-      depositorName: resolvedDepositor,
-    });
+      depositor: '강만수',
+      expectedDepositor: trimmedDepositorName ?? undefined,
+      expiresAt: null, // 무기한
+    };
 
     return {
       orderId,
       orderNumber,
       amount,
       paymentMethod,
-      paymentIntent: intent,
-      virtualAccountInfo: intent.virtualAccountInfo ?? null,
+      virtualAccountInfo: bankInfo,
     };
   }
 
+  // 카드 결제는 현재 비활성화되어 있지만 기존 로직 유지
   const intent = await createInicisPaymentIntent({
     userId,
     amount,
