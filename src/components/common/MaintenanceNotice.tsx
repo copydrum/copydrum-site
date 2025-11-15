@@ -20,7 +20,7 @@ export default function MaintenanceNotice() {
           'CopyDrum is temporarily unavailable while we finish a major renewal to make browsing and purchasing even easier.',
           'We sincerely apologize for the inconvenience and appreciate your patience.',
         ],
-        contact: 'For urgent inquiries, please contact support@copydrum.com.',
+        contact: 'For urgent inquiries, please contact copydrum@hanmail.net.',
         footer: 'We will be back online as soon as the renewal is complete.',
       };
     }
@@ -32,7 +32,7 @@ export default function MaintenanceNotice() {
         '카피드럼은 더 편리한 이용 환경을 제공해 드리기 위해 현재 리뉴얼 작업을 진행 중입니다.',
         '이 기간 동안 서비스 이용이 제한되는 점 진심으로 양해 부탁드립니다.',
       ],
-      contact: '긴급 문의: support@copydrum.com / 고객센터를 통해 연락해 주세요.',
+      contact: '긴급 문의: copydrum@hanmail.net / 고객센터를 통해 연락해 주세요.',
       footer: '리뉴얼 완료 후 즉시 이용 가능하도록 준비하겠습니다.',
     };
   }, [isEnglish]);
