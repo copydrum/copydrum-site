@@ -12,12 +12,16 @@ import MobileBottomNav from './components/mobile/MobileBottomNav';
 import MobileSearchOverlay from './components/mobile/MobileSearchOverlay';
 import MobileCashChargeModal from './components/mobile/MobileCashChargeModal';
 import HreflangTags from './components/common/HreflangTags';
+import MaintenanceNotice from './components/common/MaintenanceNotice';
+
+console.log('VITE_MAINTENANCE_MODE =', import.meta.env.VITE_MAINTENANCE_MODE);
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isCashModalOpen, setIsCashModalOpen] = useState(false);
+  const isMaintenanceMode = import.meta.env.VITE_MAINTENANCE_MODE === 'true';
 
   useEffect(() => {
     // URL 해시에서 토큰 확인
@@ -73,6 +77,10 @@ function App() {
       window.removeEventListener(CASH_CHARGE_MODAL_EVENT, handleOpenCashCharge);
     };
   }, []);
+
+  if (isMaintenanceMode) {
+    return <MaintenanceNotice />;
+  }
 
   return (
     <BrowserRouter basename={__BASE_PATH__}>
