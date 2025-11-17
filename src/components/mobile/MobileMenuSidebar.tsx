@@ -172,7 +172,7 @@ export default function MobileMenuSidebar({
           })}
         </nav>
 
-        <div className="border-t border-gray-100 px-5 py-4 space-y-2">
+        <div className="border-t border-gray-100 px-5 py-4 pb-24 space-y-2">
           {user ? (
             <>
               <button
