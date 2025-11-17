@@ -16,7 +16,9 @@ export default function Login() {
 
   const handleKakaoLogin = async () => {
     try {
-      const redirectUrl = `${window.location.origin}/auth/callback`;
+      // 현재 호스트를 유지하여 리다이렉트
+      const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://copydrum.com';
+      const redirectUrl = `${currentOrigin}/auth/callback`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'kakao',
         options: {
@@ -36,7 +38,9 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     try {
-      const redirectUrl = `${window.location.origin}/auth/callback`;
+      // 현재 호스트를 유지하여 리다이렉트
+      const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://copydrum.com';
+      const redirectUrl = `${currentOrigin}/auth/callback`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -101,8 +105,12 @@ export default function Login() {
           }
         }
 
-        // 로그인 성공 시 홈페이지로 이동
-        navigate('/');
+        // 로그인 성공 시 현재 호스트의 홈페이지로 이동 (호스트 유지)
+        if (typeof window !== 'undefined') {
+          window.location.href = '/';
+        } else {
+          navigate('/');
+        }
       }
     } catch (err: any) {
       console.error('로그인 오류:', err);

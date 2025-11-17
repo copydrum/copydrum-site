@@ -22,7 +22,9 @@ export default function Register() {
 
   const handleKakaoLogin = async () => {
     try {
-      const redirectUrl = `${window.location.origin}/auth/callback`;
+      // 현재 호스트를 유지하여 리다이렉트
+      const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://copydrum.com';
+      const redirectUrl = `${currentOrigin}/auth/callback`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'kakao',
         options: {
@@ -42,7 +44,9 @@ export default function Register() {
 
   const handleGoogleLogin = async () => {
     try {
-      const redirectUrl = `${window.location.origin}/auth/callback`;
+      // 현재 호스트를 유지하여 리다이렉트
+      const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://copydrum.com';
+      const redirectUrl = `${currentOrigin}/auth/callback`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

@@ -86,8 +86,12 @@ export default function AuthCallback() {
               }
             }
 
-            // 로그인 성공 - 홈으로 이동
-            navigate('/');
+            // 로그인 성공 - 현재 호스트의 홈으로 이동 (호스트 유지)
+            if (typeof window !== 'undefined') {
+              window.location.href = '/';
+            } else {
+              navigate('/');
+            }
           }
         } else {
           // 토큰이 없으면 로그인 페이지로
