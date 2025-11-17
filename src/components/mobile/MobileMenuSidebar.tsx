@@ -1,9 +1,10 @@
 import type { User } from '@supabase/supabase-js';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import { googleAuth } from '../../lib/google';
+import { formatPrice } from '../../lib/priceFormatter';
 
 interface MobileMenuSidebarProps {
   isOpen: boolean;
@@ -32,7 +33,8 @@ export default function MobileMenuSidebar({
 }: MobileMenuSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const [userCash, setUserCash] = useState(0);
 
   const greeting = useMemo(() => {
     if (!user) {
@@ -44,6 +46,43 @@ export default function MobileMenuSidebar({
       t('site.name');
     return t('mobile.menu.greeting', { name });
   }, [t, user]);
+
+  const formatCurrency = useCallback(
+    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
+    [i18n.language],
+  );
+
+  const loadUserCash = useCallback(async () => {
+    if (!user) {
+      setUserCash(0);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('credits')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        console.error('모바일 캐쉬 조회 오류:', error);
+        setUserCash(0);
+        return;
+      }
+
+      setUserCash(data?.credits || 0);
+    } catch (error) {
+      console.error('모바일 캐쉬 로드 오류:', error);
+      setUserCash(0);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (isOpen && user) {
+      void loadUserCash();
+    }
+  }, [isOpen, user, loadUserCash]);
 
   const handleNavigate = (href: string) => {
     navigate(href);
@@ -83,9 +122,20 @@ export default function MobileMenuSidebar({
         aria-modal="true"
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-semibold text-gray-900">{t('site.name')}</p>
-            <p className="text-xs text-gray-500 mt-1">{greeting}</p>
+            {user ? (
+              <>
+                <p className="text-xs text-gray-500 mt-1">{greeting}</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <i className="ri-wallet-3-line text-blue-600"></i>
+                  <span className="text-xs text-gray-600">보유 악보캐쉬</span>
+                  <span className="text-sm font-bold text-blue-600">{formatCurrency(userCash)}</span>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-gray-500 mt-1">{greeting}</p>
+            )}
           </div>
           <button
             type="button"
