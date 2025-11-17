@@ -15,172 +15,43 @@ export default function ResetPassword() {
   const [checkingToken, setCheckingToken] = useState(true);
 
   useEffect(() => {
-    const checkTokenAndSetSession = async () => {
+    const checkSession = async () => {
       try {
-        // URL에서 파라미터 확인 (hash와 search params 모두 확인)
-        // window.location을 직접 사용하여 React Router의 영향을 받지 않도록 함
-        const fullUrl = window.location.href;
-        const urlObj = new URL(fullUrl);
-        const hashParams = new URLSearchParams(urlObj.hash.substring(1));
-        const searchParams = new URLSearchParams(urlObj.search);
+        // Supabase 클라이언트가 URL 해시에서 토큰을 읽어 세션을 저장해두었다면
+        // 여기서 바로 확인할 수 있음
+        const { data, error } = await supabase.auth.getSession();
         
-        console.log('reset-password 페이지 로드:', {
-          fullUrl: fullUrl.substring(0, 200), // URL이 길 수 있으므로 처음 200자만
-          hash: urlObj.hash,
-          search: urlObj.search,
-          pathname: urlObj.pathname,
+        console.log('reset-password 세션 확인:', {
+          hasSession: !!data?.session,
+          error,
+          fullUrl: window.location.href.substring(0, 200),
         });
         
-        // 먼저 hash fragment에 토큰이 있는지 확인 (Supabase가 직접 리디렉션한 경우)
-        const accessTokenFromHash = hashParams.get('access_token');
-        const refreshTokenFromHash = hashParams.get('refresh_token');
-        const typeFromHash = hashParams.get('type');
-        
-        console.log('Hash fragment 확인:', {
-          hasAccessToken: !!accessTokenFromHash,
-          hasRefreshToken: !!refreshTokenFromHash,
-          type: typeFromHash,
-        });
-        
-        // confirmation_url 쿼리 파라미터 확인 (이메일 prefetch 문제 해결을 위한 사용자 정의 링크)
-        const confirmationUrl = searchParams.get('confirmation_url');
-        
-        console.log('confirmation_url 확인:', {
-          hasConfirmationUrl: !!confirmationUrl,
-          confirmationUrl: confirmationUrl ? confirmationUrl.substring(0, 100) : null,
-        });
-        
-        if (confirmationUrl && !accessTokenFromHash) {
-          // confirmation_url이 있고, 아직 토큰을 받지 않은 경우
-          console.log('confirmation_url 감지:', confirmationUrl);
-          try {
-            const decodedUrl = decodeURIComponent(confirmationUrl);
-            const url = new URL(decodedUrl);
-            
-            // confirmation_url에서 토큰 추출
-            const token = url.searchParams.get('token');
-            const type = url.searchParams.get('type');
-            
-            console.log('토큰 추출:', { hasToken: !!token, type });
-            
-            if (token && type === 'recovery') {
-              // 토큰이 있으면 Supabase verifyOtp API를 사용하여 직접 검증
-              console.log('verifyOtp로 토큰 검증 시도...');
-              const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
-                token_hash: token,
-                type: 'recovery',
-              });
-              
-              if (verifyError) {
-                console.error('OTP 검증 오류:', verifyError);
-                if (verifyError.message.includes('expired') || verifyError.message.includes('invalid')) {
-                  setError('비밀번호 재설정 링크가 만료되었거나 유효하지 않습니다. 새로운 재설정 링크를 요청해주세요.');
-                } else {
-                  setError('비밀번호 재설정 링크 확인 중 오류가 발생했습니다. 다시 시도해주세요.');
-                }
-                setCheckingToken(false);
-                return;
-              }
-              
-              if (verifyData.session) {
-                console.log('세션 설정 성공 (verifyOtp)');
-                setIsValidToken(true);
-                setCheckingToken(false);
-                return;
-              } else {
-                console.error('세션 데이터가 없음:', verifyData);
-                setError('세션을 설정할 수 없습니다. 새로운 재설정 링크를 요청해주세요.');
-                setCheckingToken(false);
-                return;
-              }
-            }
-            
-            // 토큰이 없거나 verifyOtp가 실패한 경우, redirect_to를 설정하고 Supabase로 리디렉션
-            const currentOrigin = window.location.origin;
-            const resetPasswordPath = `${currentOrigin}/auth/reset-password`;
-            url.searchParams.set('redirect_to', resetPasswordPath);
-            
-            console.log('Supabase로 리디렉션 (fallback):', url.toString());
-            window.location.href = url.toString();
-            return;
-          } catch (err) {
-            console.error('confirmation_url 처리 오류:', err);
-            // 파싱 실패 시 원본 URL로 리디렉션
-            window.location.href = decodeURIComponent(confirmationUrl);
-            return;
-          }
-        }
-        
-        // 오류 확인 (토큰 확인 전에 먼저 처리)
-        const hashError = hashParams.get('error');
-        const searchError = searchParams.get('error');
-        const errorDescription = hashParams.get('error_description') || searchParams.get('error_description');
-        const errorCode = hashParams.get('error_code') || searchParams.get('error_code');
-        
-        if (hashError || searchError) {
-          console.log('에러 감지:', { hashError, searchError, errorCode, errorDescription });
-          if (hashError === 'access_denied' || searchError === 'access_denied') {
-            if (errorCode === 'otp_expired' || errorDescription?.includes('otp_expired') || errorDescription?.includes('expired') || errorDescription?.includes('invalid')) {
-              setError('비밀번호 재설정 링크가 만료되었습니다. 새로운 재설정 링크를 요청해주세요.');
-            } else {
-              setError('비밀번호 재설정 링크가 유효하지 않습니다. 새로운 재설정 링크를 요청해주세요.');
-            }
-          } else {
-            setError('비밀번호 재설정 중 오류가 발생했습니다. 다시 시도해주세요.');
-          }
-          setCheckingToken(false);
+        if (error) {
+          console.error('세션 조회 오류:', error);
+          setError('비밀번호 재설정 링크 확인 중 오류가 발생했습니다. 다시 시도해주세요.');
+          setIsValidToken(false);
           return;
         }
-
-        // 토큰 확인
-        const accessToken = hashParams.get('access_token') || searchParams.get('access_token');
-        const refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token');
-        const type = hashParams.get('type') || searchParams.get('type');
-
-        console.log('토큰 확인:', {
-          hasAccessToken: !!accessToken,
-          hasRefreshToken: !!refreshToken,
-          type,
-          hash: window.location.hash.substring(0, 100),
-        });
-
-        if (!accessToken || type !== 'recovery') {
-          console.log('토큰이 없거나 타입이 맞지 않음');
-          setError('유효하지 않은 비밀번호 재설정 링크입니다. 새로운 재설정 링크를 요청해주세요.');
-          setCheckingToken(false);
-          return;
-        }
-
-        // 세션 설정
-        console.log('세션 설정 시도...');
-        const { data, error: sessionError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken || '',
-        });
-
-        if (sessionError) {
-          console.error('세션 설정 오류:', sessionError);
-          setError('비밀번호 재설정 링크가 만료되었거나 유효하지 않습니다. 새로운 재설정 링크를 요청해주세요.');
-          setCheckingToken(false);
-          return;
-        }
-
+        
         if (data.session) {
-          console.log('세션 설정 성공');
+          // 세션이 있다는 것은: 방금 전 recovery 링크를 통해 로그인된 상태
           setIsValidToken(true);
         } else {
-          console.error('세션 데이터가 없음:', data);
-          setError('세션을 설정할 수 없습니다. 새로운 재설정 링크를 요청해주세요.');
+          // 세션이 없으면: 만료되었거나 이미 사용된 링크, 혹은 직접 URL을 친 경우
+          setError('유효하지 않은 비밀번호 재설정 링크입니다. 새로운 재설정 링크를 요청해주세요.');
+          setIsValidToken(false);
         }
       } catch (err) {
-        console.error('토큰 확인 오류:', err);
+        console.error('세션 확인 중 예외:', err);
         setError('비밀번호 재설정 링크 확인 중 오류가 발생했습니다.');
+        setIsValidToken(false);
       } finally {
         setCheckingToken(false);
       }
     };
-
-    checkTokenAndSetSession();
+    
+    checkSession();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
