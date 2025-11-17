@@ -53,13 +53,22 @@
    - `https://www.copydrum.com/auth/callback`
    - (개발 환경) `http://localhost:3000/auth/callback`
 
-## 3. 카카오 개발자 콘솔 Redirect URI 설정
+## 3. 카카오 개발자 콘솔 Redirect URI 설정 (중요!)
 
-카카오 개발자 콘솔에서 Supabase의 Redirect URI도 등록해야 합니다:
+**⚠️ KOE205 오류 해결을 위해 반드시 설정해야 합니다!**
+
+카카오 개발자 콘솔에서 **Supabase의 Redirect URI**를 등록해야 합니다:
 
 1. 제품 설정 > 카카오 로그인 > Redirect URI
-2. Supabase 프로젝트의 Redirect URI 추가:
+2. **Supabase 프로젝트의 Redirect URI 추가** (필수):
    - `https://[YOUR_SUPABASE_PROJECT_ID].supabase.co/auth/v1/callback`
+   - 예시: `https://tkbyemysfmbhqwdvefsi.supabase.co/auth/v1/callback`
+   
+   **⚠️ 주의**: Supabase 프로젝트 ID는 Supabase 대시보드 > Settings > API에서 확인할 수 있습니다.
+
+3. **추가로 등록할 URI들**:
+   - `https://copydrum.com/auth/callback` (선택사항, 직접 콜백 사용 시)
+   - `https://www.copydrum.com/auth/callback` (선택사항)
 
 ## 4. 테스트
 
@@ -70,13 +79,34 @@
 
 ## 문제 해결
 
+### "잘못된 요청 (KOE205)" 오류 ⚠️
+**가장 흔한 오류입니다!**
+
+이 오류는 카카오 개발자 콘솔에 **Supabase의 Redirect URI가 등록되지 않았을 때** 발생합니다.
+
+**해결 방법:**
+1. Supabase 대시보드 > Settings > API에서 프로젝트 URL 확인
+   - 예: `https://tkbyemysfmbhqwdvefsi.supabase.co`
+2. 카카오 개발자 콘솔 > 제품 설정 > 카카오 로그인 > Redirect URI에 추가:
+   - `https://[YOUR_SUPABASE_PROJECT_ID].supabase.co/auth/v1/callback`
+   - 정확한 형식: `https://프로젝트ID.supabase.co/auth/v1/callback`
+3. 저장 후 몇 분 기다린 후 다시 시도
+
+**확인 사항:**
+- URI 끝에 `/auth/v1/callback`이 정확히 포함되어 있는지
+- `https://`로 시작하는지
+- 슬래시(`/`)가 올바르게 포함되어 있는지
+- 프로젝트 ID가 정확한지
+
 ### "redirect_uri_mismatch" 오류
 - 카카오 개발자 콘솔의 Redirect URI와 Supabase의 Redirect URL이 일치하는지 확인
 - 모든 도메인 변형을 등록했는지 확인 (www 포함)
+- **Supabase의 Redirect URI가 등록되어 있는지 확인** (가장 중요!)
 
 ### "invalid_client" 오류
 - REST API 키와 Client Secret이 올바른지 확인
 - Supabase에 입력한 값이 카카오 개발자 콘솔의 값과 일치하는지 확인
+- Client Secret이 생성되었는지 확인 (카카오 개발자 콘솔 > 제품 설정 > 카카오 로그인 > 보안)
 
 ### 로그인 후 프로필이 생성되지 않음
 - `src/pages/auth/callback.tsx`의 프로필 생성 로직 확인
