@@ -256,7 +256,7 @@ export default function Register() {
                     />
                     <label htmlFor="agreeTerms" className="ml-2 block text-sm text-gray-900 cursor-pointer">
                       <span className="text-red-500">*</span> 이용약관에 동의합니다{' '}
-                      <a href="#" className="text-blue-600 hover:text-blue-500 underline">
+                      <a href="/guide#terms" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-500 underline">
                         (보기)
                       </a>
                     </label>
@@ -273,7 +273,7 @@ export default function Register() {
                     />
                     <label htmlFor="agreePrivacy" className="ml-2 block text-sm text-gray-900 cursor-pointer">
                       <span className="text-red-500">*</span> 개인정보 수집 및 이용에 동의합니다{' '}
-                      <a href="#" className="text-blue-600 hover:text-blue-500 underline">
+                      <a href="/guide#privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-500 underline">
                         (보기)
                       </a>
                     </label>
