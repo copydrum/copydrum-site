@@ -159,89 +159,23 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     setLoginError('');
 
     try {
-      const { userInfo } = await googleAuth.login();
+      const redirectUrl = `${window.location.origin}/auth/callback`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+        },
+      });
       
-      // 구글 사용자 정보로 Supabase에 로그인/회원가입
-      const googleEmail = userInfo.email;
-      const googleName = userInfo.name;
-      const googleId = userInfo.id;
-
-      if (!googleEmail) {
-        throw new Error('구글 계정에서 이메일 정보를 가져올 수 없습니다.');
+      if (error) {
+        console.error('구글 로그인 오류:', error);
+        setLoginError('구글 로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        setGoogleLoading(false);
       }
-
-      // 기존 사용자 확인
-      const { data: existingUser } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('email', googleEmail)
-        .single();
-
-      if (existingUser) {
-        // 기존 사용자 - 구글 ID 업데이트
-        await supabase
-          .from('profiles')
-          .update({ 
-            google_id: googleId,
-            provider: 'google'
-          })
-          .eq('email', googleEmail);
-      } else {
-        // 새 사용자 - 프로필 생성
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            email: googleEmail,
-            name: googleName || '구글 사용자',
-            google_id: googleId,
-            provider: 'google'
-          });
-
-        if (profileError) {
-          console.error('프로필 생성 오류:', profileError);
-        }
-      }
-
-      // Supabase Auth에 사용자 정보 저장 (임시 비밀번호 사용)
-      const tempPassword = `google_${googleId}_${Date.now()}`;
-      
-      try {
-        // 기존 계정으로 로그인 시도
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: googleEmail,
-          password: tempPassword,
-        });
-
-        if (signInError) {
-          // 계정이 없으면 생성
-          const { error: signUpError } = await supabase.auth.signUp({
-            email: googleEmail,
-            password: tempPassword,
-            options: {
-              data: {
-                name: googleName || '구글 사용자',
-                google_id: googleId,
-                provider: 'google'
-              }
-            }
-          });
-
-          if (signUpError) {
-            throw signUpError;
-          }
-        }
-      } catch (authError) {
-        console.error('Supabase Auth 오류:', authError);
-        // Auth 오류가 있어도 구글 로그인은 성공으로 처리
-      }
-
-      // 성공 처리
-      window.location.reload();
-
+      // 성공 시 리다이렉트되므로 여기서는 아무것도 하지 않음
     } catch (error: any) {
       console.error('구글 로그인 오류:', error);
       setLoginError(error.message || '구글 로그인에 실패했습니다.');
-    } finally {
       setGoogleLoading(false);
     }
   };
