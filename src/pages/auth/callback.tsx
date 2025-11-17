@@ -9,6 +9,10 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
+        // 현재 호스트 확인 (로그인 후 올바른 호스트로 리다이렉트하기 위해)
+        const currentHost = typeof window !== 'undefined' ? window.location.host : '';
+        const isEnglishSite = currentHost.includes('en.copydrum.com');
+        
         // URL에서 hash fragment 추출
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const accessToken = hashParams.get('access_token');
@@ -87,8 +91,21 @@ export default function AuthCallback() {
             }
 
             // 로그인 성공 - 현재 호스트의 홈으로 이동 (호스트 유지, 해시 제거)
+            // 만약 잘못된 호스트로 리다이렉트되었다면 올바른 호스트로 이동
             if (typeof window !== 'undefined') {
               const currentOrigin = window.location.origin;
+              const currentHost = window.location.host;
+              
+              // en.copydrum.com에서 시작했는데 copydrum.com으로 왔다면 다시 en.copydrum.com으로
+              // localStorage에 원래 호스트 정보 저장 (로그인 시작 시 저장)
+              const originalHost = localStorage.getItem('oauth_original_host');
+              if (originalHost && originalHost !== currentHost) {
+                const protocol = window.location.protocol;
+                window.location.replace(`${protocol}//${originalHost}/`);
+                localStorage.removeItem('oauth_original_host');
+                return;
+              }
+              
               window.location.replace(`${currentOrigin}/`);
             } else {
               navigate('/');

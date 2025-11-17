@@ -21,7 +21,7 @@ export default function MobileHeader({
   const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
 
   return (
-    <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-blue-700 text-white">
+    <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-blue-700 text-white" style={{ top: 'var(--payment-notice-height, 0px)' }}>
       <div className="flex items-center justify-between px-4 py-3">
         <button
           type="button"

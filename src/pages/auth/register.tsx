@@ -46,11 +46,22 @@ export default function Register() {
     try {
       // 현재 호스트를 유지하여 리다이렉트
       const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://copydrum.com';
+      const currentHost = typeof window !== 'undefined' ? window.location.host : 'copydrum.com';
+      
+      // 원래 호스트를 localStorage에 저장 (콜백에서 확인용)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('oauth_original_host', currentHost);
+      }
+      
       const redirectUrl = `${currentOrigin}/auth/callback`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
+          queryParams: {
+            // 추가 파라미터로 호스트 정보 전달 (Supabase가 무시할 수 있지만 시도)
+            host: currentHost,
+          },
         },
       });
       
