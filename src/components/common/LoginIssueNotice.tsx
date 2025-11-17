@@ -42,9 +42,9 @@ export default function LoginIssueNotice() {
     if (isEnglish) {
       return {
         title: 'Notice',
-        message1: 'Due to website renewal work, there are currently temporary issues with the',
-        message2: 'login and password reset functions',
-        message3: '.',
+        message1: 'Currently, there are errors with',
+        message2: 'Kakao login and Google login',
+        message3: 'and we are working to restore them.',
         message4: 'We are working to restore these functions as soon as possible.',
         message5: 'We apologize for the inconvenience. We will restore normal service shortly.',
         button: 'OK',
@@ -54,9 +54,9 @@ export default function LoginIssueNotice() {
 
     return {
       title: '공지사항',
-      message1: '홈페이지 리뉴얼 작업으로 인해 현재',
-      message2: '로그인 및 비밀번호 재설정 기능',
-      message3: '에 일시적인 문제가 발생하고 있습니다.',
+      message1: '현재',
+      message2: '카카오 로그인, 구글 로그인',
+      message3: '에 오류가 발생하여 복구 중에 있습니다.',
       message4: '빠른 시일 내에 복구하도록 조치 중입니다.',
       message5: '불편을 드려 죄송합니다. 곧 정상적으로 이용하실 수 있도록 하겠습니다.',
       button: '확인',
