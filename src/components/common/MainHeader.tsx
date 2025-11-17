@@ -2,6 +2,8 @@ import { useMemo, useState, type KeyboardEvent, type ChangeEvent } from 'react';
 import { createSearchParams, useNavigate } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
 import { useTranslation } from 'react-i18next';
+import { supabase } from '../../lib/supabase';
+import { googleAuth } from '../../lib/google';
 import LanguageSelector from './LanguageSelector';
 
 interface MainHeaderProps {
@@ -51,10 +53,33 @@ export default function MainHeader({ user }: MainHeaderProps) {
     setSearchQuery(event.target.value);
   };
 
+  const handleLogout = async () => {
+    try {
+      // 구글 로그아웃
+      if (googleAuth.isLoggedIn()) {
+        googleAuth.logout();
+      }
+      
+      // Supabase 로그아웃
+      await supabase.auth.signOut();
+      window.location.reload();
+    } catch (error) {
+      console.error('로그아웃 오류:', error);
+    }
+  };
+
   return (
     <div className={containerClassName}>
       <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex flex-col gap-4 py-4">
-        <div className="flex justify-end">
+        <div className="flex justify-end items-center gap-3">
+          {user && (
+            <button
+              onClick={handleLogout}
+              className="text-white hover:text-purple-300 text-sm font-medium px-3 py-1.5 rounded-md hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              로그아웃
+            </button>
+          )}
           <LanguageSelector />
         </div>
         {/* Logo, Search & Cart Row */}

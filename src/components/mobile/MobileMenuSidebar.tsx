@@ -2,6 +2,8 @@ import type { User } from '@supabase/supabase-js';
 import { useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { supabase } from '../../lib/supabase';
+import { googleAuth } from '../../lib/google';
 
 interface MobileMenuSidebarProps {
   isOpen: boolean;
@@ -46,6 +48,22 @@ export default function MobileMenuSidebar({
   const handleNavigate = (href: string) => {
     navigate(href);
     onClose();
+  };
+
+  const handleLogout = async () => {
+    try {
+      // 구글 로그아웃
+      if (googleAuth.isLoggedIn()) {
+        googleAuth.logout();
+      }
+      
+      // Supabase 로그아웃
+      await supabase.auth.signOut();
+      onClose();
+      window.location.reload();
+    } catch (error) {
+      console.error('로그아웃 오류:', error);
+    }
   };
 
   if (!isOpen) {
@@ -104,14 +122,34 @@ export default function MobileMenuSidebar({
           })}
         </nav>
 
-        <div className="border-t border-gray-100 px-5 py-4">
-          <button
-            type="button"
-            onClick={() => handleNavigate(user ? '/mypage' : '/auth/login')}
-            className="flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
-          >
-            {user ? t('nav.mypage') : `${t('nav.login')} / ${t('nav.register')}`}
-          </button>
+        <div className="border-t border-gray-100 px-5 py-4 space-y-2">
+          {user ? (
+            <>
+              <button
+                type="button"
+                onClick={() => handleNavigate('/mypage')}
+                className="flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+              >
+                {t('nav.mypage')}
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex w-full items-center justify-center rounded-xl bg-gray-100 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
+              >
+                <i className="ri-logout-box-line mr-2"></i>
+                {t('nav.logout')}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleNavigate('/login')}
+              className="flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+            >
+              {t('nav.login')} / {t('nav.register')}
+            </button>
+          )}
         </div>
       </aside>
     </div>
