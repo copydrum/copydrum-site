@@ -5,10 +5,15 @@ import {
   submitInicisPaymentForm,
   getInicisReturnUrl,
 } from './inicis';
+import {
+  createPayPalPaymentIntent,
+  getPayPalReturnUrl,
+  getPayPalCancelUrl,
+} from './paypal';
 import { updateOrderPaymentStatus } from './paymentService';
 import type { VirtualAccountInfo, PaymentIntentResponse } from './types';
 
-type PurchaseMethod = 'card' | 'bank_transfer';
+type PurchaseMethod = 'card' | 'bank_transfer' | 'paypal';
 
 export interface PurchaseItem {
   sheetId: string;
@@ -91,6 +96,41 @@ export const startSheetPurchase = async ({
       amount,
       paymentMethod,
       virtualAccountInfo: bankInfo,
+    };
+  }
+
+  if (paymentMethod === 'paypal') {
+    // PayPal 결제 처리
+    const finalReturnUrl = returnUrl || getPayPalReturnUrl();
+    const cancelUrl = getPayPalCancelUrl();
+
+    const paypalIntent = await createPayPalPaymentIntent({
+      userId,
+      orderId,
+      amount,
+      description,
+      buyerEmail: buyerEmail ?? undefined,
+      buyerName: buyerName ?? undefined,
+      returnUrl: finalReturnUrl,
+      cancelUrl,
+    });
+
+    // PayPal 승인 URL로 리다이렉트
+    if (paypalIntent.approvalUrl) {
+      // 주문 ID를 sessionStorage에 저장
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('paypal_order_id', orderId);
+        sessionStorage.setItem('paypal_paypal_order_id', paypalIntent.paypalOrderId);
+      }
+      
+      window.location.href = paypalIntent.approvalUrl;
+    }
+
+    return {
+      orderId,
+      orderNumber,
+      amount,
+      paymentMethod,
     };
   }
 

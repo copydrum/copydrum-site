@@ -5,6 +5,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { processCashPurchase } from '../../lib/cashPurchases';
 import { splitPurchasedSheetIds } from '../../lib/purchaseCheck';
 import { BankTransferInfoModal, PaymentMethodSelector } from '../../components/payments';
+import type { PaymentMethod } from '../../components/payments';
 import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { openCashChargeModal } from '../../lib/cashChargeModal';
@@ -199,7 +200,7 @@ export default function CartPage() {
   };
 
   const completeOnlinePurchase = async (
-    method: 'card' | 'bank_transfer',
+    method: 'card' | 'bank_transfer' | 'paypal',
     options?: { depositorName?: string },
   ) => {
     if (!user || !pendingPurchase) return;
@@ -228,13 +229,16 @@ export default function CartPage() {
     if (method === 'bank_transfer') {
       setBankTransferInfo(purchaseResult.virtualAccountInfo ?? null);
       alert(t('cart.bankTransferCreated'));
+    } else if (method === 'paypal') {
+      setBankTransferInfo(null);
+      // PayPal은 리다이렉트되므로 알림 불필요
     } else {
       setBankTransferInfo(null);
       alert(t('cart.paymentWindowOpen'));
     }
   };
 
-  const handlePaymentMethodSelect = async (method: 'cash' | 'card' | 'bank') => {
+  const handlePaymentMethodSelect = async (method: PaymentMethod) => {
     if (!user || !pendingPurchase) return;
 
     setShowPaymentSelector(false);
@@ -281,6 +285,11 @@ export default function CartPage() {
 
         alert(t('cart.purchaseComplete'));
         navigate('/my-orders');
+        return;
+      }
+
+      if (method === 'paypal') {
+        await completeOnlinePurchase('paypal');
         return;
       }
 

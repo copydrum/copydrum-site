@@ -189,7 +189,11 @@ export default function CollectionsPage() {
   };
 
   const formatCurrency = useCallback(
-    (price: number): string => formatPriceWithCurrency({ amountKRW: price, language: currentLanguage }).formatted,
+    (price: number): string => formatPriceWithCurrency({ 
+      amountKRW: price, 
+      language: currentLanguage,
+      host: typeof window !== 'undefined' ? window.location.host : undefined
+    }).formatted,
     [currentLanguage],
   );
 

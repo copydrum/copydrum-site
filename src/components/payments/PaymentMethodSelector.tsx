@@ -1,8 +1,9 @@
-import { Fragment, useCallback } from 'react';
+import { Fragment, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
+import { isEnglishHost } from '../../i18n/languages';
 
-type PaymentMethod = 'cash' | 'card' | 'bank';
+type PaymentMethod = 'cash' | 'card' | 'bank' | 'paypal';
 
 interface PaymentMethodOption {
   id: PaymentMethod;
@@ -14,31 +15,6 @@ interface PaymentMethodOption {
   disabled?: boolean;
 }
 
-const paymentMethodOptions: PaymentMethodOption[] = [
-  {
-    id: 'cash',
-    name: '보유 캐쉬로 결제',
-    description: '보유 캐쉬에서 즉시 차감됩니다.',
-    icon: 'ri-coins-line',
-    color: 'text-yellow-600',
-  },
-  {
-    id: 'card',
-    name: '카드 결제',
-    description: 'KG이니시스 안전결제로 신용카드 결제가 가능합니다.',
-    icon: 'ri-bank-card-line',
-    color: 'text-blue-600',
-    disabled: false,
-  },
-  {
-    id: 'bank',
-    name: '무통장입금',
-    description: '입금 확인 후 관리자가 수동으로 구매를 완료합니다.',
-    icon: 'ri-bank-line',
-    color: 'text-green-600',
-  },
-];
-
 interface PaymentMethodSelectorProps {
   open: boolean;
   amount: number;
@@ -48,6 +24,8 @@ interface PaymentMethodSelectorProps {
   disabledMethods?: PaymentMethod[];
 }
 
+export type { PaymentMethod };
+
 export const PaymentMethodSelector = ({
   open,
   amount,
@@ -56,11 +34,57 @@ export const PaymentMethodSelector = ({
   allowCash = true,
   disabledMethods = [],
 }: PaymentMethodSelectorProps) => {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const formatCurrency = useCallback(
     (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
     [i18n.language],
   );
+
+  const isEnglishSite = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return isEnglishHost(window.location.host);
+  }, []);
+
+  const paymentMethodOptions: PaymentMethodOption[] = useMemo(() => {
+    const options: PaymentMethodOption[] = [
+      {
+        id: 'cash',
+        name: t('payment.cash'),
+        description: t('payment.cashDescription'),
+        icon: 'ri-coins-line',
+        color: 'text-yellow-600',
+      },
+      {
+        id: 'card',
+        name: t('payment.card'),
+        description: t('payment.cardDescription'),
+        icon: 'ri-bank-card-line',
+        color: 'text-blue-600',
+        disabled: false,
+      },
+      {
+        id: 'bank',
+        name: t('payment.bank'),
+        description: t('payment.bankDescription'),
+        icon: 'ri-bank-line',
+        color: 'text-green-600',
+      },
+    ];
+
+    // PayPal은 영문 사이트에서만 표시
+    if (isEnglishSite) {
+      options.push({
+        id: 'paypal',
+        name: t('payment.paypal'),
+        description: t('payment.paypalDescription'),
+        icon: 'ri-paypal-line',
+        color: 'text-blue-700',
+        disabled: false,
+      });
+    }
+
+    return options;
+  }, [t, isEnglishSite]);
 
   if (!open) return null;
 
@@ -68,9 +92,9 @@ export const PaymentMethodSelector = ({
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
         <div className="border-b border-gray-200 px-5 py-4">
-          <h2 className="text-lg font-semibold text-gray-900">결제수단 선택</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{t('payment.selectMethod')}</h2>
           <p className="mt-1 text-sm text-gray-600">
-            결제 금액 <span className="font-semibold text-gray-900">{formatCurrency(amount)}</span>
+            {t('payment.amount')} <span className="font-semibold text-gray-900">{formatCurrency(amount)}</span>
           </p>
         </div>
 
@@ -119,7 +143,7 @@ export const PaymentMethodSelector = ({
               onClick={onClose}
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
-              취소
+              {t('button.cancel')}
             </button>
           </div>
         </div>

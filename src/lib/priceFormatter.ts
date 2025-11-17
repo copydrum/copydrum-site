@@ -70,9 +70,13 @@ export const formatPrice = ({
 }: FormatPriceOptions): FormatPriceResult => {
   const safeAmount = Number(amountKRW ?? 0);
   const resolvedHost = getHost(host);
+  
+  // 언어가 영어이고 currencyMode가 auto일 때는 달러 사용
+  const isEnglishLanguage = language?.startsWith('en') || (!language && typeof window !== 'undefined' && window.location.hostname.includes('en.copydrum.com'));
+  
   const shouldUseKRW =
     currencyMode === 'krw' ||
-    (currencyMode === 'auto' && isKoreanHost(resolvedHost));
+    (currencyMode === 'auto' && !isEnglishLanguage && isKoreanHost(resolvedHost));
   const appliedUsdRate = resolveUsdRate(usdRate);
 
   if (shouldUseKRW) {

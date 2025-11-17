@@ -40,7 +40,11 @@ const EventSalePage = () => {
   const [favoriteLoadingIds, setFavoriteLoadingIds] = useState<Set<string>>(new Set());
   const { i18n } = useTranslation();
   const formatCurrency = useCallback(
-    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
+    (value: number) => formatPrice({ 
+      amountKRW: value, 
+      language: i18n.language,
+      host: typeof window !== 'undefined' ? window.location.host : undefined
+    }).formatted,
     [i18n.language],
   );
 

@@ -14,11 +14,13 @@ import MainHeader from '../../components/common/MainHeader';
 import { processCashPurchase } from '../../lib/cashPurchases';
 import { hasPurchasedSheet } from '../../lib/purchaseCheck';
 import { BankTransferInfoModal, PaymentMethodSelector } from '../../components/payments';
+import type { PaymentMethod } from '../../components/payments';
 import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { openCashChargeModal } from '../../lib/cashChargeModal';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
+import { isEnglishHost } from '../../i18n/languages';
 
 interface Category {
   id: string;
@@ -85,9 +87,58 @@ const CategoriesPage: React.FC = () => {
   const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
   const [selectedTopSheetId, setSelectedTopSheetId] = useState<string | null>(null);
   const { i18n, t } = useTranslation();
+  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
 
-  // 장르 목록 (순서대로)
-  const genreList = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
+  // 장르 목록 (순서대로) - 한글 원본 (한글 사이트용)
+  const genreListKo = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
+  
+  // 영문 사이트용 장르 순서 (한글 이름으로 저장되어 있지만 영문 순서로 매핑)
+  const genreListEn = ['팝', '락', '가요', '재즈', 'J-POP', 'OST', 'CCM', '트로트/성인가요', '드럼솔로', '드럼커버'];
+  
+  // 현재 사이트에 맞는 장르 목록 가져오기
+  const genreList = isEnglishSite ? genreListEn : genreListKo;
+  
+  // 장르 이름을 번역하는 함수
+  const getGenreName = (genreKo: string): string => {
+    if (!isEnglishSite) return genreKo;
+    
+    const genreMap: Record<string, string> = {
+      '가요': t('category.kpop'),
+      '팝': t('category.pop'),
+      '락': t('category.rock'),
+      'CCM': t('category.ccm'),
+      '트로트/성인가요': t('category.trot'),
+      '재즈': t('category.jazz'),
+      'J-POP': t('category.jpop'),
+      'OST': t('category.ost'),
+      '드럼솔로': t('category.drumSolo'),
+      '드럼커버': t('category.drumCover'),
+    };
+    
+    return genreMap[genreKo] || genreKo;
+  };
+
+  // 카테고리 이름을 번역하는 함수
+  const getCategoryName = (categoryName: string | null | undefined): string => {
+    if (!categoryName) return t('category.other');
+    if (!isEnglishSite) return categoryName;
+    
+    const categoryMap: Record<string, string> = {
+      '가요': t('category.kpop'),
+      '팝': t('category.pop'),
+      '락': t('category.rock'),
+      'CCM': t('category.ccm'),
+      '트로트/성인가요': t('category.trot'),
+      '재즈': t('category.jazz'),
+      'J-POP': t('category.jpop'),
+      'OST': t('category.ost'),
+      '드럼솔로': t('category.drumSolo'),
+      '드럼커버': t('category.drumCover'),
+      '기타': t('category.other'),
+    };
+    
+    return categoryMap[categoryName] || categoryName;
+  };
 
   const { addToCart, isInCart } = useCart();
 
@@ -131,7 +182,7 @@ const CategoriesPage: React.FC = () => {
 
     // 카테고리 파라미터가 없고 검색어가 없으면 첫 번째 장르(가요)로 자동 이동
     if (!categoryParam && !searchParam.trim() && categories.length > 0) {
-      const firstGenre = genreList[0]; // '가요'
+      const firstGenre = genreListKo[0]; // '가요'
       const firstCategory = categories.find(cat => cat.name === firstGenre);
       if (firstCategory) {
         setSelectedCategory(firstCategory.id);
@@ -195,7 +246,7 @@ const CategoriesPage: React.FC = () => {
   };
 
   const completeOnlinePurchase = async (
-    method: 'card' | 'bank_transfer',
+    method: 'card' | 'bank_transfer' | 'paypal',
     options?: { depositorName?: string },
   ) => {
     if (!user || !pendingPurchaseSheet) return;
@@ -221,13 +272,16 @@ const CategoriesPage: React.FC = () => {
     if (method === 'bank_transfer') {
       setBankTransferInfo(result.virtualAccountInfo ?? null);
       alert(t('categories.bankTransferCreated'));
+    } else if (method === 'paypal') {
+      setBankTransferInfo(null);
+      // PayPal은 리다이렉트되므로 알림 불필요
     } else {
       setBankTransferInfo(null);
       alert(t('categories.paymentWindowOpen'));
     }
   };
 
-  const handlePurchaseMethodSelect = async (method: 'cash' | 'card' | 'bank') => {
+  const handlePurchaseMethodSelect = async (method: PaymentMethod) => {
     if (!user || !pendingPurchaseSheet) return;
 
     const sheet = pendingPurchaseSheet;
@@ -276,6 +330,11 @@ const CategoriesPage: React.FC = () => {
 
         alert(t('categories.purchaseComplete'));
         navigate('/my-orders');
+        return;
+      }
+
+      if (method === 'paypal') {
+        await completeOnlinePurchase('paypal');
         return;
       }
 
@@ -607,7 +666,11 @@ const CategoriesPage: React.FC = () => {
 
   // Helper function to remove spaces and convert to lowercase for fuzzy search
   const formatCurrency = useCallback(
-    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
+    (value: number) => formatPrice({ 
+      amountKRW: value, 
+      language: i18n.language,
+      host: typeof window !== 'undefined' ? window.location.host : undefined
+    }).formatted,
     [i18n.language],
   );
 
@@ -817,7 +880,7 @@ const CategoriesPage: React.FC = () => {
                       isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 text-gray-600'
                     }`}
                   >
-                    {genre}
+                    {getGenreName(genre)}
                   </button>
                 );
               })}
@@ -870,11 +933,11 @@ const CategoriesPage: React.FC = () => {
                             <div className="min-w-0 flex-1 text-left">
                               <p className="truncate text-sm font-bold text-gray-900">{sheet.title}</p>
                               <p className="truncate text-xs text-gray-500">{sheet.artist}</p>
-                              <p className="truncate text-xs text-gray-400">{sheet.album_name || '앨범 정보 없음'}</p>
+                              <p className="truncate text-xs text-gray-400">{sheet.album_name || t('categories.albumInfoNotAvailable')}</p>
                             </div>
                           </div>
                           <div className="text-xs text-gray-500">
-                            {sheet.categories?.name || '기타'} · {sheet.difficulty || '난이도 정보 없음'}
+                            {getCategoryName(sheet.categories?.name)} · {sheet.difficulty || t('categories.difficultyNotSet')}
                           </div>
                           <div className="flex items-center justify-between">
                             <div className="space-y-1 text-right">
@@ -900,14 +963,14 @@ const CategoriesPage: React.FC = () => {
                               onClick={() => handleAddToCart(sheet.id)}
                               className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
                             >
-                              장바구니
+                              {t('categories.addToCart')}
                             </button>
                             <button
                               type="button"
                               onClick={() => handleBuyNow(sheet.id)}
                               className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700"
                             >
-                              바로구매
+                              {t('categories.buyNow')}
                             </button>
                           </div>
                         </div>
@@ -1075,7 +1138,7 @@ const CategoriesPage: React.FC = () => {
                     onClick={() => handlePreviewOpen(selectedSheet)}
                     className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
                   >
-                    악보 미리보기
+                    {t('categories.previewSheet')}
                   </button>
                 )}
                 {selectedSheet.youtube_url && (
@@ -1084,7 +1147,7 @@ const CategoriesPage: React.FC = () => {
                     onClick={() => handleYoutubeOpen(selectedSheet)}
                     className="flex-1 rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white shadow transition hover:bg-red-600"
                   >
-                    유튜브 재생
+                    {t('categories.playYoutube')}
                   </button>
                 )}
               </div>
@@ -1108,14 +1171,14 @@ const CategoriesPage: React.FC = () => {
                   }}
                   className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
                 >
-                  장바구니
+                  {t('categories.addToCart')}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleBuyNow(selectedSheet.id)}
                   className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow hover:bg-blue-700"
                 >
-                  바로 구매
+                  {t('categories.buyNow')}
                 </button>
               </div>
               <button
@@ -1123,7 +1186,7 @@ const CategoriesPage: React.FC = () => {
                 onClick={() => navigate(`/sheet-detail/${selectedSheet.id}`)}
                 className="w-full rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
               >
-                상세 페이지로 이동
+                {t('categories.goToDetail')}
               </button>
             </div>
           </div>
@@ -1175,7 +1238,7 @@ const CategoriesPage: React.FC = () => {
         {/* 페이지 제목 */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {selectedArtist ? `${selectedArtist}의 곡` : selectedAlbum ? `${selectedAlbum} 앨범` : '드럼 악보 카테고리'}
+            {selectedArtist ? `${selectedArtist}${t('categories.artistSongs')}` : selectedAlbum ? `${selectedAlbum} ${t('categories.album')}` : t('categories.pageTitle')}
           </h1>
           {selectedArtist && (
             <button
@@ -1212,7 +1275,7 @@ const CategoriesPage: React.FC = () => {
             </button>
           )}
           {!selectedArtist && !selectedAlbum && (
-            <p className="text-gray-600">원하는 장르와 스타일의 드럼 악보를 찾아보세요</p>
+            <p className="text-gray-600">{t('categories.pageDescription')}</p>
           )}
         </div>
 
@@ -1235,7 +1298,7 @@ const CategoriesPage: React.FC = () => {
                       : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
                   }`}
                 >
-                  {genre}
+                  {getGenreName(genre)}
                 </button>
               );
             })}
@@ -1404,14 +1467,14 @@ const CategoriesPage: React.FC = () => {
                           onClick={() => handleAddToCart(selectedSheet.id)}
                           className="flex-1 bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors"
                         >
-                          장바구니 담기
+                          {t('categories.addToCartFull')}
                         </button>
                         <button
                           onClick={() => handleBuyNow(selectedSheet.id)}
                           disabled={buyingSheetId === selectedSheet.id}
                           className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {buyingSheetId === selectedSheet.id ? '구매 중...' : '바로 구매'}
+                          {buyingSheetId === selectedSheet.id ? t('categories.processing') : t('categories.buyNow')}
                         </button>
                       </div>
                     </div>
@@ -1731,9 +1794,9 @@ const CategoriesPage: React.FC = () => {
                         >
                           {buyingSheetId === sheet.id
                             ? paymentProcessing
-                              ? '결제 준비 중...'
-                              : '구매 중...'
-                            : '바로구매'}
+                              ? t('categories.paymentPreparing')
+                              : t('categories.processing')
+                            : t('categories.buyNow')}
                         </button>
                       </div>
                     </td>

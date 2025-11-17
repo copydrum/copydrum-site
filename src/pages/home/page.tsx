@@ -372,7 +372,11 @@ export default function Home() {
   };
 
   const formatCurrency = useCallback(
-    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
+    (value: number) => formatPrice({ 
+      amountKRW: value, 
+      language: i18n.language,
+      host: typeof window !== 'undefined' ? window.location.host : undefined
+    }).formatted,
     [i18n.language],
   );
   const getEventForSheet = (sheetId: string) => eventDiscounts[sheetId];
@@ -725,7 +729,7 @@ export default function Home() {
                         <div className="relative h-48 overflow-hidden">
                           <img
                             src={event.thumbnail_url || generateDefaultThumbnail(480, 480)}
-                            alt={event.title || '이벤트 악보'}
+                            alt={event.title || t('home.eventSale')}
                             className="h-full w-full object-cover transition duration-500 hover:scale-105"
                           />
                           <div className="absolute left-4 top-4 rounded-full bg-red-500/95 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow">
@@ -768,10 +772,11 @@ export default function Home() {
                             className={`text-xs font-semibold ${isActiveNow ? 'text-orange-600' : 'text-gray-400'}`}
                           >
                             {remaining.totalMilliseconds > 0
-                              ? `⏰ 남은 시간 ${
-                                  remaining.days > 0 ? `${remaining.days}일 ` : ''
-                                }${formatRemainingTime(remaining)}`
-                              : '판매 종료'}
+                              ? t('home.remainingTime', { 
+                                  days: remaining.days > 0 ? t('home.remainingDays', { count: remaining.days }) : '',
+                                  time: formatRemainingTime(remaining)
+                                })
+                              : t('home.saleEnded')}
                           </p>
                         </div>
                       </article>
@@ -784,10 +789,10 @@ export default function Home() {
             <div className="hidden md:block">
               <div className="mb-12 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-orange-500 uppercase tracking-wide">100원 특가 이벤트</p>
-                  <h3 className="mt-2 text-3xl font-bold text-gray-900">단 100원으로 인기 드럼 악보를 만나보세요</h3>
+                  <p className="text-sm font-semibold text-orange-500 uppercase tracking-wide">{t('home.eventSaleEvent')}</p>
+                  <h3 className="mt-2 text-3xl font-bold text-gray-900">{t('home.eventSaleSubtitleFull')}</h3>
                   <p className="mt-3 text-gray-600">
-                    한정 기간 동안만 진행되는 초특가 이벤트입니다. 실시간 타이머를 확인하고 원하는 악보를 바로 담아보세요.
+                    {t('home.eventSaleDescriptionFull')}
                   </p>
                 </div>
                 <button
@@ -795,7 +800,7 @@ export default function Home() {
                   onClick={() => navigate('/event-sale')}
                   className="inline-flex items-center justify-center rounded-full border border-orange-200 bg-white px-6 py-3 text-sm font-semibold text-orange-500 shadow-sm transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600"
                 >
-                  전체 이벤트 보기
+                  {t('home.viewAllEvents')}
                   <i className="ri-arrow-right-line ml-2 text-base" />
                 </button>
               </div>
@@ -803,13 +808,13 @@ export default function Home() {
               {eventsLoading ? (
                 <div className="py-24 text-center text-gray-500">
                   <i className="ri-loader-4-line w-10 h-10 animate-spin text-orange-500 mx-auto mb-2" />
-                  <p className="font-medium">100원 특가 악보를 불러오는 중입니다...</p>
+                  <p className="font-medium">{t('home.loadingEventsFull')}</p>
                 </div>
               ) : activeEvents.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-orange-300 bg-white/70 px-10 py-16 text-center text-gray-600">
                   <i className="ri-music-2-line text-5xl text-orange-300 mb-4" />
-                  <p className="text-lg font-semibold">현재 진행 중인 100원 특가 이벤트가 없습니다.</p>
-                  <p className="mt-2 text-sm text-gray-500">곧 새로운 특가가 준비될 예정이니 조금만 기다려 주세요!</p>
+                  <p className="text-lg font-semibold">{t('home.noActiveEventsFull')}</p>
+                  <p className="mt-2 text-sm text-gray-500">{t('home.noActiveEventsSubFull')}</p>
                 </div>
               ) : (
                 <>
@@ -821,7 +826,7 @@ export default function Home() {
                       className={`absolute left-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-white/80 p-3 shadow-lg transition hover:bg-white lg:block ${
                         canSlide ? 'text-orange-500 hover:text-orange-600' : 'text-gray-300 cursor-not-allowed'
                       }`}
-                      aria-label="이전 슬라이드"
+                      aria-label={t('home.prevSlide')}
                     >
                       <i className="ri-arrow-left-s-line text-2xl" />
                     </button>
@@ -846,15 +851,15 @@ export default function Home() {
                                 <div className="relative h-56 overflow-hidden">
                                   <img
                                     src={event.thumbnail_url || generateDefaultThumbnail(480, 480)}
-                                    alt={event.title || '이벤트 악보'}
+                                    alt={event.title || t('home.eventSale')}
                                     className="h-full w-full object-cover transition duration-500 hover:scale-105"
                                   />
                                   <div className="absolute left-4 top-4 rounded-full bg-red-500/95 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow">
-                                    100원 특가
+                                    {t('home.eventSale')}
                                   </div>
                                   {!isActiveNow && (
                                     <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white">
-                                      판매 종료
+                                      {t('home.saleEnded')}
                                     </div>
                                   )}
                                 </div>
@@ -874,17 +879,17 @@ export default function Home() {
                                     </div>
                                     {event.discount_percent !== null && (
                                       <span className="inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-500">
-                                        {event.discount_percent}% 할인
+                                        {t('home.discount', { percent: event.discount_percent })}
                                       </span>
                                     )}
                                     <p
                                       className={`text-sm font-semibold ${isActiveNow ? 'text-orange-600' : 'text-gray-400'}`}
                                     >
                                       {remaining.totalMilliseconds > 0
-                                        ? `⏰ 남은 시간 ${
-                                            remaining.days > 0 ? `${remaining.days}일 ` : ''
-                                          }${formatRemainingTime(remaining)}`
-                                        : '판매 종료'}
+                                        ? t('home.remainingTime', { 
+                                            time: `${remaining.days > 0 ? `${remaining.days}일 ` : ''}${formatRemainingTime(remaining)}`
+                                          })
+                                        : t('home.saleEnded')}
                                     </p>
                                   </div>
                                   <div className="mt-auto flex gap-3">
@@ -896,7 +901,7 @@ export default function Home() {
                                       }}
                                       className="flex-1 rounded-xl border border-orange-200 px-4 py-2 text-sm font-semibold text-orange-500 transition hover:bg-orange-50 hover:text-orange-600"
                                     >
-                                      상세 보기
+                                      {t('home.viewDetails')}
                                     </button>
                                     <button
                                       type="button"
@@ -906,7 +911,7 @@ export default function Home() {
                                       }}
                                       className="flex-1 rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-red-600"
                                     >
-                                      지금 구매
+                                      {t('home.buyNow')}
                                     </button>
                                   </div>
                                 </div>
@@ -923,7 +928,7 @@ export default function Home() {
                       className={`absolute right-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-white/80 p-3 shadow-lg transition hover:bg-white lg:block ${
                         canSlide ? 'text-orange-500 hover:text-orange-600' : 'text-gray-300 cursor-not-allowed'
                       }`}
-                      aria-label="다음 슬라이드"
+                      aria-label={t('home.nextSlide')}
                     >
                       <i className="ri-arrow-right-s-line text-2xl" />
                     </button>
@@ -938,7 +943,7 @@ export default function Home() {
                           className={`h-2.5 rounded-full transition-all ${
                             eventCarouselIndex === index ? 'w-10 bg-orange-500' : 'w-2.5 bg-orange-200 hover:bg-orange-300'
                           }`}
-                          aria-label={`${index + 1}번째 슬라이드 이동`}
+                          aria-label={t('home.slideNumber', { number: index + 1 })}
                         />
                       ))}
                     </div>
@@ -954,13 +959,13 @@ export default function Home() {
           <div className="max-w-7xl mx-auto space-y-8">
             <div className="md:hidden">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-2xl font-bold text-gray-900">인기 악보</h3>
+                <h3 className="text-2xl font-bold text-gray-900">{t('home.popularSheets')}</h3>
                 <button
                   type="button"
                   onClick={() => navigate('/categories')}
                   className="text-sm font-semibold text-gray-500 hover:text-blue-600"
                 >
-                  전체보기
+                  {t('home.viewAll')}
                 </button>
               </div>
             <div className="flex gap-4 overflow-x-auto pb-2">
@@ -987,7 +992,7 @@ export default function Home() {
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
                         {eventInfo && (
                           <div className="absolute left-3 top-3 rounded-full bg-red-500/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
-                            100원 특가
+                            {t('home.eventSale')}
                           </div>
                         )}
                         <button
@@ -1002,7 +1007,7 @@ export default function Home() {
                               ? 'border-red-200 bg-red-50 text-red-500'
                               : 'border-white/60 bg-black/30 text-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/80'
                           } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          aria-label={isFavorite ? '찜 해제' : '찜하기'}
+                          aria-label={isFavorite ? t('home.unfavorite') : t('home.favorite')}
                         >
                           <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-base`} />
                         </button>
@@ -1019,9 +1024,9 @@ export default function Home() {
 
             <div className="hidden md:block">
               <div className="mb-8 flex items-center justify-between">
-                <h3 className="text-3xl font-bold text-gray-900">인기악보</h3>
+                <h3 className="text-3xl font-bold text-gray-900">{t('home.popularSheets')}</h3>
                 <a href="/categories" className="text-sm text-gray-500 hover:text-gray-700">
-                  더보기 &gt;
+                  {t('home.showMore')} &gt;
                 </a>
               </div>
 
@@ -1035,7 +1040,7 @@ export default function Home() {
                       : 'bg-white text-gray-700 hover:bg-gray-100'
                   }`}
                 >
-                  전체
+                  {t('home.all')}
                 </button>
                 {categories.map((category) => (
                   <button
@@ -1103,7 +1108,7 @@ export default function Home() {
                             {eventInfo && (
                               <div className="mt-1 flex items-center gap-2">
                                 <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
-                                  100원 특가
+                                  {t('home.eventSale')}
                                 </span>
                                 <span className="text-xs font-semibold text-red-500">{formatCurrency(displayPrice)}</span>
                               </div>
@@ -1122,7 +1127,7 @@ export default function Home() {
                               ? 'border-red-200 bg-red-50 text-red-500'
                               : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
                           } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          aria-label={isFavorite ? '찜 해제' : '찜하기'}
+                          aria-label={isFavorite ? t('home.unfavorite') : t('home.favorite')}
                         >
                           <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
                         </button>
@@ -1168,7 +1173,7 @@ export default function Home() {
                             {eventInfo && (
                               <div className="mt-1 flex items-center gap-2">
                                 <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
-                                  100원 특가
+                                  {t('home.eventSale')}
                                 </span>
                                 <span className="text-xs font-semibold text-red-500">{formatCurrency(displayPrice)}</span>
                               </div>
@@ -1187,7 +1192,7 @@ export default function Home() {
                               ? 'border-red-200 bg-red-50 text-red-500'
                               : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
                           } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          aria-label={isFavorite ? '찜 해제' : '찜하기'}
+                          aria-label={isFavorite ? t('home.unfavorite') : t('home.favorite')}
                         >
                           <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
                         </button>
@@ -1206,14 +1211,17 @@ export default function Home() {
             <div className="md:hidden">
               <div className="flex flex-col gap-4">
                 <div>
-                  <p className="text-base font-semibold uppercase tracking-wide text-blue-500">악보 모음집</p>
+                  <p className="text-base font-semibold uppercase tracking-wide text-blue-500">{t('home.collections')}</p>
                   <h3 className="mt-1 text-2xl font-bold text-gray-900 leading-snug">
-                    테마별로 엄선한
-                    <br />
-                    프리미엄 드럼 악보 컬렉션
+                    {t('home.collectionsSubtitle').split('\n').map((line, idx) => (
+                      <span key={idx}>
+                        {line}
+                        {idx < t('home.collectionsSubtitle').split('\n').length - 1 && <br />}
+                      </span>
+                    ))}
                   </h3>
                   <p className="mt-2 text-sm text-gray-600">
-                    여러 곡을 한 번에 할인된 가격으로 만나보세요.
+                    {t('home.collectionsDescription')}
                   </p>
                 </div>
                 <button
@@ -1221,7 +1229,7 @@ export default function Home() {
                   onClick={() => navigate('/collections')}
                   className="inline-flex w-full items-center justify-center rounded-full border border-blue-200 bg-white px-5 py-3 text-sm font-semibold text-blue-600 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
                 >
-                  모음집 모두 보기
+                  {t('home.viewAllCollections')}
                   <i className="ri-arrow-right-line ml-2 text-base" />
                 </button>
               </div>
@@ -1229,13 +1237,13 @@ export default function Home() {
               {collectionsLoading ? (
                 <div className="py-12 text-center text-gray-500">
                   <i className="ri-loader-4-line mx-auto mb-2 block h-10 w-10 animate-spin text-blue-500" />
-                  <p className="text-sm font-medium">악보 모음집을 불러오는 중입니다...</p>
+                  <p className="text-sm font-medium">{t('home.loadingCollections')}</p>
                 </div>
               ) : collectionsToDisplay.length === 0 ? (
                 <div className="mt-6 rounded-2xl border border-dashed border-blue-200 bg-blue-50/60 px-6 py-10 text-center text-gray-600">
                   <i className="ri-folder-music-line mb-4 text-4xl text-blue-300" />
-                  <p className="text-base font-semibold">아직 등록된 모음집이 없습니다.</p>
-                  <p className="mt-2 text-sm text-gray-500">새로운 모음집이 준비되는 대로 가장 먼저 알려드릴게요!</p>
+                  <p className="text-base font-semibold">{t('home.noCollections')}</p>
+                  <p className="mt-2 text-sm text-gray-500">{t('home.noCollectionsSub')}</p>
                 </div>
               ) : (
                 <div className="mt-6 flex gap-4 overflow-x-auto pb-2">
@@ -1263,7 +1271,7 @@ export default function Home() {
                           />
                           {collection.discount_percentage > 0 && (
                             <div className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow">
-                              {collection.discount_percentage}% 할인
+                              {t('home.discount', { percent: collection.discount_percentage })}
                             </div>
                           )}
                         </div>
@@ -1274,7 +1282,7 @@ export default function Home() {
                           )}
                           <div className="flex items-center gap-2 text-sm text-gray-500">
                             <i className="ri-drum-line text-base text-blue-500" />
-                            <span>{collection.sheet_count || 0}곡 포함</span>
+                            <span>{t('home.songsIncluded', { count: collection.sheet_count || 0 })}</span>
                           </div>
                           <div className="mt-auto flex items-center justify-between">
                             <div>
@@ -1295,7 +1303,7 @@ export default function Home() {
                               }}
                               className="inline-flex items-center rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
                             >
-                              자세히 보기
+                              {t('home.viewDetailsCollection')}
                               <i className="ri-arrow-right-line ml-2" />
                             </button>
                           </div>
@@ -1310,21 +1318,24 @@ export default function Home() {
             <div className="hidden md:block">
               <div className="mb-12 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <p className="text-base font-semibold uppercase tracking-wide text-blue-500">악보 모음집</p>
+                  <p className="text-base font-semibold uppercase tracking-wide text-blue-500">{t('home.collections')}</p>
                   <h3 className="mt-2 text-3xl font-bold text-gray-900 leading-snug">
-                    테마별로 엄선한
-                    <br />
-                    프리미엄 드럼 악보 컬렉션
+                    {t('home.collectionsSubtitle').split('\n').map((line, idx) => (
+                      <span key={idx}>
+                        {line}
+                        {idx < t('home.collectionsSubtitle').split('\n').length - 1 && <br />}
+                      </span>
+                    ))}
                   </h3>
                   <p className="mt-3 text-gray-600">
-                    여러 곡을 한 번에, 할인된 가격으로 만나보세요. 연습 목적이나 공연 준비에 딱 맞는 모음집을 추천드립니다.
+                    {t('home.collectionsDescriptionFull')}
                   </p>
                 </div>
                 <a
                   href="/collections"
                   className="inline-flex items-center justify-center rounded-full border border-blue-200 bg-white px-6 py-3 text-sm font-semibold text-blue-600 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
                 >
-                  모음집 모두 보기
+                  {t('home.viewAllCollections')}
                   <i className="ri-arrow-right-line ml-2 text-base" />
                 </a>
               </div>
@@ -1332,13 +1343,13 @@ export default function Home() {
               {collectionsLoading ? (
                 <div className="py-24 text-center text-gray-500">
                   <i className="ri-loader-4-line w-10 h-10 animate-spin text-blue-500 mx-auto mb-2" />
-                  <p className="font-medium">악보 모음집을 불러오는 중입니다...</p>
+                  <p className="font-medium">{t('home.loadingCollections')}</p>
                 </div>
               ) : collectionsToDisplay.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-blue-200 bg-blue-50/50 px-10 py-16 text-center text-gray-600">
                   <i className="ri-folder-music-line text-5xl text-blue-300 mb-4" />
-                  <p className="text-lg font-semibold">아직 등록된 모음집이 없습니다.</p>
-                  <p className="mt-2 text-sm text-gray-500">새로운 모음집이 준비되는 대로 가장 먼저 알려드릴게요!</p>
+                  <p className="text-lg font-semibold">{t('home.noCollections')}</p>
+                  <p className="mt-2 text-sm text-gray-500">{t('home.noCollectionsSub')}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
@@ -1366,7 +1377,7 @@ export default function Home() {
                           />
                           {collection.discount_percentage > 0 && (
                             <div className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow">
-                              {collection.discount_percentage}% 할인
+                              {t('home.discount', { percent: collection.discount_percentage })}
                             </div>
                           )}
                         </div>
@@ -1381,7 +1392,7 @@ export default function Home() {
                           </div>
                           <div className="flex items-center gap-2 text-sm text-gray-500">
                             <i className="ri-drum-line text-base text-blue-500" />
-                            <span>{collection.sheet_count || 0}곡 포함</span>
+                            <span>{t('home.songsIncluded', { count: collection.sheet_count || 0 })}</span>
                           </div>
                           <div className="mt-auto flex items-center justify-between">
                             <div className="flex flex-col">
@@ -1402,7 +1413,7 @@ export default function Home() {
                               }}
                               className="inline-flex items-center rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
                             >
-                              자세히 보기
+                              {t('home.viewDetailsCollection')}
                               <i className="ri-arrow-right-line ml-2" />
                             </button>
                           </div>
@@ -1420,39 +1431,30 @@ export default function Home() {
         <section className="py-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-12">
-              <h3 className="text-3xl font-bold text-gray-900 mb-4">카피드럼의 특별함</h3>
-              <p className="text-lg text-gray-600">전문가가 인정한 프리미엄 드럼 악보 서비스</p>
+              <h3 className="text-3xl font-bold text-gray-900 mb-4">{t('home.featuresTitle')}</h3>
+              <p className="text-lg text-gray-600">{t('home.featuresSubtitle')}</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="text-center">
                 <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
                   <i className="ri-file-edit-line text-blue-600 text-2xl"></i>
                 </div>
-                <h4 className="text-xl font-bold text-gray-900 mb-4">맞춤 주문제작</h4>
-                <p className="text-gray-600">
-                  원하는 곡의 드럼 악보를 직접 의뢰하면<br />
-                  전문 편곡자가 정확하고 완성도 높게 제작해드립니다.
-                </p>
+                <h4 className="text-xl font-bold text-gray-900 mb-4">{t('home.customOrderTitle')}</h4>
+                <p className="text-gray-600" dangerouslySetInnerHTML={{ __html: t('home.customOrderDescription') }} />
               </div>
               <div className="text-center">
                 <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
                   <i className="ri-price-tag-3-line text-blue-600 text-2xl"></i>
                 </div>
-                <h4 className="text-xl font-bold text-gray-900 mb-4">특가 이벤트</h4>
-                <p className="text-gray-600">
-                  정기적으로 진행되는 할인 프로모션을 통해<br />
-                  고품질 드럼 악보를 합리적인 가격에 만나보세요.
-                </p>
+                <h4 className="text-xl font-bold text-gray-900 mb-4">{t('home.eventSaleTitle')}</h4>
+                <p className="text-gray-600" dangerouslySetInnerHTML={{ __html: t('home.eventSaleDescription') }} />
               </div>
               <div className="text-center">
                 <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
                   <i className="ri-download-cloud-line text-blue-600 text-2xl"></i>
                 </div>
-                <h4 className="text-xl font-bold text-gray-900 mb-4">즉시 다운로드</h4>
-                <p className="text-gray-600">
-                  결제 후 즉시 고화질 PDF 악보를 내려받고<br />
-                  바로 연습을 시작하세요.
-                </p>
+                <h4 className="text-xl font-bold text-gray-900 mb-4">{t('home.instantDownloadTitle')}</h4>
+                <p className="text-gray-600" dangerouslySetInnerHTML={{ __html: t('home.instantDownloadDescription') }} />
               </div>
             </div>
           </div>
@@ -1464,24 +1466,22 @@ export default function Home() {
       <div className="lg:mr-64">
         <section className="bg-blue-600 text-center text-white">
           <div className="px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
-            <h3 className="text-2xl sm:text-3xl font-bold mb-4">찾으시는 악보가 없으신가요?</h3>
+            <h3 className="text-2xl sm:text-3xl font-bold mb-4">{t('home.customOrderCTATitle')}</h3>
             {/* Mobile Version */}
             <div className="md:hidden text-lg sm:text-xl text-blue-100 mb-8 space-y-1">
-              <p>원하시는 곡의 드럼 악보를</p>
-              <p>전문가가 직접 제작해드립니다.</p>
-              <p>지금 주문제작으로</p>
-              <p>나만의 악보를 받아보세요.</p>
+              <p>{t('home.customOrderCTADescription')}</p>
+              <p>{t('home.customOrderCTADescription2')}</p>
             </div>
             {/* PC Version */}
             <div className="hidden md:block text-xl text-blue-100 mb-8 space-y-1">
-              <p>원하시는 곡의 드럼 악보를 전문가가 직접 제작해드립니다.</p>
-              <p>지금 주문제작으로 나만의 악보를 받아보세요.</p>
+              <p>{t('home.customOrderCTADescription')}</p>
+              <p>{t('home.customOrderCTADescription2')}</p>
             </div>
             <button 
               onClick={() => navigate('/custom-order')}
               className="bg-white text-blue-600 px-8 py-4 rounded-lg hover:bg-gray-100 font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors shadow-lg"
             >
-              주문제작 신청하기
+              {t('home.customOrderCTAButton')}
             </button>
           </div>
         </section>
@@ -1499,7 +1499,7 @@ export default function Home() {
           onClick={() => navigate('/company/business-info')}
           className="text-sm font-semibold text-gray-700 underline underline-offset-4"
         >
-          카피드럼 사업자정보 &gt;
+          {t('home.businessInfo')} &gt;
         </button>
         <p className="text-xs text-gray-500">© {new Date().getFullYear()} COPYDRUM. All rights reserved.</p>
       </div>

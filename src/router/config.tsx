@@ -30,6 +30,8 @@ const PartnershipPage = lazy(() => import('../pages/company/partnership'));
 const BusinessInfoPage = lazy(() => import('../pages/company/business-info'));
 const InicisReturnPage = lazy(() => import('../pages/payments/inicis-return/page'));
 const InicisClosePage = lazy(() => import('../pages/payments/inicis-close/page'));
+const PayPalReturnPage = lazy(() => import('../pages/payments/paypal-return/page'));
+const PayPalCancelPage = lazy(() => import('../pages/payments/paypal-cancel/page'));
 
 // 로딩 컴포넌트
 const LoadingSpinner = () => (
@@ -287,6 +289,22 @@ const routes: RouteObject[] = [
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <InicisClosePage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/payments/paypal/return',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <PayPalReturnPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/payments/paypal/cancel',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <PayPalCancelPage />
       </Suspense>
     ),
   },

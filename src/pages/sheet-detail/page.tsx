@@ -15,6 +15,7 @@ import { processCashPurchase } from '../../lib/cashPurchases';
 import { isFavorite, toggleFavorite } from '../../lib/favorites';
 import { hasPurchasedSheet } from '../../lib/purchaseCheck';
 import { BankTransferInfoModal, PaymentMethodSelector } from '../../components/payments';
+import type { PaymentMethod } from '../../components/payments';
 import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { openCashChargeModal } from '../../lib/cashChargeModal';
@@ -59,7 +60,11 @@ export default function SheetDetailPage() {
   const eventIsActive = eventDiscount ? isEventActive(eventDiscount) : false;
   const displayPrice = sheet ? (eventDiscount && eventIsActive ? eventDiscount.discount_price : sheet.price) : 0;
   const { i18n, t } = useTranslation();
-  const formatCurrency = (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted;
+  const formatCurrency = (value: number) => formatPrice({ 
+    amountKRW: value, 
+    language: i18n.language,
+    host: typeof window !== 'undefined' ? window.location.host : undefined
+  }).formatted;
 
   useEffect(() => {
     checkAuth();
@@ -189,7 +194,7 @@ export default function SheetDetailPage() {
   };
 
   const completeOnlinePurchase = async (
-    method: 'card' | 'bank_transfer',
+    method: 'card' | 'bank_transfer' | 'paypal',
     options?: { depositorName?: string },
   ) => {
     if (!user || !sheet) return;
@@ -211,6 +216,9 @@ export default function SheetDetailPage() {
     if (method === 'bank_transfer') {
       setBankTransferInfo(result.virtualAccountInfo ?? null);
       alert(t('sheetDetail.bankTransferCreated'));
+    } else if (method === 'paypal') {
+      setBankTransferInfo(null);
+      // PayPal은 리다이렉트되므로 알림 불필요
     } else {
       setBankTransferInfo(null);
       alert(t('sheetDetail.paymentWindowOpen'));
@@ -240,7 +248,7 @@ export default function SheetDetailPage() {
     setShowPaymentSelector(true);
   };
 
-  const handlePaymentMethodSelect = async (method: 'cash' | 'card' | 'bank') => {
+  const handlePaymentMethodSelect = async (method: PaymentMethod) => {
     if (!user || !sheet) return;
 
     setShowPaymentSelector(false);
@@ -291,6 +299,11 @@ export default function SheetDetailPage() {
         }
 
         alert(t('sheetDetail.purchaseCompleteMessage', { message }));
+        return;
+      }
+
+      if (method === 'paypal') {
+        await completeOnlinePurchase('paypal');
         return;
       }
 

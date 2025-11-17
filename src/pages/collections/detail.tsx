@@ -63,7 +63,11 @@ export default function CollectionDetailPage() {
   const { i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const formatCurrency = useCallback(
-    (value: number) => formatPrice({ amountKRW: value, language: currentLanguage }).formatted,
+    (value: number) => formatPrice({ 
+      amountKRW: value, 
+      language: currentLanguage,
+      host: typeof window !== 'undefined' ? window.location.host : undefined
+    }).formatted,
     [currentLanguage],
   );
 
