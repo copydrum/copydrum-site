@@ -52,19 +52,55 @@ export default function ResetPassword() {
         
         if (confirmationUrl && !accessTokenFromHash) {
           // confirmation_url이 있고, 아직 토큰을 받지 않은 경우
-          console.log('confirmation_url 감지, Supabase로 리디렉션:', confirmationUrl);
+          console.log('confirmation_url 감지:', confirmationUrl);
           try {
             const decodedUrl = decodeURIComponent(confirmationUrl);
             const url = new URL(decodedUrl);
             
-            // redirect_to를 현재 페이지로 설정 (hash fragment를 포함하도록)
+            // confirmation_url에서 토큰 추출
+            const token = url.searchParams.get('token');
+            const type = url.searchParams.get('type');
+            
+            console.log('토큰 추출:', { hasToken: !!token, type });
+            
+            if (token && type === 'recovery') {
+              // 토큰이 있으면 Supabase verifyOtp API를 사용하여 직접 검증
+              console.log('verifyOtp로 토큰 검증 시도...');
+              const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+                token_hash: token,
+                type: 'recovery',
+              });
+              
+              if (verifyError) {
+                console.error('OTP 검증 오류:', verifyError);
+                if (verifyError.message.includes('expired') || verifyError.message.includes('invalid')) {
+                  setError('비밀번호 재설정 링크가 만료되었거나 유효하지 않습니다. 새로운 재설정 링크를 요청해주세요.');
+                } else {
+                  setError('비밀번호 재설정 링크 확인 중 오류가 발생했습니다. 다시 시도해주세요.');
+                }
+                setCheckingToken(false);
+                return;
+              }
+              
+              if (verifyData.session) {
+                console.log('세션 설정 성공 (verifyOtp)');
+                setIsValidToken(true);
+                setCheckingToken(false);
+                return;
+              } else {
+                console.error('세션 데이터가 없음:', verifyData);
+                setError('세션을 설정할 수 없습니다. 새로운 재설정 링크를 요청해주세요.');
+                setCheckingToken(false);
+                return;
+              }
+            }
+            
+            // 토큰이 없거나 verifyOtp가 실패한 경우, redirect_to를 설정하고 Supabase로 리디렉션
             const currentOrigin = window.location.origin;
             const resetPasswordPath = `${currentOrigin}/auth/reset-password`;
             url.searchParams.set('redirect_to', resetPasswordPath);
             
-            console.log('리디렉션 URL:', url.toString());
-            // Supabase verify URL로 리디렉션
-            // Supabase가 토큰을 검증한 후 redirect_to로 리디렉션할 때 hash fragment를 포함해야 함
+            console.log('Supabase로 리디렉션 (fallback):', url.toString());
             window.location.href = url.toString();
             return;
           } catch (err) {
