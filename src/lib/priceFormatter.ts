@@ -102,3 +102,15 @@ export const formatPrice = ({
 export const getCurrencySymbol = (currency: 'KRW' | 'USD') =>
   currency === 'KRW' ? '₩' : '$';
 
+// USD를 KRW로 변환
+export const convertUSDToKRW = (usdAmount: number, usdRate?: number): number => {
+  const rate = resolveUsdRate(usdRate);
+  return Math.round(usdAmount / rate);
+};
+
+// KRW를 USD로 변환
+export const convertKRWToUSD = (krwAmount: number, usdRate?: number): number => {
+  const rate = resolveUsdRate(usdRate);
+  return Math.round(krwAmount * rate * 100) / 100;
+};
+

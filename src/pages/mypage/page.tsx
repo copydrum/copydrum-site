@@ -13,6 +13,8 @@ import type { FavoriteSheet } from '../../lib/favorites';
 import { fetchUserFavorites, removeFavorite } from '../../lib/favorites';
 import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
 import { buildDownloadKey, downloadFile, getDownloadFileName, requestSignedDownloadUrl } from '../../utils/downloadHelpers';
+import { convertUSDToKRW } from '../../lib/priceFormatter';
+import { isEnglishHost } from '../../i18n/languages';
 
 type TabKey = 'profile' | 'purchases' | 'downloads' | 'favorites' | 'cash' | 'inquiries' | 'custom-orders';
 
@@ -204,7 +206,13 @@ export default function MyPage() {
   
   // 캐시충전 모달 상태
   const [showCashChargeModal, setShowCashChargeModal] = useState(false);
-  const [chargeAmount, setChargeAmount] = useState(10000);
+  const isEnglishSiteForState = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return isEnglishHost(window.location.host);
+  }, []);
+  const [chargeAmount, setChargeAmount] = useState(
+    isEnglishSiteForState ? convertUSDToKRW(10) : 10000
+  );
   const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank'>('bank');
   const [chargeAgreementChecked, setChargeAgreementChecked] = useState(false);
   const [chargeProcessing, setChargeProcessing] = useState(false);
@@ -212,14 +220,33 @@ export default function MyPage() {
   const [showDepositorInput, setShowDepositorInput] = useState(false);
   const [depositorName, setDepositorName] = useState('');
   
-  const chargeOptions = [
-    { amount: 3000, bonus: 0, label: '3천원' },
-    { amount: 5000, bonus: 500, label: '5천원', bonusPercent: '10%' },
-    { amount: 10000, bonus: 1500, label: '1만원', bonusPercent: '15%' },
-    { amount: 30000, bonus: 6000, label: '3만원', bonusPercent: '20%' },
-    { amount: 50000, bonus: 11000, label: '5만원', bonusPercent: '22%' },
-    { amount: 100000, bonus: 25000, label: '10만원', bonusPercent: '25%' },
-  ];
+  const isEnglishSite = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return isEnglishHost(window.location.host);
+  }, []);
+
+  const chargeOptions = useMemo(() => {
+    if (isEnglishSite) {
+      // 영문 사이트: 달러 단위
+      return [
+        { amount: convertUSDToKRW(3), bonus: 0, label: '$3', amountUSD: 3, bonusUSD: 0 },
+        { amount: convertUSDToKRW(5), bonus: convertUSDToKRW(0.5), label: '$5', amountUSD: 5, bonusUSD: 0.5 },
+        { amount: convertUSDToKRW(10), bonus: convertUSDToKRW(1), label: '$10', amountUSD: 10, bonusUSD: 1 },
+        { amount: convertUSDToKRW(30), bonus: convertUSDToKRW(6), label: '$30', amountUSD: 30, bonusUSD: 6 },
+        { amount: convertUSDToKRW(50), bonus: convertUSDToKRW(11), label: '$50', amountUSD: 50, bonusUSD: 11 },
+        { amount: convertUSDToKRW(100), bonus: convertUSDToKRW(25), label: '$100', amountUSD: 100, bonusUSD: 25 },
+      ];
+    }
+    // 한국어 사이트: 원화 단위
+    return [
+      { amount: 3000, bonus: 0, label: '3천원' },
+      { amount: 5000, bonus: 500, label: '5천원', bonusPercent: '10%' },
+      { amount: 10000, bonus: 1500, label: '1만원', bonusPercent: '15%' },
+      { amount: 30000, bonus: 6000, label: '3만원', bonusPercent: '20%' },
+      { amount: 50000, bonus: 11000, label: '5만원', bonusPercent: '22%' },
+      { amount: 100000, bonus: 25000, label: '10만원', bonusPercent: '25%' },
+    ];
+  }, [isEnglishSite]);
 
   const paymentMethods = [
     { 
@@ -2366,11 +2393,15 @@ export default function MyPage() {
                           {option.bonus > 0 && (
                             <div className="mt-1">
                               <span className="text-xs text-gray-500">
-                                +{option.bonus.toLocaleString()} 적립
+                                {isEnglishSite && 'amountUSD' in option
+                                  ? `+$${option.bonusUSD} bonus`
+                                  : `+${option.bonus.toLocaleString()} 적립`}
                               </span>
-                              <span className="ml-1 bg-red-500 text-white text-xs px-1 py-0.5 rounded">
-                                {option.bonusPercent}
-                              </span>
+                              {!isEnglishSite && option.bonusPercent && (
+                                <span className="ml-1 bg-red-500 text-white text-xs px-1 py-0.5 rounded">
+                                  {option.bonusPercent}
+                                </span>
+                              )}
                             </div>
                           )}
                         </button>

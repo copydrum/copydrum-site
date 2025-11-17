@@ -4,7 +4,8 @@ import { supabase } from '../../lib/supabase';
 import { startCashCharge } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import type { VirtualAccountInfo } from '../../lib/payments';
-import { formatPrice } from '../../lib/priceFormatter';
+import { formatPrice, convertUSDToKRW } from '../../lib/priceFormatter';
+import { isEnglishHost } from '../../i18n/languages';
 
 interface MobileCashChargeModalProps {
   isOpen: boolean;
@@ -28,14 +29,7 @@ interface PaymentMethodConfig {
   disabled?: boolean;
 }
 
-const chargeOptions: ChargeOption[] = [
-  { amount: 3000 },
-  { amount: 5000, bonus: 500, bonusPercent: '10%' },
-  { amount: 10000, bonus: 1500, bonusPercent: '15%' },
-  { amount: 30000, bonus: 6000, bonusPercent: '20%' },
-  { amount: 50000, bonus: 11000, bonusPercent: '22%' },
-  { amount: 100000, bonus: 25000, bonusPercent: '25%' },
-];
+// chargeOptions는 컴포넌트 내부에서 동적으로 생성
 
 const paymentMethodConfigs: PaymentMethodConfig[] = [
   {
@@ -67,6 +61,35 @@ export default function MobileCashChargeModal({
     (value: number) => new Intl.NumberFormat(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US').format(value),
     [i18n.language],
   );
+
+  const isEnglishSite = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return isEnglishHost(window.location.host);
+  }, []);
+
+  const chargeOptions = useMemo<ChargeOption[]>(() => {
+    if (isEnglishSite) {
+      // 영문 사이트: 달러 단위
+      return [
+        { amount: convertUSDToKRW(3), bonus: 0, bonusPercent: undefined },
+        { amount: convertUSDToKRW(5), bonus: convertUSDToKRW(0.5), bonusPercent: undefined },
+        { amount: convertUSDToKRW(10), bonus: convertUSDToKRW(1), bonusPercent: undefined },
+        { amount: convertUSDToKRW(30), bonus: convertUSDToKRW(6), bonusPercent: undefined },
+        { amount: convertUSDToKRW(50), bonus: convertUSDToKRW(11), bonusPercent: undefined },
+        { amount: convertUSDToKRW(100), bonus: convertUSDToKRW(25), bonusPercent: undefined },
+      ];
+    }
+    // 한국어 사이트: 원화 단위
+    return [
+      { amount: 3000 },
+      { amount: 5000, bonus: 500, bonusPercent: '10%' },
+      { amount: 10000, bonus: 1500, bonusPercent: '15%' },
+      { amount: 30000, bonus: 6000, bonusPercent: '20%' },
+      { amount: 50000, bonus: 11000, bonusPercent: '22%' },
+      { amount: 100000, bonus: 25000, bonusPercent: '25%' },
+    ];
+  }, [isEnglishSite]);
+
   const [selectedAmount, setSelectedAmount] = useState<number>(chargeOptions[2].amount);
   const [selectedPayment, setSelectedPayment] = useState<PaymentSelection>('bank');
   const [agreementChecked, setAgreementChecked] = useState(false);
@@ -78,7 +101,7 @@ export default function MobileCashChargeModal({
 
   const selectedOption = useMemo(
     () => chargeOptions.find((option) => option.amount === selectedAmount) ?? chargeOptions[0],
-    [selectedAmount],
+    [selectedAmount, chargeOptions],
   );
 
   const resetState = useCallback(() => {
@@ -89,7 +112,7 @@ export default function MobileCashChargeModal({
     setBankTransferInfo(null);
     setShowDepositorInput(false);
     setDepositorName('');
-  }, []);
+  }, [chargeOptions]);
 
   const loadUserCash = useCallback(async () => {
     if (!user) {
@@ -388,10 +411,12 @@ export default function MobileCashChargeModal({
                             <p className="text-sm font-semibold">{formatCurrency(option.amount)}</p>
                             {option.bonus ? (
                               <p className="mt-1 text-xs text-blue-600">
-                                {t('mobile.cash.bonusLabel', {
-                                  amount: formatPoints(option.bonus ?? 0),
-                                  percent: option.bonusPercent,
-                                })}
+                                {isEnglishSite
+                                  ? `+${formatCurrency(option.bonus)} bonus`
+                                  : t('mobile.cash.bonusLabel', {
+                                      amount: formatPoints(option.bonus ?? 0),
+                                      percent: option.bonusPercent,
+                                    })}
                               </p>
                             ) : (
                               <p className="mt-1 text-xs text-gray-500">
