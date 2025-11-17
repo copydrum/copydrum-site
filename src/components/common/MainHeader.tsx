@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import { googleAuth } from '../../lib/google';
 import LanguageSelector from './LanguageSelector';
+import { isEnglishHost } from '../../i18n/languages';
 
 interface MainHeaderProps {
   user?: User | null;
@@ -13,7 +14,8 @@ interface MainHeaderProps {
 export default function MainHeader({ user }: MainHeaderProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
 
   const navItems = useMemo(
     () => [
@@ -77,7 +79,7 @@ export default function MainHeader({ user }: MainHeaderProps) {
               onClick={handleLogout}
               className="text-white hover:text-purple-300 text-sm font-medium px-3 py-1.5 rounded-md hover:bg-white/10 transition-colors cursor-pointer"
             >
-              로그아웃
+              {t('nav.logout')}
             </button>
           )}
           <LanguageSelector />
@@ -88,17 +90,19 @@ export default function MainHeader({ user }: MainHeaderProps) {
           <div className="flex items-center -ml-4 absolute left-0">
             <img
               src="/logo.png"
-              alt="카피드럼"
-              className="h-12 w-auto mr-3 cursor-pointer"
+              alt={t('site.name')}
+              className={`h-12 w-auto cursor-pointer ${isEnglishSite ? '' : 'mr-3'}`}
               onClick={() => navigate('/')}
             />
-            <h1
-              className="text-2xl font-bold text-white cursor-pointer"
-              style={{ fontFamily: '"Noto Sans KR", "Malgun Gothic", sans-serif' }}
-              onClick={() => navigate('/')}
-            >
-              카피드럼
-            </h1>
+            {!isEnglishSite && (
+              <h1
+                className="text-2xl font-bold text-white cursor-pointer"
+                style={{ fontFamily: '"Noto Sans KR", "Malgun Gothic", sans-serif' }}
+                onClick={() => navigate('/')}
+              >
+                {t('site.name')}
+              </h1>
+            )}
           </div>
 
           {/* Search Bar */}

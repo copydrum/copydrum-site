@@ -2,6 +2,7 @@ import type { User } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '../common/LanguageSelector';
+import { isEnglishHost } from '../../i18n/languages';
 
 interface MobileHeaderProps {
   user?: User | null;
@@ -17,6 +18,7 @@ export default function MobileHeader({
   const navigate = useNavigate();
   const { t } = useTranslation();
   const siteName = t('site.name');
+  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
 
   return (
     <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-blue-700 text-white">
@@ -41,9 +43,11 @@ export default function MobileHeader({
             alt={siteName}
             className="h-10 w-auto"
           />
-          <span className="text-xs font-semibold mt-1 tracking-wide">
-            {siteName}
-          </span>
+          {!isEnglishSite && (
+            <span className="text-xs font-semibold mt-1 tracking-wide">
+              {siteName}
+            </span>
+          )}
         </button>
 
         <button

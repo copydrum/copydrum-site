@@ -9,6 +9,7 @@ import UserSidebar from '@/components/feature/UserSidebar';
 import { useCart } from '@/hooks/useCart';
 import { buildDownloadKey, downloadFile, getDownloadFileName, requestSignedDownloadUrl } from '@/utils/downloadHelpers';
 import type { VirtualAccountInfo } from '@/lib/payments';
+import { useTranslation } from 'react-i18next';
 
 interface CategoryInfo {
   name: string | null;
@@ -48,61 +49,7 @@ interface OrderSummary {
   order_items: OrderItemInfo[];
 }
 
-const STATUS_META: Record<
-  string,
-  { label: string; badgeClass: string; description?: string }
-> = {
-  pending: {
-    label: '결제 대기',
-    badgeClass: 'bg-yellow-100 text-yellow-800',
-    description: '결제 확인을 기다리고 있습니다.',
-  },
-  in_progress: {
-    label: '처리 중',
-    badgeClass: 'bg-blue-100 text-blue-800',
-    description: '주문이 처리되고 있습니다.',
-  },
-  completed: {
-    label: '완료',
-    badgeClass: 'bg-green-100 text-green-800',
-    description: '결제가 정상적으로 완료되었습니다.',
-  },
-  cancelled: {
-    label: '취소됨',
-    badgeClass: 'bg-red-100 text-red-700',
-    description: '주문이 취소되었습니다.',
-  },
-  awaiting_deposit: {
-    label: '입금 대기',
-    badgeClass: 'bg-amber-100 text-amber-700',
-    description: '무통장입금 확인을 기다리고 있습니다.',
-  },
-  payment_confirmed: {
-    label: '결제 확인',
-    badgeClass: 'bg-blue-100 text-blue-800',
-    description: '결제가 확인되었습니다. 다운로드가 가능합니다.',
-  },
-  paid: {
-    label: '결제 완료',
-    badgeClass: 'bg-green-100 text-green-900',
-    description: '결제가 완료되었습니다.',
-  },
-  refunded: {
-    label: '환불 완료',
-    badgeClass: 'bg-purple-100 text-purple-700',
-    description: '환불이 완료된 주문입니다. 해당 악보는 더 이상 다운로드할 수 없습니다.',
-  },
-};
-
 const DOWNLOADABLE_STATUSES = ['completed', 'payment_confirmed', 'paid'];
-
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  card: '카드 결제',
-  bank_transfer: '계좌 이체',
-  virtual_account: '가상 계좌',
-  cash: '보유 캐시',
-  points: '포인트 사용',
-};
 
 const formatCurrency = (value: number | null | undefined) =>
   value != null ? `₩${value.toLocaleString('ko-KR')}` : '-';
@@ -113,34 +60,85 @@ const formatDateTime = (value: string | null | undefined) =>
 const formatDate = (value: string | null | undefined) =>
   value ? new Date(value).toLocaleDateString('ko-KR') : '-';
 
-const normalizePaymentMethod = (method: string | null | undefined) => {
-  if (!method) return '-';
-  const key = method.toLowerCase();
-  return PAYMENT_METHOD_LABELS[key] ?? method;
-};
 
-const getCategoryName = (categories: DrumSheetInfo['categories']) => {
-  if (!categories) return '카테고리 미지정';
+const getCategoryName = (categories: DrumSheetInfo['categories'], t: (key: string) => string) => {
+  if (!categories) return t('myOrders.categoryNotSet');
   if (Array.isArray(categories)) {
-    return categories[0]?.name ?? '카테고리 미지정';
+    return categories[0]?.name ?? t('myOrders.categoryNotSet');
   }
-  return categories.name ?? '카테고리 미지정';
+  return categories.name ?? t('myOrders.categoryNotSet');
 };
 
-const getStatusMeta = (status: string | null | undefined) => {
+const getStatusMeta = (status: string | null | undefined, t: (key: string) => string) => {
   if (!status) {
     return {
-      label: '미정',
+      label: t('common.status'),
       badgeClass: 'bg-gray-100 text-gray-600',
       description: undefined,
     };
   }
+  const statusKey = status.toLowerCase();
+  const statusMap: Record<string, { label: string; badgeClass: string; description?: string }> = {
+    pending: {
+      label: t('myOrders.status.pending'),
+      badgeClass: 'bg-yellow-100 text-yellow-800',
+      description: t('myOrders.status.pendingDesc'),
+    },
+    in_progress: {
+      label: t('myOrders.status.processing'),
+      badgeClass: 'bg-blue-100 text-blue-800',
+      description: t('myOrders.status.processingDesc'),
+    },
+    completed: {
+      label: t('myOrders.status.completed'),
+      badgeClass: 'bg-green-100 text-green-800',
+      description: t('myOrders.status.completedDesc'),
+    },
+    cancelled: {
+      label: t('myOrders.status.cancelled'),
+      badgeClass: 'bg-red-100 text-red-700',
+      description: t('myOrders.status.cancelledDesc'),
+    },
+    awaiting_deposit: {
+      label: t('myOrders.status.paymentPending'),
+      badgeClass: 'bg-amber-100 text-amber-700',
+      description: t('myOrders.status.paymentPendingDesc'),
+    },
+    payment_confirmed: {
+      label: t('myOrders.status.paymentConfirmed'),
+      badgeClass: 'bg-blue-100 text-blue-800',
+      description: t('myOrders.status.paymentConfirmedDesc'),
+    },
+    paid: {
+      label: t('myOrders.status.paid'),
+      badgeClass: 'bg-green-100 text-green-900',
+      description: t('myOrders.status.paidDesc'),
+    },
+    refunded: {
+      label: t('myOrders.status.refunded'),
+      badgeClass: 'bg-purple-100 text-purple-700',
+      description: t('myOrders.status.refundedDesc'),
+    },
+  };
   return (
-    STATUS_META[status.toLowerCase()] ?? {
+    statusMap[statusKey] ?? {
       label: status,
       badgeClass: 'bg-gray-100 text-gray-600',
     }
   );
+};
+
+const getPaymentMethodLabel = (method: string | null | undefined, t: (key: string) => string) => {
+  if (!method) return '-';
+  const key = method.toLowerCase();
+  const methodMap: Record<string, string> = {
+    card: t('myOrders.paymentMethod.card'),
+    bank_transfer: t('myOrders.paymentMethod.bankTransfer'),
+    virtual_account: t('myOrders.paymentMethod.virtualAccount'),
+    cash: t('myOrders.paymentMethod.cash'),
+    points: t('myOrders.paymentMethod.points'),
+  };
+  return methodMap[key] ?? method;
 };
 
 const MyOrdersPage = () => {
@@ -152,6 +150,7 @@ const MyOrdersPage = () => {
   const [selectedPurchaseIds, setSelectedPurchaseIds] = useState<Record<string, string[]>>({});
   const [bulkDownloading, setBulkDownloading] = useState(false);
   const [downloadingKeys, setDownloadingKeys] = useState<string[]>([]);
+  const { t } = useTranslation();
 
   const loadOrders = useCallback(async (currentUser: User) => {
     const { data, error } = await supabase
@@ -430,7 +429,7 @@ const MyOrdersPage = () => {
 
   const handleDownloadMultiple = async (targets: { order: OrderSummary; item: OrderItemInfo }[]) => {
     if (targets.length === 0) {
-      alert('다운로드할 악보를 선택해주세요.');
+      alert(t('myOrders.selectSheetsToDownload'));
       return;
     }
 
@@ -438,7 +437,7 @@ const MyOrdersPage = () => {
       ({ order }) => !DOWNLOADABLE_STATUSES.includes((order.status ?? '').toLowerCase()),
     );
     if (invalidTargets.length > 0) {
-      alert('환불되었거나 다운로드가 제한된 주문이 포함되어 있습니다.');
+      alert(t('myOrders.refundedOrRestricted'));
       return;
     }
 
@@ -447,7 +446,7 @@ const MyOrdersPage = () => {
     } = await supabase.auth.getSession();
 
     if (!session?.access_token) {
-      alert('로그인이 필요합니다. 다시 로그인한 후 이용해주세요.');
+      alert(t('myOrders.loginRequired'));
       return;
     }
 
@@ -492,19 +491,19 @@ const MyOrdersPage = () => {
     }
 
     if (failed.length > 0) {
-      alert(`${failed.length}개의 파일을 다운로드하지 못했습니다. 잠시 후 다시 시도해주세요.`);
+      alert(t('myOrders.downloadFailed', { count: failed.length }));
     }
   };
 
   const handleDownloadSelectedInOrder = async (order: OrderSummary) => {
     if (!DOWNLOADABLE_STATUSES.includes((order.status ?? '').toLowerCase())) {
-      alert('환불되었거나 다운로드가 제한된 주문입니다.');
+      alert(t('myOrders.refundedOrder'));
       return;
     }
 
     const selectedIds = selectedPurchaseIds[order.id] ?? [];
     if (selectedIds.length === 0) {
-      alert('다운로드할 악보를 선택해주세요.');
+      alert(t('myOrders.selectSheetsToDownload'));
       return;
     }
 
@@ -517,7 +516,7 @@ const MyOrdersPage = () => {
 
   const handleDownloadAllInOrder = async (order: OrderSummary) => {
     if (!DOWNLOADABLE_STATUSES.includes((order.status ?? '').toLowerCase())) {
-      alert('환불되었거나 다운로드가 제한된 주문입니다.');
+      alert(t('myOrders.refundedOrder'));
       return;
     }
 
@@ -526,7 +525,7 @@ const MyOrdersPage = () => {
       .map((item) => ({ order, item }));
 
     if (targets.length === 0) {
-      alert('다운로드 가능한 악보가 없습니다.');
+      alert(t('myOrders.noSheetsToDownload'));
       return;
     }
 
@@ -535,17 +534,17 @@ const MyOrdersPage = () => {
 
   const handleDownload = async (order: OrderSummary, item: OrderItemInfo) => {
     if (!DOWNLOADABLE_STATUSES.includes((order.status ?? '').toLowerCase())) {
-      alert('환불되었거나 다운로드가 제한된 주문입니다.');
+      alert(t('myOrders.refundedOrder'));
       return;
     }
 
     if (!item.sheet_id) {
-      alert('다운로드 가능한 악보 정보를 찾을 수 없습니다.');
+      alert(t('myOrders.sheetInfoNotFound'));
       return;
     }
 
     if (!item.drum_sheets) {
-      alert('다운로드 가능한 파일을 찾을 수 없습니다.');
+      alert(t('myOrders.fileNotFound'));
       return;
     }
 
@@ -554,7 +553,7 @@ const MyOrdersPage = () => {
     } = await supabase.auth.getSession();
 
     if (!session?.access_token) {
-      alert('로그인이 필요합니다. 다시 로그인해주세요.');
+      alert(t('myOrders.loginRequired'));
       return;
     }
 
@@ -651,7 +650,7 @@ const MyOrdersPage = () => {
         ) : (
           <div className="space-y-6">
             {orders.map((order) => {
-              const statusMeta = getStatusMeta(order.status);
+              const statusMeta = getStatusMeta(order.status, t);
               const normalizedStatus = (order.status ?? '').toLowerCase();
               const isDownloadableStatus = DOWNLOADABLE_STATUSES.includes(normalizedStatus);
               const selectableOrderItems = order.order_items.filter((item) => item.sheet_id);
@@ -672,7 +671,7 @@ const MyOrdersPage = () => {
                   <header className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
                     <div>
                       <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <span>주문 번호</span>
+                        <span>{t('myOrders.orderNumber')}</span>
                         <span className="font-semibold text-gray-900">
                           {displayOrderNumber}
                         </span>
@@ -681,7 +680,7 @@ const MyOrdersPage = () => {
                         {formatDateTime(order.created_at)}
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
-                        결제 수단: {normalizePaymentMethod(order.payment_method)}
+                        {t('payment.method')}: {getPaymentMethodLabel(order.payment_method, t)}
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
@@ -806,10 +805,10 @@ const MyOrdersPage = () => {
                             />
                             <div className="min-w-0">
                               <p className="text-xs text-gray-500">
-                                {getCategoryName(sheet?.categories)}
+                                {getCategoryName(sheet?.categories, t)}
                               </p>
                               <h3 className="text-sm font-semibold text-gray-900 truncate">
-                                {sheet?.title ?? '삭제된 악보'}
+                                {sheet?.title ?? t('myOrders.deletedSheet')}
                               </h3>
                               <p className="text-xs text-gray-500">
                                 {sheet?.artist ?? '-'}

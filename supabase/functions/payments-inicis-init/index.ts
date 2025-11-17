@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const ALLOWED_ORIGIN = "https://www.copydrum.com";
+// 필요하면 http://localhost:3000 같이 개발용도 추가 가능
+
 // SHA256 해시 생성 함수
 const sha256 = async (data: string): Promise<string> => {
   const msgBuffer = new TextEncoder().encode(data);
@@ -9,11 +12,12 @@ const sha256 = async (data: string): Promise<string> => {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 };
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const getCorsHeaders = (origin?: string) => ({
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey",
+  "Access-Control-Max-Age": "86400",
+});
 
 const requireEnv = (key: string) => {
   const value = Deno.env.get(key);
@@ -26,23 +30,32 @@ const requireEnv = (key: string) => {
 const buildResponse = <T>(payload: T, status = 200) =>
   new Response(JSON.stringify(payload), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...getCorsHeaders(), "Content-Type": "application/json" },
   });
 
 serve(async (req) => {
-  // CORS preflight 요청 처리 (환경 변수 체크 전에 처리)
+  const origin = req.headers.get("origin") ?? "";
+
+  // ✅ 1) 프리플라이트(OPTIONS) 요청 먼저 처리
   if (req.method === "OPTIONS") {
-    return new Response("ok", { 
+    return new Response(null, {
       status: 200,
-      headers: corsHeaders 
+      headers: getCorsHeaders(origin),
     });
   }
 
+  // ✅ 2) 아래부터 실제 로직 (POST 등)
   if (req.method !== "POST") {
-    return new Response("Method Not Allowed", { 
-      status: 405, 
-      headers: corsHeaders 
-    });
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      {
+        status: 405,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders(origin),
+        },
+      }
+    );
   }
 
   try {
@@ -191,7 +204,10 @@ serve(async (req) => {
       }),
       {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders(),
+        },
       }
     );
   }

@@ -33,7 +33,7 @@ export default function CartPage() {
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [showBankTransferModal, setShowBankTransferModal] = useState(false);
   const navigate = useNavigate();
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const formatPriceValue = useCallback(
     (price: number) => formatPriceWithCurrency({ amountKRW: price, language: i18n.language }).formatted,
     [i18n.language],
@@ -43,8 +43,8 @@ export default function CartPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">로그인이 필요합니다</h2>
-          <p className="text-gray-600">장바구니를 확인하려면 로그인해주세요.</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('cart.loginRequired')}</h2>
+          <p className="text-gray-600">{t('cart.loginRequiredDescription')}</p>
         </div>
       </div>
     );
@@ -76,11 +76,11 @@ export default function CartPage() {
 
   const handleRemoveSelected = async () => {
     if (selectedItems.length === 0) {
-      alert('삭제할 상품을 선택해주세요.');
+      alert(t('cart.selectItemsToDelete'));
       return;
     }
 
-    if (confirm(`선택한 ${selectedItems.length}개 상품을 삭제하시겠습니까?`)) {
+    if (confirm(t('cart.confirmDelete', { count: selectedItems.length }))) {
       const success = await removeSelectedItems(selectedItems);
       if (success) {
         setSelectedItems([]);
@@ -91,7 +91,7 @@ export default function CartPage() {
   const handleClearCart = async () => {
     if (cartItems.length === 0) return;
 
-    if (confirm('장바구니를 전체 비우시겠습니까?')) {
+    if (confirm(t('cart.confirmClear'))) {
       const success = await clearCart();
       if (success) {
         setSelectedItems([]);
@@ -107,14 +107,14 @@ export default function CartPage() {
     }
 
     if (itemIds.length === 0) {
-      alert('구매할 상품을 선택해주세요.');
+      alert(t('cart.selectItemsToPurchase'));
       return;
     }
 
     let targetItemIds = [...itemIds];
     const itemsToPurchase = cartItems.filter(item => targetItemIds.includes(item.id));
     if (itemsToPurchase.length === 0) {
-      alert('선택한 상품 정보를 찾을 수 없습니다.');
+      alert(t('cart.itemsNotFound'));
       return;
     }
 
@@ -133,7 +133,7 @@ export default function CartPage() {
               ? duplicateItems.map(item => `- ${item.title}`).join('\n')
               : purchasedSheetIds.map(id => `- ${id}`).join('\n');
           alert(
-            ['이미 구매하신 악보만 선택되어 결제를 진행할 수 없습니다.', '', '중복된 악보:', duplicateList].join('\n'),
+            [t('cart.onlyPurchasedItems'), '', t('cart.duplicateSheets'), duplicateList].join('\n'),
           );
           return;
         }
@@ -148,29 +148,29 @@ export default function CartPage() {
 
         alert(
           [
-            '이미 구매하신 악보를 제외하고 결제를 진행합니다.',
+            t('cart.excludePurchased'),
             '',
-            '제외된 악보:',
+            t('cart.excludedSheets'),
             duplicateList,
           ].join('\n'),
         );
       }
     } catch (error) {
       console.error('장바구니 구매 전 구매 이력 확인 오류:', error);
-      alert('구매 이력 확인 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      alert(t('cart.purchaseCheckError'));
       return;
     }
 
     if (filteredItems.length === 0) {
-      alert('구매할 수 있는 신규 악보가 없습니다.');
+      alert(t('cart.noNewItems'));
       return;
     }
 
     const totalPrice = filteredItems.reduce((total, item) => total + item.price, 0);
     const description =
       filteredItems.length === 1
-        ? `악보 구매: ${filteredItems[0].title}`
-        : `장바구니 상품 ${filteredItems.length}개 구매`;
+        ? t('cart.purchaseDescription', { title: filteredItems[0].title })
+        : t('cart.cartPurchaseDescription', { count: filteredItems.length });
 
     const purchaseItems = filteredItems.map(item => ({
       sheetId: item.sheet_id,
@@ -227,10 +227,10 @@ export default function CartPage() {
 
     if (method === 'bank_transfer') {
       setBankTransferInfo(purchaseResult.virtualAccountInfo ?? null);
-      alert('무통장입금 안내가 생성되었습니다.\n안내에 따라 입금 후 자동으로 구매가 완료됩니다.');
+      alert(t('cart.bankTransferCreated'));
     } else {
       setBankTransferInfo(null);
-      alert('결제창이 열립니다. 결제를 완료해 주세요.');
+      alert(t('cart.paymentWindowOpen'));
     }
   };
 
@@ -261,9 +261,9 @@ export default function CartPage() {
         if (!cashResult.success) {
           if (cashResult.reason === 'INSUFFICIENT_CREDIT') {
             alert(
-              `보유 캐쉬가 부족합니다.\n현재 잔액: ${cashResult.currentCredits.toLocaleString(
-                'ko-KR',
-              )}P\n캐쉬를 충전한 뒤 다시 시도해주세요.`,
+              t('cart.insufficientCash', { 
+                amount: cashResult.currentCredits.toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')
+              }),
             );
             openCashChargeModal();
           }
@@ -279,7 +279,7 @@ export default function CartPage() {
           prev.filter(id => !pendingPurchase.targetItemIds.includes(id)),
         );
 
-        alert('구매가 완료되었습니다. 마이페이지에서 콘텐츠를 확인하세요.');
+        alert(t('cart.purchaseComplete'));
         navigate('/my-orders');
         return;
       }
@@ -287,7 +287,7 @@ export default function CartPage() {
       await completeOnlinePurchase('card');
     } catch (error) {
       console.error('장바구니 결제 처리 오류:', error);
-      alert(error instanceof Error ? error.message : '결제 처리 중 오류가 발생했습니다.');
+      alert(error instanceof Error ? error.message : t('cart.paymentError'));
     } finally {
       setProcessing(false);
       setPaymentProcessing(false);
@@ -306,7 +306,7 @@ export default function CartPage() {
       await completeOnlinePurchase('bank_transfer', { depositorName });
     } catch (error) {
       console.error('무통장입금 결제 처리 오류:', error);
-      alert(error instanceof Error ? error.message : '결제 처리 중 오류가 발생했습니다.');
+      alert(error instanceof Error ? error.message : t('cart.paymentError'));
     } finally {
       setProcessing(false);
       setPaymentProcessing(false);
@@ -320,13 +320,13 @@ export default function CartPage() {
         {bankTransferInfo ? (
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-blue-900">무통장입금 안내</h3>
+              <h3 className="font-semibold text-blue-900">{t('cart.bankTransferInfo')}</h3>
               <button
                 type="button"
                 onClick={() => setBankTransferInfo(null)}
                 className="text-blue-600 hover:text-blue-800 text-xs"
               >
-                닫기
+                {t('cart.close')}
               </button>
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">

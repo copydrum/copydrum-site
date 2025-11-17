@@ -1,5 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { isEnglishHost } from '../../i18n/languages';
 
 interface FooterLink {
   label: string;
@@ -16,24 +18,26 @@ const categoryLinks: FooterLink[] = [
   { label: 'OST', href: '/categories?search=OST' },
 ];
 
-const supportLinks: FooterLink[] = [
-  { label: '이용 가이드', href: '/guide' },
-  { label: '자주 묻는 질문', href: '/customer-support' },
-  { label: '문의하기', href: '/customer-support?tab=contact' },
-  { label: '환불 정책', href: '/customer-support?tab=faq' },
-];
-
-const companyLinks: FooterLink[] = [
-  { label: '회사 소개', href: '/company/about' },
-  { label: '사업자 정보', href: '/company/business-info' },
-  { label: '이용약관', href: '/guide#terms' },
-  { label: '개인정보처리방침', href: '/guide#privacy' },
-  { label: '파트너십', href: '/company/partnership' },
-];
-
 export default function Footer() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const currentYear = new Date().getFullYear();
+  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
+
+  const supportLinks: FooterLink[] = [
+    { label: t('footer.guide'), href: '/guide' },
+    { label: t('footer.faq'), href: '/customer-support' },
+    { label: t('footer.contact'), href: '/customer-support?tab=contact' },
+    { label: t('footer.refundPolicy'), href: '/customer-support?tab=faq' },
+  ];
+
+  const companyLinks: FooterLink[] = [
+    { label: t('footer.about'), href: '/company/about' },
+    { label: t('footer.businessInfo'), href: '/company/business-info' },
+    { label: t('footer.terms'), href: '/guide#terms' },
+    { label: t('footer.privacy'), href: '/guide#privacy' },
+    { label: t('footer.partnership'), href: '/company/partnership' },
+  ];
 
   const handleInternalNavigation = useCallback(
     (href: string) => () => {
@@ -79,15 +83,17 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
-            <div
-              className="text-2xl font-bold mb-4 cursor-pointer"
-              style={{ fontFamily: '"Noto Sans KR", "Malgun Gothic", sans-serif' }}
-              onClick={handleInternalNavigation('/')}
-            >
-              카피드럼
-            </div>
+            {!isEnglishSite && (
+              <div
+                className="text-2xl font-bold mb-4 cursor-pointer"
+                style={{ fontFamily: '"Noto Sans KR", "Malgun Gothic", sans-serif' }}
+                onClick={handleInternalNavigation('/')}
+              >
+                {t('site.name')}
+              </div>
+            )}
             <p className="text-gray-400 mb-6 leading-relaxed">
-              전문 드러머부터 취미 드러머까지, 누구나 믿고 찾는 최고 품질의 드럼 악보를 제공합니다.
+              {t('footer.description')}
             </p>
             <div className="flex space-x-4">
               <a
@@ -102,7 +108,7 @@ export default function Footer() {
           </div>
 
           <div>
-            <h5 className="font-semibold mb-4">악보 카테고리</h5>
+            <h5 className="font-semibold mb-4">{t('footer.categories')}</h5>
             <ul className="space-y-2">
               {categoryLinks.map((link) => (
                 <li key={link.label}>{renderLink(link)}</li>
@@ -111,7 +117,7 @@ export default function Footer() {
           </div>
 
           <div>
-            <h5 className="font-semibold mb-4">고객 지원</h5>
+            <h5 className="font-semibold mb-4">{t('footer.support')}</h5>
             <ul className="space-y-2">
               {supportLinks.map((link) => (
                 <li key={link.label}>{renderLink(link)}</li>
@@ -120,7 +126,7 @@ export default function Footer() {
           </div>
 
           <div>
-            <h5 className="font-semibold mb-4">회사 정보</h5>
+            <h5 className="font-semibold mb-4">{t('footer.company')}</h5>
             <ul className="space-y-2">
               {companyLinks.map((link) => (
                 <li key={link.label}>{renderLink(link)}</li>
@@ -132,12 +138,10 @@ export default function Footer() {
         <div className="border-t border-gray-800 mt-10 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div className="text-sm text-gray-400 space-y-2 flex-1">
-              <p>회사명 COPYDRUM | 대표자 강만수 | 사업자등록번호 307-07-86155</p>
-              <p>통신판매업 신고 : 제2020세종0099호</p>
-              <p>주소 세종 남세종로 454 강남제일타워 8층 836호</p>
-              <p>
-                연락처 070-7570-0028 (작업중에 연락이 어렵습니다. 1:1문의 또는 카카오톡 채팅을 이용해주세요.)
-              </p>
+              <p>{t('footer.companyInfo')}</p>
+              <p>{t('footer.telecomLicense')}</p>
+              <p>{t('footer.address')}</p>
+              <p>{t('footer.contactInfo')}</p>
               <p className="pt-2 text-gray-500">© {currentYear} COPYDRUM. All rights reserved.</p>
             </div>
             <div className="flex-shrink-0">

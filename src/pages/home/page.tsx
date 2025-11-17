@@ -400,7 +400,7 @@ export default function Home() {
 
   const handleToggleFavorite = async (sheetId: string) => {
     if (!user) {
-      alert('로그인이 필요합니다.');
+      alert(t('home.loginRequired'));
       return;
     }
 
@@ -435,7 +435,7 @@ export default function Home() {
       });
     } catch (error) {
       console.error('찜하기 처리 오류:', error);
-      alert('찜하기 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+      alert(t('home.favoriteError'));
       setFavoriteIds((prev) => {
         const next = new Set(prev);
         if (wasFavorite) {
@@ -460,7 +460,7 @@ export default function Home() {
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">로딩 중...</p>
+          <p className="text-gray-600">{t('message.loading')}</p>
         </div>
       </div>
     );
@@ -547,13 +547,13 @@ export default function Home() {
           <div className="max-w-7xl mx-auto space-y-8">
             <div className="md:hidden">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-2xl font-bold text-gray-900">최신 악보</h3>
+                <h3 className="text-2xl font-bold text-gray-900">{t('home.latestSheets')}</h3>
                 <button
                   type="button"
                   onClick={() => navigate('/categories')}
                   className="text-sm font-semibold text-gray-500 hover:text-blue-600"
                 >
-                  더보기
+                  {t('common.showMore')}
                 </button>
               </div>
             <div className="flex gap-4 overflow-x-auto pb-2">
@@ -580,7 +580,7 @@ export default function Home() {
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent"></div>
                         {eventInfo && (
                           <div className="absolute left-3 top-3 rounded-full bg-red-500/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
-                            100원 특가
+                            {t('home.eventSale')}
                           </div>
                         )}
                         <button
@@ -595,7 +595,7 @@ export default function Home() {
                               ? 'border-red-200 bg-red-50/90 text-red-500'
                               : 'border-white/60 bg-black/30 text-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/80'
                           } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          aria-label={isFavorite ? '찜 해제' : '찜하기'}
+                          aria-label={isFavorite ? t('home.unfavorite') : t('home.favorite')}
                         >
                           <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
                         </button>
@@ -611,7 +611,7 @@ export default function Home() {
             </div>
 
             <div className="hidden md:block">
-              <h3 className="mb-8 text-center text-3xl font-bold text-gray-900">최신 악보</h3>
+              <h3 className="mb-8 text-center text-3xl font-bold text-gray-900">{t('home.latestSheets')}</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 {latestSheets.map((sheet) => {
                   const eventInfo = getEventForSheet(sheet.id);
@@ -635,7 +635,7 @@ export default function Home() {
                       />
                       {eventInfo && (
                         <div className="absolute left-3 top-3 rounded-full bg-red-500/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
-                          100원 특가
+                          {t('home.eventSale')}
                         </div>
                       )}
                       <button
@@ -650,7 +650,7 @@ export default function Home() {
                             ? 'border-red-200 bg-red-50/90 text-red-500'
                             : 'border-white/60 bg-black/30 text-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/80'
                         } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                        aria-label={isFavorite ? '찜 해제' : '찜하기'}
+                        aria-label={isFavorite ? t('home.unfavorite') : t('home.favorite')}
                       >
                         <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
                       </button>
@@ -659,7 +659,7 @@ export default function Home() {
                         <p className="text-white text-xs line-clamp-1">{sheet.artist}</p>
                         {eventInfo && (
                           <p className="mt-1 text-xs font-semibold text-red-300">
-                            {formatCurrency(displayPrice)} (정가 {formatCurrency(sheet.price)})
+                            {formatCurrency(displayPrice)} ({t('home.originalPrice')} {formatCurrency(sheet.price)})
                           </p>
                         )}
                       </div>
@@ -677,14 +677,17 @@ export default function Home() {
             <div className="md:hidden">
                 <div className="flex flex-col gap-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-orange-500">100원 특가 이벤트</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-orange-500">{t('home.eventSaleTitle')}</p>
                     <h3 className="mt-1 text-2xl font-bold text-gray-900 leading-snug">
-                      단 100원으로
-                      <br />
-                      인기 드럼 악보를 만나보세요
+                      {t('home.eventSaleSubtitle').split('\n').map((line, idx) => (
+                        <span key={idx}>
+                          {line}
+                          {idx < t('home.eventSaleSubtitle').split('\n').length - 1 && <br />}
+                        </span>
+                      ))}
                     </h3>
                   <p className="mt-2 text-sm text-gray-600">
-                    한정 기간 동안 진행되는 초특가 이벤트를 놓치지 마세요.
+                    {t('home.eventSaleDescription')}
                   </p>
                 </div>
                 <button
@@ -692,7 +695,7 @@ export default function Home() {
                   onClick={() => navigate('/event-sale')}
                   className="inline-flex w-full items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-3 text-sm font-semibold text-orange-500 shadow-sm transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600"
                 >
-                  전체 이벤트 보기
+                  {t('home.viewAllEvents')}
                   <i className="ri-arrow-right-line ml-2 text-base" />
                 </button>
               </div>
@@ -700,13 +703,13 @@ export default function Home() {
               {eventsLoading ? (
                 <div className="py-12 text-center text-gray-500">
                   <i className="ri-loader-4-line mx-auto mb-2 block h-10 w-10 animate-spin text-orange-500" />
-                  <p className="text-sm font-medium">100원 특가 악보를 불러오는 중입니다...</p>
+                  <p className="text-sm font-medium">{t('home.loadingEvents')}</p>
                 </div>
               ) : activeEvents.length === 0 ? (
                 <div className="mt-6 rounded-2xl border border-dashed border-orange-300 bg-white/70 px-6 py-10 text-center text-gray-600">
                   <i className="ri-music-2-line mb-4 text-4xl text-orange-300" />
-                  <p className="text-base font-semibold">현재 진행 중인 100원 특가 이벤트가 없습니다.</p>
-                  <p className="mt-2 text-sm text-gray-500">곧 새로운 특가가 준비될 예정이니 조금만 기다려 주세요!</p>
+                  <p className="text-base font-semibold">{t('home.noActiveEvents')}</p>
+                  <p className="mt-2 text-sm text-gray-500">{t('home.noActiveEventsSub')}</p>
                 </div>
               ) : (
                 <div className="mt-6 flex gap-4 overflow-x-auto pb-2">
@@ -726,20 +729,23 @@ export default function Home() {
                             className="h-full w-full object-cover transition duration-500 hover:scale-105"
                           />
                           <div className="absolute left-4 top-4 rounded-full bg-red-500/95 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow">
-                            100원 특가
+                            {t('home.eventSale')}
                           </div>
                           {!isActiveNow && (
                             <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white">
-                              판매 종료
+                              {t('home.saleEnded')}
                             </div>
                           )}
                         </div>
                         <div className="flex flex-1 flex-col gap-3 px-5 py-5 text-center">
                           <div className="space-y-1">
                             <h4 className="text-lg font-bold text-gray-900">
-                              단 100원으로
-                              <br />
-                              인기 드럼 악보를 만나보세요
+                              {t('home.eventSaleSubtitle').split('\n').map((line, idx) => (
+                                <span key={idx}>
+                                  {line}
+                                  {idx < t('home.eventSaleSubtitle').split('\n').length - 1 && <br />}
+                                </span>
+                              ))}
                             </h4>
                             <p className="text-sm font-medium text-gray-500">{event.artist}</p>
                           </div>
@@ -754,7 +760,7 @@ export default function Home() {
                             </div>
                             {event.discount_percent !== null && (
                               <span className="mt-2 inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-500">
-                                {event.discount_percent}% 할인
+                                {t('home.discount', { percent: event.discount_percent })}
                               </span>
                             )}
                           </div>

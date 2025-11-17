@@ -98,7 +98,7 @@ const normalizeHost = (host?: string) => {
   return host.split(':')[0].toLowerCase();
 };
 
-const isEnglishHost = (host?: string) => {
+export const isEnglishHost = (host?: string) => {
   const normalized = normalizeHost(host);
   if (!normalized) return false;
   return normalized === 'en.copydrum.com' || normalized.endsWith('.en.copydrum.com');

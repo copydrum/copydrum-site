@@ -58,7 +58,7 @@ export default function SheetDetailPage() {
   const [showBankTransferModal, setShowBankTransferModal] = useState(false);
   const eventIsActive = eventDiscount ? isEventActive(eventDiscount) : false;
   const displayPrice = sheet ? (eventDiscount && eventIsActive ? eventDiscount.discount_price : sheet.price) : 0;
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const formatCurrency = (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted;
 
   useEffect(() => {
@@ -172,13 +172,13 @@ export default function SheetDetailPage() {
     const normalizedDifficulty = (difficulty || '').toLowerCase().trim();
     switch (normalizedDifficulty) {
       case 'beginner':
-        return '초급';
+        return t('sheetDetail.difficulty.beginner');
       case 'intermediate':
-        return '중급';
+        return t('sheetDetail.difficulty.intermediate');
       case 'advanced':
-        return '고급';
+        return t('sheetDetail.difficulty.advanced');
       default:
-        return difficulty || '미설정';
+        return difficulty || t('sheetDetail.difficulty.notSet');
     }
   };
 
@@ -201,7 +201,7 @@ export default function SheetDetailPage() {
       items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
       amount: price,
       paymentMethod: method,
-      description: `악보 구매: ${sheet.title}`,
+      description: t('sheetDetail.purchaseDescription', { title: sheet.title }),
       buyerName: user.email ?? null,
       buyerEmail: user.email ?? null,
       // returnUrl은 productPurchase에서 자동으로 Edge Function URL 사용
@@ -210,10 +210,10 @@ export default function SheetDetailPage() {
 
     if (method === 'bank_transfer') {
       setBankTransferInfo(result.virtualAccountInfo ?? null);
-      alert('무통장입금 안내가 생성되었습니다.\n입금 후 자동으로 구매가 완료됩니다.');
+      alert(t('sheetDetail.bankTransferCreated'));
     } else {
       setBankTransferInfo(null);
-      alert('결제창이 열립니다. 결제를 완료해 주세요.');
+      alert(t('sheetDetail.paymentWindowOpen'));
     }
   };
 
@@ -228,12 +228,12 @@ export default function SheetDetailPage() {
     try {
       const alreadyPurchased = await hasPurchasedSheet(user.id, sheet.id);
       if (alreadyPurchased) {
-        alert('이미 구매하신 악보입니다.\n마이페이지 > 악보 구매 내역에서 다운로드해 주세요.');
+        alert(t('sheetDetail.alreadyPurchased'));
         return;
       }
     } catch (error) {
       console.error('구매 이력 확인 오류:', error);
-      alert('구매 이력 확인 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      alert(t('sheetDetail.purchaseCheckError'));
       return;
     }
 
@@ -260,7 +260,7 @@ export default function SheetDetailPage() {
         const purchaseResult = await processCashPurchase({
           userId: user.id,
           totalPrice: price,
-          description: `악보 구매: ${sheet.title}`,
+          description: t('sheetDetail.purchaseDescription', { title: sheet.title }),
           items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
           sheetIdForTransaction: sheet.id,
         });
@@ -268,16 +268,16 @@ export default function SheetDetailPage() {
         if (!purchaseResult.success) {
           if (purchaseResult.reason === 'INSUFFICIENT_CREDIT') {
             alert(
-              `보유 캐쉬가 부족합니다.\n현재 잔액: ${purchaseResult.currentCredits.toLocaleString(
-                'ko-KR',
-              )}P\n캐쉬를 충전한 뒤 다시 시도해주세요.`,
+              t('sheetDetail.insufficientCash', { 
+                amount: purchaseResult.currentCredits.toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')
+              }),
             );
             openCashChargeModal();
           }
           return;
         }
 
-        let message = '구매가 완료되었습니다.';
+        let message = t('sheetDetail.purchaseComplete');
 
         if (eventDiscount && eventIsActive) {
           try {
@@ -290,7 +290,7 @@ export default function SheetDetailPage() {
           }
         }
 
-        alert(`${message}\n마이페이지에서 악보를 확인하세요.`);
+        alert(t('sheetDetail.purchaseCompleteMessage', { message }));
         return;
       }
 
@@ -317,7 +317,7 @@ export default function SheetDetailPage() {
       await completeOnlinePurchase('bank_transfer', { depositorName });
     } catch (error) {
       console.error('무통장입금 구매 오류:', error);
-      alert(error instanceof Error ? error.message : '구매 중 오류가 발생했습니다.');
+      alert(error instanceof Error ? error.message : t('sheetDetail.purchaseError'));
     } finally {
       setPurchasing(false);
       setPaymentProcessing(false);
@@ -335,18 +335,18 @@ export default function SheetDetailPage() {
     try {
       const alreadyPurchased = await hasPurchasedSheet(user.id, sheet.id);
       if (alreadyPurchased) {
-        alert('이미 구매하신 악보입니다.\n마이페이지 > 악보 구매 내역에서 다운로드해 주세요.');
+        alert(t('sheetDetail.alreadyPurchased'));
         return;
       }
     } catch (error) {
       console.error('장바구니 담기 전 구매 이력 확인 오류:', error);
-      alert('구매 이력 확인 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      alert(t('sheetDetail.purchaseCheckError'));
       return;
     }
 
     const success = await addToCart(sheet.id);
     if (success) {
-      alert('장바구니에 추가되었습니다.');
+      alert(t('sheetDetail.addedToCart'));
     }
   };
 
@@ -356,7 +356,7 @@ export default function SheetDetailPage() {
     }
 
     if (!user) {
-      alert('로그인이 필요합니다.');
+      alert(t('sheetDetail.loginRequired'));
       return;
     }
 
@@ -366,7 +366,7 @@ export default function SheetDetailPage() {
       setIsFavoriteSheet(favorite);
     } catch (error) {
       console.error('찜하기 처리 오류:', error);
-      alert('찜하기 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+      alert(t('sheetDetail.favoriteError'));
     } finally {
       setFavoriteProcessing(false);
     }
@@ -388,7 +388,7 @@ export default function SheetDetailPage() {
       URL.revokeObjectURL(link.href);
     } catch (error) {
       console.error('다운로드 오류:', error);
-      alert('파일 다운로드 중 오류가 발생했습니다.');
+      alert(t('sheetDetail.downloadError'));
     }
   };
 

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import LanguageSelector from './LanguageSelector';
+import { isEnglishHost } from '../../i18n/languages';
 
 interface HeaderProps {
   user?: User | null;
@@ -16,6 +17,7 @@ export default function Header({ user: propUser }: HeaderProps) {
   const [customOrderCategoryId, setCustomOrderCategoryId] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
 
   useEffect(() => {
     if (!propUser) {
@@ -112,17 +114,19 @@ export default function Header({ user: propUser }: HeaderProps) {
             <div className="flex items-center">
               <img 
                 src="/logo.png" 
-                alt="카피드럼" 
-                className="h-12 w-auto mr-3 cursor-pointer"
+                alt={t('site.name')}
+                className={`h-12 w-auto cursor-pointer ${isEnglishSite ? '' : 'mr-3'}`}
                 onClick={() => navigate('/')}
               />
-              <h1 
-                className="text-2xl font-bold text-white cursor-pointer"
-                style={{ fontFamily: '"Noto Sans KR", "Malgun Gothic", sans-serif' }}
-                onClick={() => navigate('/')}
-              >
-                카피드럼
-              </h1>
+              {!isEnglishSite && (
+                <h1 
+                  className="text-2xl font-bold text-white cursor-pointer"
+                  style={{ fontFamily: '"Noto Sans KR", "Malgun Gothic", sans-serif' }}
+                  onClick={() => navigate('/')}
+                >
+                  {t('site.name')}
+                </h1>
+              )}
             </div>
           </div>
 

@@ -1,17 +1,23 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
-};
+const ALLOWED_ORIGIN = "https://www.copydrum.com";
+// 필요하면 http://localhost:3000 같이 개발용도 추가 가능
+
+const getCorsHeaders = (origin?: string) => ({
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey",
+  "Access-Control-Max-Age": "86400",
+});
 
 serve(async (req) => {
-  // CORS preflight 요청 처리
+  const origin = req.headers.get("origin") ?? "";
+
+  // ✅ 1) 프리플라이트(OPTIONS) 요청 먼저 처리
   if (req.method === "OPTIONS") {
-    return new Response("ok", {
+    return new Response(null, {
       status: 200,
-      headers: corsHeaders,
+      headers: getCorsHeaders(origin),
     });
   }
 
@@ -84,7 +90,7 @@ serve(async (req) => {
       return new Response(null, {
         status: 302,
         headers: {
-          ...corsHeaders,
+          ...getCorsHeaders(origin),
           Location: redirectUrl.toString(),
         },
       });
@@ -115,7 +121,7 @@ serve(async (req) => {
         return new Response(null, {
           status: 302,
           headers: {
-            ...corsHeaders,
+            ...getCorsHeaders(origin),
             Location: redirectUrl.toString(),
           },
         });
@@ -124,27 +130,40 @@ serve(async (req) => {
       // 데이터가 없으면 에러 페이지로
       return new Response("No payment data received", {
         status: 400,
-        headers: { ...corsHeaders, "Content-Type": "text/plain" },
+        headers: {
+          "Content-Type": "text/plain",
+          ...getCorsHeaders(origin),
+        },
       });
     }
 
-    return new Response("Method Not Allowed", {
-      status: 405,
-      headers: corsHeaders,
-    });
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      {
+        status: 405,
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders(origin),
+        },
+      }
+    );
   } catch (error) {
     console.error("[inicis-return] Error", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return new Response(
       JSON.stringify({
         success: false,
         error: {
           message: "결제 반환 처리 중 오류가 발생했습니다.",
-          details: error instanceof Error ? error.message : String(error),
+          details: errorMessage,
         },
       }),
       {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getCorsHeaders(origin),
+        },
       }
     );
   }

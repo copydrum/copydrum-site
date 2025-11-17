@@ -84,7 +84,7 @@ const CategoriesPage: React.FC = () => {
   const [showBankTransferModal, setShowBankTransferModal] = useState(false);
   const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
   const [selectedTopSheetId, setSelectedTopSheetId] = useState<string | null>(null);
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
 
   // 장르 목록 (순서대로)
   const genreList = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
@@ -211,7 +211,7 @@ const CategoriesPage: React.FC = () => {
       items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
       amount: price,
       paymentMethod: method,
-      description: `악보 바로구매: ${sheet.title}`,
+      description: t('categories.purchaseDescription', { title: sheet.title }),
       buyerName: user.email ?? null,
       buyerEmail: user.email ?? null,
       // returnUrl은 productPurchase에서 자동으로 Edge Function URL 사용
@@ -220,10 +220,10 @@ const CategoriesPage: React.FC = () => {
 
     if (method === 'bank_transfer') {
       setBankTransferInfo(result.virtualAccountInfo ?? null);
-      alert('무통장입금 안내가 생성되었습니다.\n입금 후 자동으로 구매가 완료됩니다.');
+      alert(t('categories.bankTransferCreated'));
     } else {
       setBankTransferInfo(null);
-      alert('결제창이 열립니다. 결제를 완료해 주세요.');
+      alert(t('categories.paymentWindowOpen'));
     }
   };
 
@@ -249,7 +249,7 @@ const CategoriesPage: React.FC = () => {
         const result = await processCashPurchase({
           userId: user.id,
           totalPrice: price,
-          description: `악보 바로구매: ${sheet.title}`,
+          description: t('categories.purchaseDescription', { title: sheet.title }),
           items: [{ sheetId, sheetTitle: sheet.title, price }],
           sheetIdForTransaction: sheetId,
         });
@@ -257,9 +257,9 @@ const CategoriesPage: React.FC = () => {
         if (!result.success) {
           if (result.reason === 'INSUFFICIENT_CREDIT') {
             alert(
-              `보유 캐쉬가 부족합니다.\n현재 잔액: ${result.currentCredits.toLocaleString(
-                'ko-KR',
-              )}P\n캐쉬를 충전한 뒤 다시 시도해주세요.`,
+              t('categories.insufficientCash', { 
+                amount: result.currentCredits.toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')
+              }),
             );
             openCashChargeModal();
           }
@@ -274,7 +274,7 @@ const CategoriesPage: React.FC = () => {
           }
         }
 
-        alert('구매가 완료되었습니다. 마이페이지에서 악보를 확인하세요.');
+        alert(t('categories.purchaseComplete'));
         navigate('/my-orders');
         return;
       }
@@ -282,7 +282,7 @@ const CategoriesPage: React.FC = () => {
       await completeOnlinePurchase('card');
     } catch (error) {
       console.error('주문 처리 오류:', error);
-      alert(error instanceof Error ? error.message : '구매 중 오류가 발생했습니다.');
+      alert(error instanceof Error ? error.message : t('categories.purchaseError'));
     } finally {
       setPaymentProcessing(false);
       setBuyingSheetId(null);
@@ -300,7 +300,7 @@ const CategoriesPage: React.FC = () => {
       await completeOnlinePurchase('bank_transfer', { depositorName });
     } catch (error) {
       console.error('무통장입금 주문 처리 오류:', error);
-      alert(error instanceof Error ? error.message : '구매 중 오류가 발생했습니다.');
+      alert(error instanceof Error ? error.message : t('categories.purchaseError'));
     } finally {
       setPaymentProcessing(false);
       setBuyingSheetId(null);
@@ -499,20 +499,20 @@ const CategoriesPage: React.FC = () => {
             topSheets.find((sheet) => sheet.id === sheetId) ||
             selectedSheet;
 
-          const title = targetSheet?.title ? `"${targetSheet.title}"` : '선택하신 악보';
-          alert(`${title}는 이미 구매하신 악보입니다.\n마이페이지에서 다운로드해 주세요.`);
+          const title = targetSheet?.title || '';
+          alert(t('categories.alreadyPurchased', { title }));
           return;
         }
       } catch (error) {
         console.error('장바구니 담기 전 구매 이력 확인 오류:', error);
-        alert('구매 이력 확인 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        alert(t('categories.purchaseCheckError'));
         return;
       }
     }
 
     const success = await addToCart(sheetId);
     if (success) {
-      alert('장바구니에 추가되었습니다.');
+      alert(t('categories.addedToCart'));
     }
   };
 
@@ -524,7 +524,7 @@ const CategoriesPage: React.FC = () => {
 
     const sheet = drumSheets.find((item) => item.id === sheetId);
     if (!sheet) {
-      alert('선택한 악보 정보를 찾을 수 없습니다.');
+      alert(t('categories.sheetNotFound'));
       return;
     }
 
@@ -533,7 +533,7 @@ const CategoriesPage: React.FC = () => {
     try {
       const alreadyPurchased = await hasPurchasedSheet(user.id, sheetId);
       if (alreadyPurchased) {
-        alert('이미 구매하신 악보입니다.\n마이페이지에서 다운로드해 주세요.');
+        alert(t('categories.alreadyPurchasedGeneric'));
         setBuyingSheetId(null);
         return;
       }
@@ -542,7 +542,7 @@ const CategoriesPage: React.FC = () => {
       setShowPaymentSelector(true);
     } catch (error) {
       console.error('바로구매 사전 확인 오류:', error);
-      alert('구매 이력 확인 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      alert(t('categories.purchaseCheckError'));
       setBuyingSheetId(null);
     } finally {
       // keep buyingSheetId while modal is open
@@ -551,7 +551,7 @@ const CategoriesPage: React.FC = () => {
 
   const handleToggleFavorite = async (sheetId: string) => {
     if (!user) {
-      alert('로그인이 필요합니다.');
+      alert(t('categories.loginRequired'));
       return;
     }
 
@@ -586,7 +586,7 @@ const CategoriesPage: React.FC = () => {
       });
     } catch (error) {
       console.error('찜하기 처리 오류:', error);
-      alert('찜하기 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+      alert(t('categories.favoriteError'));
       setFavoriteIds((prev) => {
         const next = new Set(prev);
         if (wasFavorite) {
