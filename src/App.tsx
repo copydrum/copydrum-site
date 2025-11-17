@@ -29,9 +29,12 @@ function App() {
     const hash = window.location.hash;
     const pathname = window.location.pathname;
     
-    // 비밀번호 재설정 토큰이 있고, 아직 reset-password 페이지가 아닌 경우에만 리디렉션
-    if (hash.includes('access_token') && hash.includes('type=recovery') && !pathname.includes('/auth/reset-password')) {
-      // 비밀번호 재설정 토큰이 있으면 재설정 페이지로 리다이렉트
+    // 비밀번호 재설정 관련 hash fragment가 있고, 아직 reset-password 페이지가 아닌 경우 리디렉션
+    const hasRecoveryToken = hash.includes('access_token') && hash.includes('type=recovery');
+    const hasRecoveryError = hash.includes('error') && (hash.includes('otp_expired') || hash.includes('access_denied'));
+    
+    if ((hasRecoveryToken || hasRecoveryError) && !pathname.includes('/auth/reset-password')) {
+      // 비밀번호 재설정 토큰 또는 에러가 있으면 재설정 페이지로 리다이렉트
       // search params는 유지하지 않음 (confirmation_url 제거)
       window.location.replace('/auth/reset-password' + hash);
     }
