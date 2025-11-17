@@ -27,7 +27,10 @@ function App() {
   useEffect(() => {
     // URL 해시에서 토큰 확인
     const hash = window.location.hash;
-    if (hash.includes('access_token') && hash.includes('type=recovery')) {
+    const pathname = window.location.pathname;
+    
+    // 비밀번호 재설정 토큰이 있고, 아직 reset-password 페이지가 아닌 경우에만 리디렉션
+    if (hash.includes('access_token') && hash.includes('type=recovery') && !pathname.includes('/auth/reset-password')) {
       // 비밀번호 재설정 토큰이 있으면 재설정 페이지로 리다이렉트
       window.location.href = '/auth/reset-password' + hash;
     }

@@ -21,14 +21,40 @@ export default function ResetPassword() {
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const searchParams = new URLSearchParams(window.location.search);
         
+        // 먼저 hash fragment에 토큰이 있는지 확인 (Supabase가 직접 리디렉션한 경우)
+        const accessTokenFromHash = hashParams.get('access_token');
+        const refreshTokenFromHash = hashParams.get('refresh_token');
+        const typeFromHash = hashParams.get('type');
+        
         // confirmation_url 쿼리 파라미터 확인 (이메일 prefetch 문제 해결을 위한 사용자 정의 링크)
-        // 문서 Option 2: confirmation_url을 쿼리 파라미터로 전달하고, 실제 확인 링크로 리디렉션
         const confirmationUrl = searchParams.get('confirmation_url');
-        if (confirmationUrl) {
-          // confirmation_url이 있으면 실제 확인 링크로 리디렉션
-          // 이렇게 하면 이메일 prefetch 문제를 피할 수 있습니다
-          window.location.href = decodeURIComponent(confirmationUrl);
-          return;
+        
+        if (confirmationUrl && !accessTokenFromHash) {
+          // confirmation_url이 있고, 아직 토큰을 받지 않은 경우
+          // confirmation_url에서 토큰을 추출하여 직접 검증 시도
+          try {
+            const decodedUrl = decodeURIComponent(confirmationUrl);
+            const url = new URL(decodedUrl);
+            const token = url.searchParams.get('token');
+            const type = url.searchParams.get('type');
+            
+            if (token && type === 'recovery') {
+              // 토큰이 있으면 Supabase verify URL로 직접 이동
+              // redirect_to를 현재 페이지로 설정
+              const currentOrigin = window.location.origin;
+              const resetPasswordPath = `${currentOrigin}/auth/reset-password`;
+              url.searchParams.set('redirect_to', resetPasswordPath);
+              
+              // Supabase verify URL로 리디렉션
+              window.location.href = url.toString();
+              return;
+            }
+          } catch (err) {
+            console.error('confirmation_url 처리 오류:', err);
+            // 파싱 실패 시 원본 URL로 리디렉션
+            window.location.href = decodeURIComponent(confirmationUrl);
+            return;
+          }
         }
         
         // 오류 확인

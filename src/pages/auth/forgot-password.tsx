@@ -18,17 +18,29 @@ export default function ForgotPassword() {
     setError('');
     setMessage('');
 
+    // 이메일 검증
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError('이메일 주소를 입력해주세요.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const redirectBase = getSiteUrl();
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      // 로컬 개발 환경에서는 localhost를 사용
+      const redirectBase = window.location.origin || getSiteUrl();
+      console.log('비밀번호 재설정 요청:', { email: trimmedEmail, redirectBase });
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
         redirectTo: `${redirectBase}/auth/reset-password`,
       });
+      console.log('비밀번호 재설정 응답:', { error: resetError });
 
       if (resetError) {
         throw resetError;
       }
 
       setMessage('비밀번호 재설정 링크가 이메일로 전송되었습니다. 이메일을 확인해주세요.');
+      setEmail(''); // 성공 시 이메일 필드 비우기
     } catch (err: any) {
       console.error('비밀번호 재설정 오류:', err);
       if (err.message.includes('Invalid email')) {
