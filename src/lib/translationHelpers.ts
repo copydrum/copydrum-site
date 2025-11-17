@@ -64,3 +64,5 @@ export const hasTranslations = (translations: TranslationRecord): boolean => {
   return Object.values(translations).some((value) => !!value && value.trim().length > 0);
 };
 
+
+

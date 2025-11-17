@@ -8,3 +8,5 @@ COMMENT ON COLUMN order_items.last_downloaded_at IS '마지막으로 다운로�
 COMMENT ON COLUMN order_items.last_download_ip IS '마지막 다운로드 요청 시 확인된 IP';
 
 
+
+

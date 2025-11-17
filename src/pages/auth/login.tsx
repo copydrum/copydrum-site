@@ -14,6 +14,46 @@ export default function Login() {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
 
+  const handleKakaoLogin = async () => {
+    try {
+      const redirectUrl = `${window.location.origin}/auth/callback`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'kakao',
+        options: {
+          redirectTo: redirectUrl,
+        },
+      });
+      
+      if (error) {
+        console.error('카카오 로그인 오류:', error);
+        alert('카카오 로그인에 실패했습니다. 다시 시도해주세요.');
+      }
+    } catch (err) {
+      console.error('카카오 로그인 오류:', err);
+      alert('카카오 로그인에 실패했습니다. 다시 시도해주세요.');
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      const redirectUrl = `${window.location.origin}/auth/callback`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+        },
+      });
+      
+      if (error) {
+        console.error('구글 로그인 오류:', error);
+        alert('구글 로그인에 실패했습니다. 다시 시도해주세요.');
+      }
+    } catch (err) {
+      console.error('구글 로그인 오류:', err);
+      alert('구글 로그인에 실패했습니다. 다시 시도해주세요.');
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -234,12 +274,20 @@ export default function Login() {
                 </div>
 
                 <div className="mt-6 grid grid-cols-2 gap-3">
-                  <button className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 cursor-pointer">
+                  <button 
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 cursor-pointer"
+                  >
                     <i className="ri-google-fill text-red-500 text-lg"></i>
                     <span className="ml-2">Google</span>
                   </button>
 
-                  <button className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 cursor-pointer">
+                  <button 
+                    type="button"
+                    onClick={handleKakaoLogin}
+                    className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 cursor-pointer"
+                  >
                     <i className="ri-kakao-talk-fill text-yellow-500 text-lg"></i>
                     <span className="ml-2">카카오</span>
                   </button>

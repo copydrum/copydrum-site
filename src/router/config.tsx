@@ -12,6 +12,7 @@ const LoginPage = lazy(() => import('../pages/auth/login'));
 const RegisterPage = lazy(() => import('../pages/auth/register'));
 const ForgotPasswordPage = lazy(() => import('../pages/auth/forgot-password'));
 const ResetPasswordPage = lazy(() => import('../pages/auth/reset-password'));
+const AuthCallbackPage = lazy(() => import('../pages/auth/callback'));
 const AdminPage = lazy(() => import('../pages/admin/page'));
 const MyOrdersPage = lazy(() => import('../pages/my-orders/page'));
 const CustomOrdersPage = lazy(() => import('../pages/custom-orders/page'));
@@ -148,6 +149,14 @@ const routes: RouteObject[] = [
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <ResetPasswordPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/auth/callback',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <AuthCallbackPage />
       </Suspense>
     ),
   },
