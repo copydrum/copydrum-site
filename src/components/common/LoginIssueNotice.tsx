@@ -1,7 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+
+const getHostInfo = () => {
+  if (typeof window === 'undefined') {
+    return { isEnglish: false };
+  }
+  const host = window.location.hostname.toLowerCase();
+  return { isEnglish: host.startsWith('en.') };
+};
 
 export default function LoginIssueNotice() {
   const [isVisible, setIsVisible] = useState(false);
+  const { isEnglish } = getHostInfo();
 
   useEffect(() => {
     // localStorage에서 닫힘 상태 확인
@@ -29,6 +38,32 @@ export default function LoginIssueNotice() {
     }
   }, []);
 
+  const copy = useMemo(() => {
+    if (isEnglish) {
+      return {
+        title: 'Notice',
+        message1: 'Due to website renewal work, there are currently temporary issues with the',
+        message2: 'login and password reset functions',
+        message3: '.',
+        message4: 'We are working to restore these functions as soon as possible.',
+        message5: 'We apologize for the inconvenience. We will restore normal service shortly.',
+        button: 'OK',
+        closeLabel: 'Close',
+      };
+    }
+
+    return {
+      title: '공지사항',
+      message1: '홈페이지 리뉴얼 작업으로 인해 현재',
+      message2: '로그인 및 비밀번호 재설정 기능',
+      message3: '에 일시적인 문제가 발생하고 있습니다.',
+      message4: '빠른 시일 내에 복구하도록 조치 중입니다.',
+      message5: '불편을 드려 죄송합니다. 곧 정상적으로 이용하실 수 있도록 하겠습니다.',
+      button: '확인',
+      closeLabel: '닫기',
+    };
+  }, [isEnglish]);
+
   if (!isVisible) return null;
 
   return (
@@ -37,7 +72,7 @@ export default function LoginIssueNotice() {
         <button
           onClick={handleClose}
           className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 transition-colors"
-          aria-label="닫기"
+          aria-label={copy.closeLabel}
         >
           <i className="ri-close-line text-2xl" aria-hidden />
         </button>
@@ -45,18 +80,18 @@ export default function LoginIssueNotice() {
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <i className="ri-information-line text-2xl text-blue-600" aria-hidden />
-            <h2 className="text-xl font-bold text-gray-900">공지사항</h2>
+            <h2 className="text-xl font-bold text-gray-900">{copy.title}</h2>
           </div>
           
           <div className="space-y-3 text-gray-700 leading-relaxed">
             <p>
-              홈페이지 리뉴얼 작업으로 인해 현재 <strong className="text-red-600">로그인 및 비밀번호 재설정 기능</strong>에 일시적인 문제가 발생하고 있습니다.
+              {copy.message1} <strong className="text-red-600">{copy.message2}</strong>{copy.message3}
             </p>
             <p>
-              빠른 시일 내에 복구하도록 조치 중입니다.
+              {copy.message4}
             </p>
             <p className="text-sm text-gray-600 pt-2">
-              불편을 드려 죄송합니다. 곧 정상적으로 이용하실 수 있도록 하겠습니다.
+              {copy.message5}
             </p>
           </div>
           
@@ -64,7 +99,7 @@ export default function LoginIssueNotice() {
             onClick={handleClose}
             className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-white font-medium hover:bg-blue-700 transition-colors"
           >
-            확인
+            {copy.button}
           </button>
         </div>
       </div>
