@@ -769,7 +769,7 @@ export default function MyPage() {
           buyerName: profile?.name ?? profileForm.name ?? null,
           buyerEmail: user.email ?? null,
           buyerTel: profile?.phone ?? profileForm.phone ?? null,
-          returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
+          // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
         });
 
         if (result.paymentIntent?.requestForm) {
@@ -821,7 +821,7 @@ export default function MyPage() {
         buyerEmail: user.email ?? null,
         buyerTel: profile?.phone ?? profileForm.phone ?? null,
         depositorName: depositorName.trim(),
-        returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
+        // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
       });
 
       setBankTransferInfo(result.virtualAccountInfo ?? null);

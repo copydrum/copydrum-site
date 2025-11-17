@@ -3,6 +3,7 @@ import {
   createInicisPaymentIntent,
   ensureInicisSdkLoaded,
   submitInicisPaymentForm,
+  getInicisReturnUrl,
 } from './inicis';
 import type { PaymentIntentResponse, PaymentStatus, VirtualAccountInfo } from './types';
 import { updateOrderPaymentStatus } from './paymentService';
@@ -90,7 +91,11 @@ export const startCashCharge = async ({
     };
   }
 
-  // 카드 결제는 현재 비활성화되어 있지만 기존 로직 유지
+  // 카드 결제
+  // returnUrl이 지정되지 않으면 클라이언트 페이지 URL 사용 (GET 파라미터 방식)
+  // KG이니시스 관리자 콘솔에서 GET 전달 방식 활성화 필요
+  const finalReturnUrl = returnUrl || getInicisReturnUrl();
+
   const intent = await createInicisPaymentIntent({
     userId,
     amount,
@@ -98,13 +103,18 @@ export const startCashCharge = async ({
     method: 'card',
     orderId,
     bonusAmount,
-    returnUrl,
+    returnUrl: finalReturnUrl,
     buyerName: buyerName ?? undefined,
     buyerEmail: buyerEmail ?? undefined,
     buyerTel: buyerTel ?? undefined,
   });
 
   if (intent.requestForm) {
+    // 주문 ID를 sessionStorage에 저장 (결제 반환 페이지에서 사용)
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('inicis_order_id', orderId);
+    }
+    
     await ensureInicisSdkLoaded();
     submitInicisPaymentForm(intent.requestForm);
   }

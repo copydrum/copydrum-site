@@ -203,7 +203,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     setDepositorName('');
   };
 
-  const handleChargeConfirm = () => {
+  const handleChargeConfirm = async () => {
     if (!user) {
       alert('로그인이 필요합니다.');
       return;
@@ -220,8 +220,38 @@ export default function UserSidebar({ user }: UserSidebarProps) {
       return;
     }
 
-    if (selectedPayment === 'card' || selectedPayment === 'kakaopay') {
-      alert('카드/카카오페이 결제는 준비 중입니다. 무통장입금을 이용해주세요.');
+    if (selectedPayment === 'kakaopay') {
+      alert('카카오페이 결제는 준비 중입니다. 다른 결제수단을 이용해주세요.');
+      return;
+    }
+
+    if (selectedPayment === 'card') {
+      // 카드 결제 처리
+      setChargeProcessing(true);
+      try {
+        const description = `${selectedOption.label} (${formatCurrency(selectedOption.amount)})`;
+        const result = await startCashCharge({
+          userId: user.id,
+          amount: selectedOption.amount,
+          bonusAmount: selectedOption.bonus ?? 0,
+          paymentMethod: 'card',
+          description,
+          buyerName: user.user_metadata?.name ?? user.email ?? null,
+          buyerEmail: user.email ?? null,
+          // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
+        });
+
+        if (result.paymentIntent?.requestForm) {
+          alert('결제창이 열립니다. 결제를 완료해 주세요.');
+        } else {
+          alert('결제 처리 중 오류가 발생했습니다.');
+        }
+      } catch (error) {
+        console.error('캐쉬 충전 오류:', error);
+        alert(error instanceof Error ? error.message : '캐쉬 충전 중 오류가 발생했습니다.');
+      } finally {
+        setChargeProcessing(false);
+      }
       return;
     }
 

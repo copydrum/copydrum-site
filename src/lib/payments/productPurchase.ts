@@ -3,6 +3,7 @@ import {
   createInicisPaymentIntent,
   ensureInicisSdkLoaded,
   submitInicisPaymentForm,
+  getInicisReturnUrl,
 } from './inicis';
 import { updateOrderPaymentStatus } from './paymentService';
 import type { VirtualAccountInfo, PaymentIntentResponse } from './types';
@@ -93,6 +94,10 @@ export const startSheetPurchase = async ({
     };
   }
 
+  // returnUrl이 지정되지 않으면 클라이언트 페이지 URL 사용 (GET 파라미터 방식)
+  // KG이니시스 관리자 콘솔에서 GET 전달 방식 활성화 필요
+  const finalReturnUrl = returnUrl || getInicisReturnUrl();
+
   const intent = await createInicisPaymentIntent({
     userId,
     amount,
@@ -100,7 +105,7 @@ export const startSheetPurchase = async ({
     method: 'card',
     orderId,
     bonusAmount: 0,
-    returnUrl,
+    returnUrl: finalReturnUrl,
     buyerName: buyerName ?? undefined,
     buyerEmail: buyerEmail ?? undefined,
     buyerTel: buyerTel ?? undefined,

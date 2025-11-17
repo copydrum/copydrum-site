@@ -30,12 +30,19 @@ const buildResponse = <T>(payload: T, status = 200) =>
   });
 
 serve(async (req) => {
+  // CORS preflight 요청 처리 (환경 변수 체크 전에 처리)
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { 
+      status: 200,
+      headers: corsHeaders 
+    });
   }
 
   if (req.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405, headers: corsHeaders });
+    return new Response("Method Not Allowed", { 
+      status: 405, 
+      headers: corsHeaders 
+    });
   }
 
   try {
@@ -123,9 +130,21 @@ serve(async (req) => {
         signature,
         verification,
         mKey,
-        returnUrl,
+        // returnUrl과 closeUrl 모두 HTTPS로 강제 설정
+        // KG이니시스는 HTTPS 필수
+        returnUrl: returnUrl.startsWith('https://') 
+          ? returnUrl 
+          : `https://${returnUrl.replace(/^https?:\/\//, '')}`,
         // closeUrl: 결제창 닫기 URL (결제창에서 닫기 버튼 클릭 시 호출)
-        closeUrl: metadata.closeUrl ?? returnUrl.replace(/\/[^/]*$/, "/payments/inicis/close"),
+        // HTTPS로 강제 설정
+        closeUrl: metadata.closeUrl 
+          ? (metadata.closeUrl.startsWith('https://') ? metadata.closeUrl : `https://${metadata.closeUrl.replace(/^https?:\/\//, '')}`)
+          : (() => {
+              const defaultCloseUrl = returnUrl.replace(/\/[^/]*$/, "/payments/inicis/close");
+              return defaultCloseUrl.startsWith('https://') 
+                ? defaultCloseUrl
+                : `https://${defaultCloseUrl.replace(/^https?:\/\//, '')}`;
+            })(),
         currency: "WON",
         goodname: goodsName ?? description ?? "콘텐츠 결제",
         buyername: buyerName ?? "",
@@ -159,15 +178,21 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("[inicis-init] Unexpected error", error);
-    return buildResponse(
-      {
+    
+    // 에러 발생 시에도 CORS 헤더 포함
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return new Response(
+      JSON.stringify({
         success: false,
         error: {
           message: "KG이니시스 결제 초기화 중 오류가 발생했습니다.",
-          details: error?.message ?? error,
+          details: errorMessage,
         },
-      },
-      500,
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
     );
   }
 });

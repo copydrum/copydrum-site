@@ -45,12 +45,19 @@ const buildResponse = <T>(payload: T, status = 200) =>
   });
 
 serve(async (req) => {
+  // CORS preflight 요청 처리 (환경 변수 체크 전에 처리)
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { 
+      status: 200,
+      headers: corsHeaders 
+    });
   }
 
   if (req.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405, headers: corsHeaders });
+    return new Response("Method Not Allowed", { 
+      status: 405, 
+      headers: corsHeaders 
+    });
   }
 
   try {

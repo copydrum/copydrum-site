@@ -19,7 +19,49 @@ interface EdgeResponse<T> {
 const INIT_FUNCTION = 'payments-inicis-init';
 const APPROVE_FUNCTION = 'payments-inicis-approve';
 const CANCEL_FUNCTION = 'payments-inicis-cancel';
+const RETURN_FUNCTION = 'payments-inicis-return';
 const INICIS_SCRIPT_URL = 'https://stdpay.inicis.com/stdjs/INIStdPay.js';
+
+// KG이니시스 returnUrl 생성 (GET 파라미터 방식 사용)
+// 관리자 콘솔에서 GET 전달 방식 활성화 시, GET 파라미터로 자동 전달됨
+export const getInicisReturnUrl = (): string => {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  
+  // HTTPS로 클라이언트 페이지 URL 생성
+  const origin = window.location.origin;
+  const returnPath = '/payments/inicis/return';
+  
+  // HTTPS 강제 설정
+  let baseUrl = origin;
+  if (!baseUrl.startsWith('https://')) {
+    // HTTP인 경우 HTTPS로 변환
+    baseUrl = baseUrl.replace(/^https?:\/\//, 'https://');
+  }
+  
+  return `${baseUrl}${returnPath}`;
+};
+
+// KG이니시스 closeUrl 생성 (HTTPS 강제)
+export const getInicisCloseUrl = (): string => {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  
+  // HTTPS로 클라이언트 페이지 URL 생성
+  const origin = window.location.origin;
+  const closePath = '/payments/inicis/close';
+  
+  // HTTPS 강제 설정
+  let baseUrl = origin;
+  if (!baseUrl.startsWith('https://')) {
+    // HTTP인 경우 HTTPS로 변환
+    baseUrl = baseUrl.replace(/^https?:\/\//, 'https://');
+  }
+  
+  return `${baseUrl}${closePath}`;
+};
 
 const invokeEdgeFunction = async <T>(functionName: string, payload: unknown): Promise<T> => {
   const { data, error } = await supabase.functions.invoke<EdgeResponse<T>>(functionName, {

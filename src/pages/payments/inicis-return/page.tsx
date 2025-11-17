@@ -22,9 +22,8 @@ export default function InicisReturnPage() {
   useEffect(() => {
     const processPaymentReturn = async () => {
       try {
-        // KG이니시스는 POST로 데이터를 보내지만, 브라우저에서는 직접 받기 어려움
-        // closeUrl 스크립트를 통해 데이터를 받거나, URL 파라미터로 받도록 처리
-        // URL 파라미터로 받기 (KG이니시스 설정에 따라 GET 파라미터로도 전달 가능)
+        // KG이니시스 GET 전달 방식 사용 (관리자 콘솔에서 활성화)
+        // GET 파라미터로 결제 결과 데이터 수신
         const resultCode = searchParams.get('resultCode') || '';
         const mid = searchParams.get('mid') || '';
         const authToken = searchParams.get('authToken') || '';
@@ -36,7 +35,7 @@ export default function InicisReturnPage() {
         const goodName = searchParams.get('goodName') || '';
         const resultMsg = searchParams.get('resultMsg') || '';
 
-        // sessionStorage에서 저장된 주문 정보 확인 (POST 데이터 대체)
+        // sessionStorage에서 저장된 주문 정보 확인 (MOID가 없는 경우 대비)
         const savedOrderId = sessionStorage.getItem('inicis_order_id');
         const orderId = MOID || savedOrderId || '';
 

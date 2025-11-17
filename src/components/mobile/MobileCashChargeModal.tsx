@@ -164,7 +164,7 @@ export default function MobileCashChargeModal({
           description: `${t('mobile.cash.title')} ${formatCurrency(selectedOption.amount)}`,
           buyerName: user.email ?? null,
           buyerEmail: user.email ?? null,
-          returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
+          // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
         });
 
         if (result.paymentIntent?.requestForm) {

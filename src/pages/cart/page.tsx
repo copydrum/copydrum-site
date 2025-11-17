@@ -212,7 +212,7 @@ export default function CartPage() {
       description: pendingPurchase.description,
       buyerName: user.email ?? null,
       buyerEmail: user.email ?? null,
-      returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
+      // returnUrl은 productPurchase에서 자동으로 Edge Function URL 사용
       depositorName: options?.depositorName,
     });
 
