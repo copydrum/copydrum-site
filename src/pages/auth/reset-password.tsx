@@ -77,13 +77,22 @@ export default function ResetPassword() {
         const refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token');
         const type = hashParams.get('type') || searchParams.get('type');
 
+        console.log('토큰 확인:', {
+          hasAccessToken: !!accessToken,
+          hasRefreshToken: !!refreshToken,
+          type,
+          hash: window.location.hash.substring(0, 100),
+        });
+
         if (!accessToken || type !== 'recovery') {
+          console.log('토큰이 없거나 타입이 맞지 않음');
           setError('유효하지 않은 비밀번호 재설정 링크입니다. 새로운 재설정 링크를 요청해주세요.');
           setCheckingToken(false);
           return;
         }
 
         // 세션 설정
+        console.log('세션 설정 시도...');
         const { data, error: sessionError } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken || '',
@@ -97,8 +106,10 @@ export default function ResetPassword() {
         }
 
         if (data.session) {
+          console.log('세션 설정 성공');
           setIsValidToken(true);
         } else {
+          console.error('세션 데이터가 없음:', data);
           setError('세션을 설정할 수 없습니다. 새로운 재설정 링크를 요청해주세요.');
         }
       } catch (err) {
