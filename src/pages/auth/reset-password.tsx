@@ -18,13 +18,17 @@ export default function ResetPassword() {
     const checkTokenAndSetSession = async () => {
       try {
         // URL에서 파라미터 확인 (hash와 search params 모두 확인)
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        const searchParams = new URLSearchParams(window.location.search);
+        // window.location을 직접 사용하여 React Router의 영향을 받지 않도록 함
+        const fullUrl = window.location.href;
+        const urlObj = new URL(fullUrl);
+        const hashParams = new URLSearchParams(urlObj.hash.substring(1));
+        const searchParams = new URLSearchParams(urlObj.search);
         
         console.log('reset-password 페이지 로드:', {
-          hash: window.location.hash,
-          search: window.location.search,
-          pathname: window.location.pathname,
+          fullUrl: fullUrl.substring(0, 200), // URL이 길 수 있으므로 처음 200자만
+          hash: urlObj.hash,
+          search: urlObj.search,
+          pathname: urlObj.pathname,
         });
         
         // 먼저 hash fragment에 토큰이 있는지 확인 (Supabase가 직접 리디렉션한 경우)
@@ -40,6 +44,11 @@ export default function ResetPassword() {
         
         // confirmation_url 쿼리 파라미터 확인 (이메일 prefetch 문제 해결을 위한 사용자 정의 링크)
         const confirmationUrl = searchParams.get('confirmation_url');
+        
+        console.log('confirmation_url 확인:', {
+          hasConfirmationUrl: !!confirmationUrl,
+          confirmationUrl: confirmationUrl ? confirmationUrl.substring(0, 100) : null,
+        });
         
         if (confirmationUrl && !accessTokenFromHash) {
           // confirmation_url이 있고, 아직 토큰을 받지 않은 경우
