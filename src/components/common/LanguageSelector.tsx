@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { languages, getLanguageByCode } from '../../i18n/languages';
+import { useLocation } from 'react-router-dom';
+import { languages, getLanguageByCode, isEnglishHost } from '../../i18n/languages';
 
 interface LanguageSelectorProps {
   variant?: 'desktop' | 'mobile';
@@ -21,6 +22,7 @@ const menuAlignmentByVariant: Record<'desktop' | 'mobile', string> = {
 
 export default function LanguageSelector({ variant = 'desktop', className = '' }: LanguageSelectorProps) {
   const { i18n } = useTranslation();
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -69,10 +71,48 @@ export default function LanguageSelector({ variant = 'desktop', className = '' }
   }, []);
 
   const handleLanguageChange = (langCode: string) => {
-    i18n.changeLanguage(langCode);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('i18nextLng', langCode);
+    if (typeof window === 'undefined') {
+      return;
     }
+
+    const currentHost = window.location.host;
+    const currentPath = location.pathname + location.search;
+    const isCurrentlyEnglish = isEnglishHost(currentHost);
+    const wantsEnglish = langCode === 'en';
+    const wantsKorean = langCode === 'ko';
+
+    // 호스트 변경이 필요한 경우 (영어 <-> 한국어)
+    if ((isCurrentlyEnglish && wantsKorean) || (!isCurrentlyEnglish && wantsEnglish)) {
+      let targetHost: string;
+      
+      if (wantsEnglish) {
+        // 한국어 사이트에서 영어 사이트로 이동
+        targetHost = currentHost.replace(/^(www\.)?copydrum\.com$/, 'en.copydrum.com');
+        if (targetHost === currentHost) {
+          // 이미 en.copydrum.com이거나 다른 서브도메인인 경우
+          targetHost = 'en.copydrum.com';
+        }
+      } else {
+        // 영어 사이트에서 한국어 사이트로 이동
+        targetHost = currentHost.replace(/^en\.copydrum\.com$/, 'copydrum.com');
+        if (targetHost === currentHost) {
+          // 이미 copydrum.com이거나 다른 도메인인 경우
+          targetHost = 'copydrum.com';
+        }
+      }
+
+      // 프로토콜 포함 전체 URL 생성
+      const protocol = window.location.protocol;
+      const targetUrl = `${protocol}//${targetHost}${currentPath}`;
+      
+      // 호스트 변경하여 리다이렉트
+      window.location.href = targetUrl;
+      return;
+    }
+
+    // 같은 언어 그룹 내에서만 언어 변경 (예: 영어 -> 일본어)
+    i18n.changeLanguage(langCode);
+    localStorage.setItem('i18nextLng', langCode);
     setIsOpen(false);
   };
 

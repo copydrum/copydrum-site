@@ -86,9 +86,10 @@ export default function AuthCallback() {
               }
             }
 
-            // 로그인 성공 - 현재 호스트의 홈으로 이동 (호스트 유지)
+            // 로그인 성공 - 현재 호스트의 홈으로 이동 (호스트 유지, 해시 제거)
             if (typeof window !== 'undefined') {
-              window.location.href = '/';
+              const currentOrigin = window.location.origin;
+              window.location.replace(`${currentOrigin}/`);
             } else {
               navigate('/');
             }
