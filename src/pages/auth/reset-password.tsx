@@ -21,6 +21,16 @@ export default function ResetPassword() {
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const searchParams = new URLSearchParams(window.location.search);
         
+        // confirmation_url 쿼리 파라미터 확인 (이메일 prefetch 문제 해결을 위한 사용자 정의 링크)
+        // 문서 Option 2: confirmation_url을 쿼리 파라미터로 전달하고, 실제 확인 링크로 리디렉션
+        const confirmationUrl = searchParams.get('confirmation_url');
+        if (confirmationUrl) {
+          // confirmation_url이 있으면 실제 확인 링크로 리디렉션
+          // 이렇게 하면 이메일 prefetch 문제를 피할 수 있습니다
+          window.location.href = decodeURIComponent(confirmationUrl);
+          return;
+        }
+        
         // 오류 확인
         const hashError = hashParams.get('error');
         const searchError = searchParams.get('error');
