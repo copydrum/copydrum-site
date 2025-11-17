@@ -2,7 +2,6 @@
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
 import { supabase } from '../../lib/supabase';
 import { getSiteUrl } from '../../lib/siteUrl';
-import { kakaoAuth } from '../../lib/kakao';
 import { googleAuth } from '../../lib/google';
 import type { User } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
@@ -26,7 +25,6 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
   const [showDepositorInput, setShowDepositorInput] = useState(false);
   const [depositorName, setDepositorName] = useState('');
-  const [isKakaoChatReady, setIsKakaoChatReady] = useState(false);
 
   // 로그인 폼 상태
   const [email, setEmail] = useState('');
@@ -53,11 +51,6 @@ export default function UserSidebar({ user }: UserSidebarProps) {
 
   const handleLogout = async () => {
     try {
-      // 카카오 로그아웃
-      if (kakaoAuth.isLoggedIn()) {
-        kakaoAuth.logout();
-      }
-      
       // 구글 로그아웃
       if (googleAuth.isLoggedIn()) {
         googleAuth.logout();
@@ -140,89 +133,23 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     setLoginError('');
 
     try {
-      const { userInfo } = await kakaoAuth.login();
+      const redirectUrl = `${window.location.origin}/auth/callback`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'kakao',
+        options: {
+          redirectTo: redirectUrl,
+        },
+      });
       
-      // 카카오 사용자 정보로 Supabase에 로그인/회원가입
-      const kakaoEmail = userInfo.kakao_account?.email;
-      const kakaoNickname = userInfo.kakao_account?.profile?.nickname;
-      const kakaoId = userInfo.id.toString();
-
-      if (!kakaoEmail) {
-        throw new Error('카카오 계정에서 이메일 정보를 가져올 수 없습니다.');
+      if (error) {
+        console.error('카카오 로그인 오류:', error);
+        setLoginError('카카오 로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        setKakaoLoading(false);
       }
-
-      // 기존 사용자 확인
-      const { data: existingUser } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('email', kakaoEmail)
-        .single();
-
-      if (existingUser) {
-        // 기존 사용자 - 카카오 ID 업데이트
-        await supabase
-          .from('profiles')
-          .update({ 
-            kakao_id: kakaoId,
-            provider: 'kakao'
-          })
-          .eq('email', kakaoEmail);
-      } else {
-        // 새 사용자 - 프로필 생성
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            email: kakaoEmail,
-            name: kakaoNickname || '카카오 사용자',
-            kakao_id: kakaoId,
-            provider: 'kakao'
-          });
-
-        if (profileError) {
-          console.error('프로필 생성 오류:', profileError);
-        }
-      }
-
-      // Supabase Auth에 사용자 정보 저장 (임시 비밀번호 사용)
-      const tempPassword = `kakao_${kakaoId}_${Date.now()}`;
-      
-      try {
-        // 기존 계정으로 로그인 시도
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: kakaoEmail,
-          password: tempPassword,
-        });
-
-        if (signInError) {
-          // 계정이 없으면 생성
-          const { error: signUpError } = await supabase.auth.signUp({
-            email: kakaoEmail,
-            password: tempPassword,
-            options: {
-              data: {
-                name: kakaoNickname || '카카오 사용자',
-                kakao_id: kakaoId,
-                provider: 'kakao'
-              }
-            }
-          });
-
-          if (signUpError) {
-            throw signUpError;
-          }
-        }
-      } catch (authError) {
-        console.error('Supabase Auth 오류:', authError);
-        // Auth 오류가 있어도 카카오 로그인은 성공으로 처리
-      }
-
-      // 성공 처리
-      window.location.reload();
-
+      // 성공 시 리다이렉트되므로 여기서는 아무것도 하지 않음
     } catch (error: any) {
       console.error('카카오 로그인 오류:', error);
       setLoginError(error.message || '카카오 로그인에 실패했습니다.');
-    } finally {
       setKakaoLoading(false);
     }
   };
@@ -547,52 +474,6 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     void loadUserCash();
   }, [loadUserCash]);
 
-  useEffect(() => {
-    const ensureKakaoSdk = () => {
-      const kakao = window.Kakao;
-      if (kakao) {
-        try {
-          if (!kakao.isInitialized()) {
-            kakao.init('f8269368f9d501a595c3f3d6d99e4ff5');
-          }
-          setIsKakaoChatReady(true);
-        } catch (error) {
-          console.error('카카오 SDK 초기화 중 오류:', error);
-        }
-        return;
-      }
-
-      const existingScript = document.getElementById('kakao-sdk');
-      if (existingScript) {
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.id = 'kakao-sdk';
-      script.src = 'https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js';
-      script.integrity = 'sha384-TiCUE00h649CAMonG018J2ujOgDKW/kVWlChEuu4jK2vxfAAD0eZxzCKakxg55G4';
-      script.crossOrigin = 'anonymous';
-      script.async = true;
-      script.onload = () => {
-        try {
-          const kakaoOnLoad = window.Kakao;
-          if (kakaoOnLoad && !kakaoOnLoad.isInitialized()) {
-            kakaoOnLoad.init('f8269368f9d501a595c3f3d6d99e4ff5');
-          }
-          setIsKakaoChatReady(true);
-        } catch (error) {
-          console.error('카카오 SDK 로드 후 초기화 실패:', error);
-        }
-      };
-      script.onerror = () => {
-        console.error('카카오 SDK 로드 실패');
-      };
-
-      document.head.appendChild(script);
-    };
-
-    ensureKakaoSdk();
-  }, []);
 
   // 로그인하지 않은 경우 로그인 사이드바 표시
   if (!user) {
@@ -854,11 +735,9 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                           <i className="ri-arrow-right-up-line text-base"></i>
                         </div>
                       </div>
-                      {!isKakaoChatReady && (
-                        <p className="mt-3 text-xs font-medium text-gray-900/80">
-                          클릭하면 새 창에서 카카오톡 상담이 열립니다.
-                        </p>
-                      )}
+                      <p className="mt-3 text-xs font-medium text-gray-900/80">
+                        클릭하면 새 창에서 카카오톡 상담이 열립니다.
+                      </p>
                     </button>
                   </div>
                 )}
