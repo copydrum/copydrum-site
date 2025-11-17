@@ -28,6 +28,8 @@ const NotFoundPage = lazy(() => import('../pages/NotFound'));
 const CompanyAboutPage = lazy(() => import('../pages/company/about'));
 const PartnershipPage = lazy(() => import('../pages/company/partnership'));
 const BusinessInfoPage = lazy(() => import('../pages/company/business-info'));
+const InicisReturnPage = lazy(() => import('../pages/payments/inicis-return/page'));
+const InicisClosePage = lazy(() => import('../pages/payments/inicis-close/page'));
 
 // 로딩 컴포넌트
 const LoadingSpinner = () => (
@@ -269,6 +271,22 @@ const routes: RouteObject[] = [
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <PartnershipPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/payments/inicis/return',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <InicisReturnPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/payments/inicis/close',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <InicisClosePage />
       </Suspense>
     ),
   },

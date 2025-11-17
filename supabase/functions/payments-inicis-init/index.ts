@@ -1,6 +1,13 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createHash } from "https://deno.land/std@0.224.0/hash/mod.ts";
+
+// SHA256 해시 생성 함수
+const sha256 = async (data: string): Promise<string> => {
+  const msgBuffer = new TextEncoder().encode(data);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+};
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,7 +42,7 @@ serve(async (req) => {
     const supabaseUrl = requireEnv("SUPABASE_URL");
     const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
     const mid = requireEnv("INICIS_MID");
-    const merchantKey = requireEnv("INICIS_MERCHANT_KEY");
+    const signKey = requireEnv("INICIS_SIGN_KEY") || requireEnv("INICIS_MERCHANT_KEY");
 
     const payload = await req.json();
 
@@ -75,9 +82,14 @@ serve(async (req) => {
     }
 
     const timestamp = Date.now().toString();
-    const hashedMerchantKey = createHash("sha256").update(merchantKey).toString().toUpperCase();
-    const signatureSource = `${mid}${orderId}${normalizedAmount}${timestamp}${hashedMerchantKey}`;
-    const signature = createHash("sha256").update(signatureSource).toString().toUpperCase();
+    // mKey: SHA256(signKey) - 소문자 hex
+    const mKey = await sha256(signKey);
+    // signature: SHA256("oid=" + oid + "&price=" + price + "&timestamp=" + timestamp) - 소문자 hex
+    const signatureSource = `oid=${orderId}&price=${normalizedAmount}&timestamp=${timestamp}`;
+    const signature = await sha256(signatureSource);
+    // verification: SHA256("oid=" + oid + "&price=" + price + "&signKey=" + signKey + "&timestamp=" + timestamp) - 소문자 hex
+    const verificationSource = `oid=${orderId}&price=${normalizedAmount}&signKey=${signKey}&timestamp=${timestamp}`;
+    const verification = await sha256(verificationSource);
     const transactionId = crypto.randomUUID();
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
@@ -107,21 +119,27 @@ serve(async (req) => {
         oid: orderId,
         price: normalizedAmount.toString(),
         timestamp,
+        use_chkfake: "Y", // PC결제 보안강화 사용 (필수, Y 고정)
         signature,
-        mKey: hashedMerchantKey,
+        verification,
+        mKey,
         returnUrl,
-        closeUrl: metadata.closeUrl ?? "",
+        // closeUrl: 결제창 닫기 URL (결제창에서 닫기 버튼 클릭 시 호출)
+        closeUrl: metadata.closeUrl ?? returnUrl.replace(/\/[^/]*$/, "/payments/inicis/close"),
         currency: "WON",
         goodname: goodsName ?? description ?? "콘텐츠 결제",
         buyername: buyerName ?? "",
         buyeremail: buyerEmail ?? "",
         buyertel: buyerTel ?? "",
-        gopaymethod: method === "kakaopay" ? "KAKAOPAY" : "Card",
-        offerPeriod: metadata.offerPeriod ?? "",
-        acceptmethod: metadata.acceptmethod ?? "HPP(2)",
+        gopaymethod: method === "kakaopay" ? "KAKAOPAY" : "Card:DirectBank:VBank:HPP",
+        // acceptmethod: centerCd(Y) 필수 포함 (IDC센터코드 수신용)
+        // HPP(1) 또는 HPP(2): 휴대폰결제 상품유형 (1:컨텐츠, 2:실물)
+        // below1000: 1000원 이하 결제 가능 옵션
+        // va_receipt: 현금영수증 UI 노출
+        acceptmethod: metadata.acceptmethod ?? "HPP(1):va_receipt:below1000:centerCd(Y)",
         languageView: "ko",
         charSet: "utf-8",
-        payViewType: metadata.payViewType ?? "",
+        payViewType: metadata.payViewType ?? "overlay",
       },
     };
 
@@ -153,6 +171,7 @@ serve(async (req) => {
     );
   }
 });
+
 
 
 

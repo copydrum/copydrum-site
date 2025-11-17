@@ -107,6 +107,11 @@ export const startSheetPurchase = async ({
   });
 
   if (intent.requestForm) {
+    // 주문 ID를 sessionStorage에 저장 (결제 반환 페이지에서 사용)
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('inicis_order_id', orderId);
+    }
+    
     await ensureInicisSdkLoaded();
     submitInicisPaymentForm(intent.requestForm);
   }

@@ -25,11 +25,10 @@ const paymentMethodOptions: PaymentMethodOption[] = [
   {
     id: 'card',
     name: '카드 결제',
-    description: '준비 중입니다.',
+    description: 'KG이니시스 안전결제로 신용카드 결제가 가능합니다.',
     icon: 'ri-bank-card-line',
     color: 'text-blue-600',
-    disabled: true,
-    badge: '준비중',
+    disabled: false,
   },
   {
     id: 'bank',

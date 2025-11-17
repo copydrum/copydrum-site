@@ -66,7 +66,7 @@ export default function Home() {
   const [now, setNow] = useState(() => new Date());
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoriteLoadingIds, setFavoriteLoadingIds] = useState<Set<string>>(new Set());
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
 
   const loadLatestSheets = useCallback(async () => {
     try {
@@ -494,38 +494,45 @@ export default function Home() {
               {/* Mobile Version */}
               <div className="max-w-xl md:hidden text-center space-y-4">
                 <h2 className="text-3xl sm:text-4xl font-bold text-white leading-tight">
-                  전 세계 드러머들이 찾는
-                  <br />
-                  드럼 악보 컬렉션
+                  {t('home.banner.title').split('\n').map((line, idx) => (
+                    <span key={idx}>
+                      {line}
+                      {idx < t('home.banner.title').split('\n').length - 1 && <br />}
+                    </span>
+                  ))}
                 </h2>
                 <div className="text-white text-base sm:text-lg leading-relaxed space-y-1">
-                  <p>K-POP, 락, CCM, 팝까지!</p>
-                  <p>전문가가 직접 만든 정교한 드럼 악보를</p>
-                  <p>PDF로 바로 다운로드하세요.</p>
+                  <p>{t('home.banner.subtitle1')}</p>
+                  <p>{t('home.banner.subtitle2')}</p>
+                  <p>{t('home.banner.subtitle3')}</p>
                 </div>
                 <button 
                   onClick={() => window.location.href = '/categories'}
                   className="inline-flex items-center justify-center bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 sm:px-8 sm:py-3 rounded-full hover:from-blue-700 hover:to-purple-700 font-semibold whitespace-nowrap cursor-pointer transition-all duration-300 shadow-lg"
                 >
-                  악보 둘러보기
+                  {t('home.banner.browseButton')}
                 </button>
               </div>
               {/* PC Version */}
               <div className="hidden md:block max-w-2xl text-left space-y-6">
                 <h2 className="text-5xl font-bold text-white leading-tight">
-                  전 세계 드러머들이 찾는<br />
-                  드럼 악보 컬렉션
+                  {t('home.banner.title').split('\n').map((line, idx) => (
+                    <span key={idx}>
+                      {line}
+                      {idx < t('home.banner.title').split('\n').length - 1 && <br />}
+                    </span>
+                  ))}
                 </h2>
                 <div className="text-white text-xl leading-relaxed space-y-1">
-                  <p>K-POP, 락, CCM, 팝까지!</p>
-                  <p>전문가가 직접 만든 정교한 드럼 악보를</p>
-                  <p>PDF로 바로 다운로드하세요.</p>
+                  <p>{t('home.banner.subtitle1')}</p>
+                  <p>{t('home.banner.subtitle2')}</p>
+                  <p>{t('home.banner.subtitle3')}</p>
                 </div>
                 <button 
                   onClick={() => window.location.href = '/categories'}
                   className="inline-flex items-center justify-center bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-3 rounded-full hover:from-blue-700 hover:to-purple-700 font-semibold whitespace-nowrap cursor-pointer transition-all duration-300 shadow-lg"
                 >
-                  악보 둘러보기
+                  {t('home.banner.browseButton')}
                 </button>
               </div>
             </div>

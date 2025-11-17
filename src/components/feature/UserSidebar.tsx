@@ -37,7 +37,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const navigate = useNavigate();
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const formatCurrency = useCallback(
     (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
     [i18n.language],
@@ -300,52 +300,52 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     () => [
       {
         icon: 'ri-history-line',
-        label: '악보캐쉬 내역',
+        label: t('sidebar.cashHistory'),
         onClick: () => handleNavigate('/mypage?section=cash-history'),
       },
       {
         icon: 'ri-user-settings-line',
-        label: '회원정보 업데이트',
+        label: t('sidebar.updateProfile'),
         onClick: () => handleNavigate('/mypage?section=profile'),
       },
       {
         icon: 'ri-shopping-cart-line',
-        label: '장바구니',
+        label: t('sidebar.cart'),
         onClick: () => handleNavigate('/cart'),
         badge: cartItems.length,
       },
       {
         icon: 'ri-file-list-3-line',
-        label: '구입목록',
+        label: t('sidebar.purchaseHistory'),
         onClick: () => handleNavigate('/my-orders'),
       },
       {
         icon: 'ri-edit-2-line',
-        label: '주문제작하기',
+        label: t('sidebar.customOrder'),
         onClick: () => handleNavigate('/custom-order'),
       },
       {
         icon: 'ri-user-line',
-        label: '마이페이지',
+        label: t('sidebar.myPage'),
         onClick: () => handleNavigate('/mypage'),
       },
       {
         icon: 'ri-customer-service-2-line',
-        label: '고객센터',
+        label: t('sidebar.customerSupport'),
         onClick: () => handleNavigate('/customer-support'),
       },
       {
         icon: 'ri-question-answer-line',
-        label: '1:1 문의',
+        label: t('sidebar.inquiry'),
         onClick: () => handleNavigate('/mypage?section=inquiries'),
       },
       {
         icon: 'ri-question-line',
-        label: '검색/구매가이드',
+        label: t('sidebar.guide'),
         onClick: () => handleNavigate('/guide'),
       },
     ],
-    [cartItems.length, handleNavigate],
+    [cartItems.length, handleNavigate, t],
   );
 
   const chargeOptions = [
@@ -363,8 +363,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
       name: '신용카드',
       icon: 'ri-bank-card-line',
       color: 'text-blue-600',
-      disabled: true,
-      badge: '준비 중',
+      disabled: false,
     },
     {
       id: 'kakaopay',
@@ -416,8 +415,8 @@ export default function UserSidebar({ user }: UserSidebarProps) {
         <div className="fixed top-0 right-0 h-full w-64 bg-white shadow-2xl z-50 border-l border-gray-200">
         {/* 헤더 */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white flex flex-col items-center justify-center" style={{ height: '156px' }}>
-          <h2 className="text-lg font-bold text-center">로그인</h2>
-          <p className="text-blue-100 text-xs text-center mt-1">악보 구매를 위해 로그인하세요</p>
+          <h2 className="text-lg font-bold text-center">{t('sidebar.loginTitle')}</h2>
+          <p className="text-blue-100 text-xs text-center mt-1">{t('sidebar.loginDescription')}</p>
         </div>
 
         {/* 로그인 폼 */}
@@ -443,7 +442,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                이메일 주소
+                {t('sidebar.email')}
               </label>
               <input
                 id="email"
@@ -452,13 +451,13 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="이메일을 입력하세요"
+                placeholder={t('sidebar.emailPlaceholder')}
               />
             </div>
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                비밀번호
+                {t('sidebar.password')}
               </label>
               <input
                 id="password"
@@ -467,7 +466,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="비밀번호를 입력하세요"
+                placeholder={t('sidebar.passwordPlaceholder')}
               />
             </div>
 
@@ -480,7 +479,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
               />
               <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 cursor-pointer">
-                아이디 저장
+                {t('sidebar.rememberMe')}
               </label>
             </div>
 
@@ -492,10 +491,10 @@ export default function UserSidebar({ user }: UserSidebarProps) {
               {loginLoading ? (
                 <div className="flex items-center justify-center">
                   <i className="ri-loader-4-line animate-spin mr-2"></i>
-                  로그인 중...
+                  {t('sidebar.loggingIn')}
                 </div>
               ) : (
-                '로그인'
+                t('sidebar.login')
               )}
             </button>
           </form>
@@ -507,7 +506,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                 <div className="w-full border-t border-gray-300" />
               </div>
               <div className="relative flex justify-center text-xs">
-                <span className="px-2 bg-white text-gray-500">또는</span>
+                <span className="px-2 bg-white text-gray-500">{t('sidebar.or')}</span>
               </div>
             </div>
 
@@ -520,12 +519,12 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                 {kakaoLoading ? (
                   <>
                     <i className="ri-loader-4-line animate-spin text-lg mr-2"></i>
-                    카카오 로그인 중...
+                    {t('sidebar.kakaoLoggingIn')}
                   </>
                 ) : (
                   <>
                     <i className="ri-kakao-talk-fill text-lg mr-2"></i>
-                    카카오톡 로그인
+                    {t('sidebar.kakaoLogin')}
                   </>
                 )}
               </button>
@@ -538,12 +537,12 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                 {googleLoading ? (
                   <>
                     <i className="ri-loader-4-line animate-spin text-lg mr-2"></i>
-                    구글 로그인 중...
+                    {t('sidebar.googleLoggingIn')}
                   </>
                 ) : (
                   <>
                     <i className="ri-google-fill text-red-500 text-lg mr-2"></i>
-                    구글 로그인
+                    {t('sidebar.googleLogin')}
                   </>
                 )}
               </button>
@@ -556,7 +555,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                 className="w-full flex items-center justify-center py-2 px-4 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-medium text-sm cursor-pointer"
               >
                 <i className="ri-user-add-line mr-2"></i>
-                회원가입
+                {t('sidebar.register')}
               </a>
 
             <div className="flex space-x-2">
@@ -564,27 +563,27 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                 href="/auth/forgot-password"
                 className="flex-1 text-center py-2 px-3 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md hover:bg-blue-50 cursor-pointer"
               >
-                아이디 찾기
+                {t('sidebar.findId')}
               </a>
               <a
                 href="/auth/forgot-password"
                 className="flex-1 text-center py-2 px-3 text-xs text-white bg-blue-600 hover:bg-blue-700 border border-blue-600 rounded-md cursor-pointer"
               >
-                비밀번호 찾기
+                {t('sidebar.findPassword')}
               </a>
             </div>
             </div>
 
             {/* 고객센터 */}
             <div className="mt-6 pt-4 border-t border-gray-200">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">도움이 필요하신가요?</h3>
+              <h3 className="text-sm font-medium text-gray-700 mb-3">{t('sidebar.needHelp')}</h3>
               <div className="space-y-2">
                 <button 
                   onClick={handleCustomerSupportClick}
                   className="w-full flex items-center p-2 text-sm text-gray-600 hover:bg-gray-50 rounded-md cursor-pointer"
                 >
                   <i className="ri-customer-service-2-line mr-2"></i>
-                  고객센터
+                  {t('sidebar.customerSupport')}
                 </button>
               </div>
             </div>
@@ -603,19 +602,19 @@ export default function UserSidebar({ user }: UserSidebarProps) {
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-4 text-white">
           <div className="mb-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold">{user?.user_metadata?.name || '사용자'}</h2>
+              <h2 className="text-lg font-bold">{user?.user_metadata?.name || t('sidebar.user')}</h2>
               <button
                 onClick={handleLogout}
                 className="text-xs bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-white transition-colors cursor-pointer"
               >
-                로그아웃
+                {t('sidebar.logout')}
               </button>
             </div>
             <p className="text-blue-100 text-xs">{user?.email}</p>
           </div>
 
           <div className="bg-white/20 rounded-lg p-3">
-            <p className="text-xs text-blue-100">보유 악보캐쉬</p>
+            <p className="text-xs text-blue-100">{t('sidebar.availableCash')}</p>
             <p className="text-xl font-bold">{formatCurrency(userCash)}</p>
           </div>
         </div>
@@ -632,8 +631,8 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                 <i className="ri-wallet-3-line text-blue-600 text-sm"></i>
               </div>
               <div className="text-left">
-                <h3 className="font-semibold text-blue-900 text-sm">캐쉬충전</h3>
-                <p className="text-xs text-blue-600">악보 구매용 캐쉬</p>
+                <h3 className="font-semibold text-blue-900 text-sm">{t('sidebar.cashCharge')}</h3>
+                <p className="text-xs text-blue-600">{t('sidebar.cashForPurchase')}</p>
               </div>
             </button>
 
@@ -654,7 +653,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                   ) : null}
                 </button>
 
-                {item.label === '검색/구매가이드' && (
+                {item.label === t('sidebar.guide') && (
                   <div className="pt-2 pb-2">
                     <button
                       onClick={handleKakaoChatClick}
@@ -664,13 +663,13 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                         <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-black/85 text-[#FEE500]">
                           <i className="ri-kakao-talk-fill text-lg"></i>
                         </div>
-                        <span className="flex-1 text-center text-sm font-semibold text-gray-900">카카오 채팅 상담</span>
+                        <span className="flex-1 text-center text-sm font-semibold text-gray-900">{t('sidebar.kakaoChat')}</span>
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/35 text-gray-900 transition-transform group-hover:translate-x-0.5">
                           <i className="ri-arrow-right-up-line text-base"></i>
                         </div>
                       </div>
                       <p className="mt-3 text-xs font-medium text-gray-900/80">
-                        클릭하면 새 창에서 카카오톡 상담이 열립니다.
+                        {t('sidebar.kakaoChatDescription')}
                       </p>
                     </button>
                   </div>
@@ -687,7 +686,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
           <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
             {/* 헤더 */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">캐쉬충전</h2>
+              <h2 className="text-lg font-bold text-gray-900">{t('sidebar.cashChargeTitle')}</h2>
               <button onClick={handleCloseCashChargeModal} className="text-gray-400 hover:text-gray-600 cursor-pointer">
                 <i className="ri-close-line text-xl"></i>
               </button>
@@ -697,7 +696,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
               {/* 현재 포인트 */}
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6 flex items-center">
                 <i className="ri-coins-line text-yellow-600 text-lg mr-2"></i>
-                <span className="text-sm text-gray-700">보유 악보캐쉬</span>
+                <span className="text-sm text-gray-700">{t('sidebar.currentCash')}</span>
                 <span className="ml-auto font-bold text-yellow-600">{formatNumber(userCash)} P</span>
               </div>
 
@@ -705,7 +704,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                 <div className="space-y-5">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-700">입금하실 금액</span>
+                      <span className="text-sm text-gray-700">{t('sidebar.amountToDeposit')}</span>
                       <span className="text-lg font-bold text-blue-600">
                         {formatCurrency(chargeAmount)}
                       </span>
@@ -713,36 +712,36 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                   </div>
                   <div className="bg-gray-50 rounded-lg px-4 py-3 space-y-2 border border-gray-200">
                     <div className="flex items-center justify-between text-xs text-gray-600">
-                      <span>은행</span>
+                      <span>{t('sidebar.bank')}</span>
                       <span className="font-semibold text-gray-900">농협</span>
                     </div>
                     <div className="flex items-center justify-between text-xs text-gray-600">
-                      <span>계좌번호</span>
+                      <span>{t('sidebar.accountNumber')}</span>
                       <span className="font-semibold text-gray-900">106-02-303742</span>
                     </div>
                     <div className="flex items-center justify-between text-xs text-gray-600">
-                      <span>예금주</span>
+                      <span>{t('sidebar.accountHolder')}</span>
                       <span className="font-semibold text-gray-900">강만수</span>
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="block text-sm font-semibold text-gray-900">
-                      입금자명 <span className="text-red-500">*</span>
+                      {t('sidebar.depositorName')} <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       value={depositorName}
                       onChange={(event) => setDepositorName(event.target.value)}
-                      placeholder="입금자명을 입력하세요"
+                      placeholder={t('sidebar.depositorNamePlaceholder')}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <p className="text-xs text-gray-500">
-                      회원명과 입금자가 다르면 확인이 지연될 수 있으니 정확히 입력해주세요.
+                      {t('sidebar.depositorNote')}
                     </p>
                   </div>
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 text-xs text-gray-700 space-y-1">
-                    <p>• 입금 확인 후 관리자가 수동으로 캐시 충전을 완료합니다.</p>
-                    <p>• 입금 확인까지 영업일 기준 1~2일 소요될 수 있습니다.</p>
+                    <p>{t('sidebar.chargeNotice1')}</p>
+                    <p>{t('sidebar.chargeNotice2')}</p>
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -752,39 +751,39 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                       }}
                       className="flex-1 border border-gray-300 text-gray-700 py-2.5 px-4 rounded-lg hover:bg-gray-50 font-medium text-sm transition-colors"
                     >
-                      이전
+                      {t('sidebar.previous')}
                     </button>
                     <button
                       onClick={handleBankTransferConfirm}
                       disabled={chargeProcessing}
                       className="flex-1 bg-blue-600 text-white py-2.5 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-70 font-medium text-sm transition-colors"
                     >
-                      {chargeProcessing ? '처리 중...' : '확인'}
+                      {chargeProcessing ? t('sidebar.processing') : t('sidebar.confirm')}
                     </button>
                   </div>
                 </div>
               ) : bankTransferInfo ? (
                 <div className="space-y-5">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h3 className="text-sm font-semibold text-blue-800 mb-3">무통장입금 안내</h3>
+                    <h3 className="text-sm font-semibold text-blue-800 mb-3">{t('sidebar.bankTransferInfo')}</h3>
                     <ul className="space-y-2 text-sm text-gray-700">
                       <li>
-                        <span className="font-medium text-gray-900">은행</span> {bankTransferInfo.bankName}
+                        <span className="font-medium text-gray-900">{t('sidebar.bank')}</span> {bankTransferInfo.bankName}
                       </li>
                       <li>
-                        <span className="font-medium text-gray-900">계좌번호</span>{' '}
+                        <span className="font-medium text-gray-900">{t('sidebar.accountNumber')}</span>{' '}
                         {bankTransferInfo.accountNumber}
                       </li>
                       <li>
-                        <span className="font-medium text-gray-900">예금주</span> {bankTransferInfo.depositor}
+                        <span className="font-medium text-gray-900">{t('sidebar.accountHolder')}</span> {bankTransferInfo.depositor}
                       </li>
                       <li>
-                        <span className="font-medium text-gray-900">입금금액</span>{' '}
+                        <span className="font-medium text-gray-900">{t('sidebar.depositAmount')}</span>{' '}
                         {formatCurrency(bankTransferInfo.amount ?? chargeAmount)}
                       </li>
                       {bankTransferInfo.expectedDepositor ? (
                         <li>
-                          <span className="font-medium text-gray-900">입금자명</span>{' '}
+                          <span className="font-medium text-gray-900">{t('sidebar.depositorName')}</span>{' '}
                           <span className="text-blue-600 font-semibold">
                             {bankTransferInfo.expectedDepositor}
                           </span>
@@ -800,14 +799,14 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                     onClick={handleCloseCashChargeModal}
                     className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 font-bold text-sm transition-colors"
                   >
-                    확인
+                    {t('sidebar.confirm')}
                   </button>
                 </div>
               ) : (
                 <>
                   {/* 결제금액 */}
                   <div className="mb-6">
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">결제금액</h3>
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">{t('sidebar.paymentAmount')}</h3>
                     <div className="grid grid-cols-2 gap-3">
                       {chargeOptions.map((option, index) => (
                         <button
@@ -844,7 +843,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
 
                   {/* 결제방법 */}
                   <div className="mb-6">
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">결제방법</h3>
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">{t('sidebar.paymentMethod')}</h3>
                     <div className="grid grid-cols-2 gap-3">
                       {paymentMethods.map((method) => {
                         const isSelected = selectedPayment === method.id;
@@ -855,7 +854,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                             type="button"
                             onClick={() => {
                               if (isDisabled) {
-                                alert('해당 결제수단은 현재 준비 중입니다.');
+                                alert(t('mobile.cash.paymentUnavailable'));
                                 return;
                               }
                               setSelectedPayment(method.id);
@@ -870,7 +869,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                             <div className="flex items-center justify-between">
                               <div className="flex items-center">
                                 <i className={`${method.icon} ${method.color} text-lg mr-2`}></i>
-                                <span className="text-sm font-medium">{method.name}</span>
+                                <span className="text-sm font-medium">{method.id === 'card' ? t('sidebar.creditCard') : method.id === 'kakaopay' ? t('sidebar.kakaoPay') : t('sidebar.bankTransfer')}</span>
                               </div>
                               <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
                                 {isSelected && <div className="w-2 h-2 bg-blue-500 rounded-full"></div>}
@@ -879,7 +878,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                             {method.badge ? (
                               <div className="mt-1">
                                 <span className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded">
-                                  {method.badge}
+                                  {t('sidebar.preparing')}
                                 </span>
                               </div>
                             ) : null}
@@ -899,7 +898,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                         className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
                       />
                       <span className="ml-2 text-xs text-gray-600 leading-relaxed">
-                        결제 내용을 확인하였으며, 약관에 동의합니다.
+                        {t('sidebar.agreement')}
                         <button type="button" className="text-blue-600 hover:text-blue-800 ml-1">
                           <i className="ri-arrow-down-s-line"></i>
                         </button>
@@ -915,7 +914,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                       chargeProcessing ? 'opacity-70 cursor-not-allowed' : 'hover:from-blue-700 hover:to-purple-700'
                     }`}
                   >
-                    {chargeProcessing ? '결제 준비 중...' : '충전하기'}
+                    {chargeProcessing ? t('sidebar.processing') : t('sidebar.charge')}
                   </button>
                 </>
               )}

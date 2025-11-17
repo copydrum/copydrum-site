@@ -51,8 +51,12 @@ export const createInicisPaymentIntent = async (
   return invokeEdgeFunction<PaymentIntentResponse>(INIT_FUNCTION, payload);
 };
 
-export const approveInicisPayment = async (payload: PaymentApprovalPayload) => {
-  return invokeEdgeFunction<{ success: true }>(APPROVE_FUNCTION, payload);
+export const approveInicisPayment = async (payload: PaymentApprovalPayload & {
+  authToken?: string;
+  idcName?: string;
+  authUrl?: string;
+}) => {
+  return invokeEdgeFunction<{ success: true; data?: any }>(APPROVE_FUNCTION, payload);
 };
 
 export const cancelInicisPayment = async (payload: PaymentCancelPayload) => {

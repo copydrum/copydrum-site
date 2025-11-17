@@ -43,7 +43,7 @@ const paymentMethodConfigs: PaymentMethodConfig[] = [
     nameKey: 'payment.card',
     icon: 'ri-bank-card-line',
     color: 'text-blue-600',
-    disabled: true,
+    disabled: false,
   },
   {
     id: 'bank',
@@ -153,7 +153,33 @@ export default function MobileCashChargeModal({
       return;
     }
 
-    alert(t('mobile.cash.cardPending'));
+    if (selectedPayment === 'card') {
+      setIsProcessing(true);
+      try {
+        const result = await startCashCharge({
+          userId: user.id,
+          amount: selectedOption.amount,
+          bonusAmount: selectedOption.bonus ?? 0,
+          paymentMethod: 'card',
+          description: `${t('mobile.cash.title')} ${formatCurrency(selectedOption.amount)}`,
+          buyerName: user.email ?? null,
+          buyerEmail: user.email ?? null,
+          returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
+        });
+
+        if (result.paymentIntent?.requestForm) {
+          alert(t('mobile.cash.paymentWindowOpen') || '결제창이 열립니다. 결제를 완료해 주세요.');
+        } else {
+          alert(t('mobile.cash.error') || '결제 처리 중 오류가 발생했습니다.');
+        }
+      } catch (error) {
+        console.error('모바일 캐쉬 충전 오류:', error);
+        alert(error instanceof Error ? error.message : t('mobile.cash.error'));
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
+    }
   };
 
   const handleBankTransferConfirm = async () => {

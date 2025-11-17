@@ -750,8 +750,39 @@ export default function MyPage() {
       return;
     }
 
-    if (selectedPayment === 'kakaopay' || selectedPayment === 'card') {
+    if (selectedPayment === 'kakaopay') {
       alert('해당 결제수단은 현재 준비 중입니다.');
+      return;
+    }
+
+    if (selectedPayment === 'card') {
+      // 카드 결제 처리
+      setChargeProcessing(true);
+      try {
+        const description = `캐쉬 충전 ${selectedOption.amount.toLocaleString('ko-KR')}원`;
+        const result = await startCashCharge({
+          userId: user.id,
+          amount: selectedOption.amount,
+          bonusAmount: selectedOption.bonus ?? 0,
+          paymentMethod: 'card',
+          description,
+          buyerName: profile?.name ?? profileForm.name ?? null,
+          buyerEmail: user.email ?? null,
+          buyerTel: profile?.phone ?? profileForm.phone ?? null,
+          returnUrl: new URL('/payments/inicis/return', window.location.origin).toString(),
+        });
+
+        if (result.paymentIntent?.requestForm) {
+          alert('결제창이 열립니다. 결제를 완료해 주세요.');
+        } else {
+          alert('결제 처리 중 오류가 발생했습니다.');
+        }
+      } catch (error) {
+        console.error('캐쉬 충전 오류:', error);
+        alert(error instanceof Error ? error.message : '캐쉬 충전 중 오류가 발생했습니다.');
+      } finally {
+        setChargeProcessing(false);
+      }
       return;
     }
 

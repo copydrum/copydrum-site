@@ -15,6 +15,29 @@ const requireEnv = (key: string) => {
   return value;
 };
 
+// SHA256 해시 생성 함수
+const sha256 = async (data: string): Promise<string> => {
+  const msgBuffer = new TextEncoder().encode(data);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+};
+
+// 승인 API URL 가져오기
+const getAuthUrl = (idcName: string): string => {
+  const baseUrl = "stdpay.inicis.com/api/payAuth";
+  switch (idcName) {
+    case "fc":
+      return `https://fc${baseUrl}`;
+    case "ks":
+      return `https://ks${baseUrl}`;
+    case "stg":
+      return `https://stg${baseUrl}`;
+    default:
+      return `https://${baseUrl}`;
+  }
+};
+
 const buildResponse = <T>(payload: T, status = 200) =>
   new Response(JSON.stringify(payload), {
     status,
@@ -33,10 +56,173 @@ serve(async (req) => {
   try {
     const supabaseUrl = requireEnv("SUPABASE_URL");
     const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+    const signKey = requireEnv("INICIS_SIGN_KEY") || requireEnv("INICIS_MERCHANT_KEY");
 
     const payload = await req.json();
 
-    const { orderId, transactionId, amount, rawResponse } = payload ?? {};
+    const {
+      orderId,
+      authToken,
+      idcName,
+      authUrl,
+      amount,
+      rawResponse,
+      resultCode,
+    } = payload ?? {};
+
+    // authToken이 있는 경우 (새로운 승인 요청)
+    if (authToken && idcName) {
+      if (!orderId) {
+        return buildResponse(
+          { success: false, error: { message: "orderId는 필수입니다." } },
+          400,
+        );
+      }
+
+      const timestamp = Date.now().toString();
+      // signature: SHA256("authToken=" + authToken + "&timestamp=" + timestamp)
+      const signatureSource = `authToken=${authToken}&timestamp=${timestamp}`;
+      const signature = await sha256(signatureSource);
+      // verification: SHA256("authToken=" + authToken + "&signKey=" + signKey + "&timestamp=" + timestamp)
+      const verificationSource = `authToken=${authToken}&signKey=${signKey}&timestamp=${timestamp}`;
+      const verification = await sha256(verificationSource);
+
+      const approveUrl = authUrl || getAuthUrl(idcName);
+
+      // KG이니시스 승인 API 호출
+      const approveFormData = new URLSearchParams({
+        mid: requireEnv("INICIS_MID"),
+        authToken,
+        timestamp,
+        signature,
+        verification,
+        charset: "UTF-8",
+        format: "JSON",
+      });
+
+      const approveResponse = await fetch(approveUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: approveFormData.toString(),
+      });
+
+      // 응답 형식 확인 (JSON 또는 텍스트)
+      const responseText = await approveResponse.text();
+      let approveResult: any;
+      
+      try {
+        approveResult = JSON.parse(responseText);
+      } catch {
+        // JSON이 아닌 경우 NVP 또는 XML 형식일 수 있음
+        // 간단한 파싱 시도 또는 오류 처리
+        console.error("[inicis-approve] 승인 API 응답 파싱 실패", responseText);
+        return buildResponse(
+          {
+            success: false,
+            error: {
+              message: "승인 API 응답 형식 오류",
+              details: responseText.substring(0, 500),
+            },
+          },
+          400,
+        );
+      }
+
+      if (approveResult.resultCode !== "0000") {
+        return buildResponse(
+          {
+            success: false,
+            error: {
+              message: approveResult.resultMsg || "결제 승인에 실패했습니다.",
+              details: approveResult,
+            },
+          },
+          400,
+        );
+      }
+
+      // 승인 성공 - 주문 상태 업데이트
+      const transactionId = approveResult.tid || approveResult.MOID;
+      const approvedAmount = Number(approveResult.TotPrice) || Number(amount) || 0;
+
+      const supabase = createClient(supabaseUrl, serviceRoleKey);
+      const nowIso = new Date().toISOString();
+
+      const { data: order, error: orderError } = await supabase
+        .from("orders")
+        .select("id, user_id")
+        .eq("id", orderId)
+        .maybeSingle();
+
+      if (orderError) {
+        return buildResponse(
+          { success: false, error: { message: "주문을 조회할 수 없습니다.", details: orderError } },
+          400,
+        );
+      }
+
+      if (!order) {
+        return buildResponse(
+          { success: false, error: { message: "해당 주문이 존재하지 않습니다." } },
+          404,
+        );
+      }
+
+      const { error: updateOrderError } = await supabase
+        .from("orders")
+        .update({
+          payment_status: "paid",
+          status: "payment_confirmed",
+          transaction_id: transactionId,
+          payment_confirmed_at: nowIso,
+          updated_at: nowIso,
+        })
+        .eq("id", orderId);
+
+      if (updateOrderError) {
+        return buildResponse(
+          {
+            success: false,
+            error: { message: "주문 결제 상태 업데이트에 실패했습니다.", details: updateOrderError },
+          },
+          400,
+        );
+      }
+
+      const { error: updateLogError } = await supabase
+        .from("payment_transactions")
+        .update({
+          status: "paid",
+          pg_transaction_id: transactionId,
+          raw_response: approveResult,
+          amount: approvedAmount,
+          updated_at: nowIso,
+        })
+        .eq("order_id", orderId);
+
+      if (updateLogError) {
+        console.error("[inicis-approve] 결제 로그 업데이트 실패", updateLogError);
+      }
+
+      return buildResponse({
+        success: true,
+        data: {
+          resultCode: approveResult.resultCode,
+          resultMsg: approveResult.resultMsg,
+          tid: approveResult.tid,
+          MOID: approveResult.MOID,
+          TotPrice: approveResult.TotPrice,
+          goodName: approveResult.goodName,
+          applDate: approveResult.applDate,
+          applTime: approveResult.applTime,
+        },
+      });
+    }
+
+    // 기존 방식 (transactionId만 있는 경우 - 상태만 업데이트)
+    const { transactionId } = payload ?? {};
 
     if (!orderId || !transactionId) {
       return buildResponse(
@@ -119,6 +305,7 @@ serve(async (req) => {
     );
   }
 });
+
 
 
 

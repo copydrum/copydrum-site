@@ -10,3 +10,4 @@ COMMENT ON COLUMN order_items.last_download_ip IS '마지막 다운로드 요청
 
 
 
+
