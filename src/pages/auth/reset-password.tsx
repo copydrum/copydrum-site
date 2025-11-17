@@ -21,17 +21,29 @@ export default function ResetPassword() {
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const searchParams = new URLSearchParams(window.location.search);
         
+        console.log('reset-password 페이지 로드:', {
+          hash: window.location.hash,
+          search: window.location.search,
+          pathname: window.location.pathname,
+        });
+        
         // 먼저 hash fragment에 토큰이 있는지 확인 (Supabase가 직접 리디렉션한 경우)
         const accessTokenFromHash = hashParams.get('access_token');
         const refreshTokenFromHash = hashParams.get('refresh_token');
         const typeFromHash = hashParams.get('type');
+        
+        console.log('Hash fragment 확인:', {
+          hasAccessToken: !!accessTokenFromHash,
+          hasRefreshToken: !!refreshTokenFromHash,
+          type: typeFromHash,
+        });
         
         // confirmation_url 쿼리 파라미터 확인 (이메일 prefetch 문제 해결을 위한 사용자 정의 링크)
         const confirmationUrl = searchParams.get('confirmation_url');
         
         if (confirmationUrl && !accessTokenFromHash) {
           // confirmation_url이 있고, 아직 토큰을 받지 않은 경우
-          // Supabase verify URL로 리디렉션하되, redirect_to를 현재 페이지로 설정
+          console.log('confirmation_url 감지, Supabase로 리디렉션:', confirmationUrl);
           try {
             const decodedUrl = decodeURIComponent(confirmationUrl);
             const url = new URL(decodedUrl);
@@ -41,6 +53,7 @@ export default function ResetPassword() {
             const resetPasswordPath = `${currentOrigin}/auth/reset-password`;
             url.searchParams.set('redirect_to', resetPasswordPath);
             
+            console.log('리디렉션 URL:', url.toString());
             // Supabase verify URL로 리디렉션
             // Supabase가 토큰을 검증한 후 redirect_to로 리디렉션할 때 hash fragment를 포함해야 함
             window.location.href = url.toString();
