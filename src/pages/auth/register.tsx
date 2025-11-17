@@ -13,7 +13,6 @@ export default function Register() {
     confirmPassword: '',
     name: '',
     phone: '',
-    role: 'user' as 'user' | 'admin',
     agreeTerms: false,
     agreePrivacy: false,
     agreeMarketing: false
@@ -66,7 +65,7 @@ export default function Register() {
           data: {
             name: formData.name,
             phone: formData.phone,
-            role: formData.role
+            role: 'user' // 기본값으로 'user' 고정
           }
         }
       });
@@ -182,24 +181,6 @@ export default function Register() {
                       className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
                       placeholder="휴대폰 번호를 입력하세요"
                     />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="role" className="block text-sm font-medium text-gray-700">
-                    계정 유형 *
-                  </label>
-                  <div className="mt-1">
-                    <select
-                      id="role"
-                      name="role"
-                      value={formData.role}
-                      onChange={handleChange}
-                      className="appearance-none block w-full px-3 py-2 pr-8 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm bg-white"
-                    >
-                      <option value="user">일반 사용자</option>
-                      <option value="admin">관리자</option>
-                    </select>
                   </div>
                 </div>
 
