@@ -12,7 +12,6 @@ export default function Register() {
     password: '',
     confirmPassword: '',
     name: '',
-    phone: '',
     agreeTerms: false,
     agreePrivacy: false,
     agreeMarketing: false
@@ -64,7 +63,6 @@ export default function Register() {
           emailRedirectTo: `${location.origin}/auth/callback`,
           data: {
             name: formData.name,
-            phone: formData.phone,
             role: 'user' // 기본값으로 'user' 고정
           }
         }
@@ -163,23 +161,6 @@ export default function Register() {
                       onChange={handleChange}
                       className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
                       placeholder="이메일을 입력하세요"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-707">
-                    휴대폰 번호
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      id="phone"
-                      name="phone"
-                      type="tel"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      placeholder="휴대폰 번호를 입력하세요"
                     />
                   </div>
                 </div>
