@@ -182,7 +182,7 @@ export default function Login() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex items-center">
                     <input
                       id="remember-me"
@@ -196,9 +196,12 @@ export default function Login() {
                   </div>
 
                   <div className="text-sm">
-                    <a href="#" className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer">
+                    <Link 
+                      to="/auth/forgot-password" 
+                      className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer underline"
+                    >
                       비밀번호를 잊으셨나요?
-                    </a>
+                    </Link>
                   </div>
                 </div>
 
