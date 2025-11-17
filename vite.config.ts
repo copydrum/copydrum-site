@@ -71,6 +71,18 @@ export default defineConfig({
   build: {
     sourcemap: true,
     outDir: 'out',
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
+    },
+    commonjsOptions: {
+      include: [/node_modules/],
+      transformMixedEsModules: true,
+    },
+  },
+  optimizeDeps: {
+    include: ['react-is', 'recharts'],
   },
   resolve: {
     alias: {
