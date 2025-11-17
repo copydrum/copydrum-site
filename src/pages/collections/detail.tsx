@@ -154,13 +154,14 @@ export default function CollectionDetailPage() {
             id,
             collection_id,
             drum_sheet_id,
-            drum_sheets (
+            drum_sheets!inner (
               id,
               title,
               artist,
               price,
               difficulty,
-              thumbnail_url
+              thumbnail_url,
+              is_active
             )
           `)
           .eq('collection_id', collectionId);
@@ -169,7 +170,12 @@ export default function CollectionDetailPage() {
           throw sheetsError;
         }
 
-        setCollectionSheets(sheetRows ?? []);
+        // 비활성 악보 필터링
+        const activeSheets = (sheetRows ?? []).filter(
+          (row: any) => row.drum_sheets?.is_active === true
+        );
+
+        setCollectionSheets(activeSheets);
       } catch (err) {
         console.error('모음집 상세 정보 로드 오류:', err);
         setError('모음집 정보를 불러오는 중 문제가 발생했습니다.');

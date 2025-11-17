@@ -373,10 +373,11 @@ const CategoriesPage: React.FC = () => {
 
   const loadDrumSheets = async () => {
     try {
-      // 먼저 총 개수 확인
+      // 먼저 총 개수 확인 (활성화된 악보만)
       const { count: totalCount, error: countError } = await supabase
         .from('drum_sheets')
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .eq('is_active', true);
 
       if (countError) {
         console.error('악보 개수 확인 오류:', countError);
@@ -400,6 +401,7 @@ const CategoriesPage: React.FC = () => {
         const { data, error } = await supabase
           .from('drum_sheets')
           .select('id, title, artist, difficulty, price, category_id, tempo, pdf_url, preview_image_url, youtube_url, is_featured, created_at, thumbnail_url, album_name, page_count, categories (name)')
+          .eq('is_active', true)
           .order('created_at', { ascending: false })
           .range(from, to)
           .limit(pageSize);

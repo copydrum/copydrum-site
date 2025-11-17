@@ -73,6 +73,7 @@ export default function Home() {
       const { data, error } = await supabase
         .from('drum_sheets')
         .select('id, title, artist, price, thumbnail_url, youtube_url')
+        .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(12);
 
@@ -194,6 +195,7 @@ export default function Home() {
       let query = supabase
         .from('drum_sheets')
         .select('id, title, artist, price, thumbnail_url, youtube_url, is_featured, category_id')
+        .eq('is_active', true)
         .order('is_featured', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(10);
