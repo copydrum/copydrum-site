@@ -53,14 +53,16 @@ export default function ResetPassword() {
           }
         }
         
-        // 오류 확인
+        // 오류 확인 (토큰 확인 전에 먼저 처리)
         const hashError = hashParams.get('error');
         const searchError = searchParams.get('error');
         const errorDescription = hashParams.get('error_description') || searchParams.get('error_description');
+        const errorCode = hashParams.get('error_code') || searchParams.get('error_code');
         
         if (hashError || searchError) {
+          console.log('에러 감지:', { hashError, searchError, errorCode, errorDescription });
           if (hashError === 'access_denied' || searchError === 'access_denied') {
-            if (errorDescription?.includes('otp_expired') || errorDescription?.includes('expired')) {
+            if (errorCode === 'otp_expired' || errorDescription?.includes('otp_expired') || errorDescription?.includes('expired') || errorDescription?.includes('invalid')) {
               setError('비밀번호 재설정 링크가 만료되었습니다. 새로운 재설정 링크를 요청해주세요.');
             } else {
               setError('비밀번호 재설정 링크가 유효하지 않습니다. 새로운 재설정 링크를 요청해주세요.');
