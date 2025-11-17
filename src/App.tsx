@@ -32,7 +32,8 @@ function App() {
     // 비밀번호 재설정 토큰이 있고, 아직 reset-password 페이지가 아닌 경우에만 리디렉션
     if (hash.includes('access_token') && hash.includes('type=recovery') && !pathname.includes('/auth/reset-password')) {
       // 비밀번호 재설정 토큰이 있으면 재설정 페이지로 리다이렉트
-      window.location.href = '/auth/reset-password' + hash;
+      // search params는 유지하지 않음 (confirmation_url 제거)
+      window.location.replace('/auth/reset-password' + hash);
     }
   }, []);
 

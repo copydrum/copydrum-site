@@ -31,24 +31,20 @@ export default function ResetPassword() {
         
         if (confirmationUrl && !accessTokenFromHash) {
           // confirmation_url이 있고, 아직 토큰을 받지 않은 경우
-          // confirmation_url에서 토큰을 추출하여 직접 검증 시도
+          // Supabase verify URL로 리디렉션하되, redirect_to를 현재 페이지로 설정
           try {
             const decodedUrl = decodeURIComponent(confirmationUrl);
             const url = new URL(decodedUrl);
-            const token = url.searchParams.get('token');
-            const type = url.searchParams.get('type');
             
-            if (token && type === 'recovery') {
-              // 토큰이 있으면 Supabase verify URL로 직접 이동
-              // redirect_to를 현재 페이지로 설정
-              const currentOrigin = window.location.origin;
-              const resetPasswordPath = `${currentOrigin}/auth/reset-password`;
-              url.searchParams.set('redirect_to', resetPasswordPath);
-              
-              // Supabase verify URL로 리디렉션
-              window.location.href = url.toString();
-              return;
-            }
+            // redirect_to를 현재 페이지로 설정 (hash fragment를 포함하도록)
+            const currentOrigin = window.location.origin;
+            const resetPasswordPath = `${currentOrigin}/auth/reset-password`;
+            url.searchParams.set('redirect_to', resetPasswordPath);
+            
+            // Supabase verify URL로 리디렉션
+            // Supabase가 토큰을 검증한 후 redirect_to로 리디렉션할 때 hash fragment를 포함해야 함
+            window.location.href = url.toString();
+            return;
           } catch (err) {
             console.error('confirmation_url 처리 오류:', err);
             // 파싱 실패 시 원본 URL로 리디렉션
