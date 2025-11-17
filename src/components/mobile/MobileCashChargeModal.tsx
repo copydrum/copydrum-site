@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { startCashCharge } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import type { VirtualAccountInfo } from '../../lib/payments';
+import { formatPrice } from '../../lib/priceFormatter';
 
 interface MobileCashChargeModalProps {
   isOpen: boolean;
