@@ -6,9 +6,9 @@ export default function LoginIssueNotice() {
   useEffect(() => {
     // localStorage에서 닫힘 상태 확인
     const isDismissed = localStorage.getItem('loginIssueNoticeDismissed');
-    if (!isDismissed) {
-      setIsVisible(true);
-    }
+    // 임시: 항상 표시 (테스트용)
+    setIsVisible(true);
+    // 원래 코드: if (!isDismissed) { setIsVisible(true); }
   }, []);
 
   const handleClose = () => {
