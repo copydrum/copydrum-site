@@ -854,6 +854,7 @@ const AdminPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // 기존 상태 선언
   const [dashboardStats, setDashboardStats] = useState({
@@ -5133,20 +5134,20 @@ const AdminPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto -mx-3 md:mx-0">
+            <table className="w-full min-w-[640px] md:min-w-0">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     회원
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     보유 캐쉬
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     최근 가입
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     관리
                   </th>
                 </tr>
@@ -5154,53 +5155,55 @@ const AdminPage: React.FC = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {cashLoading ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={4} className="px-3 md:px-6 py-6 md:py-8 text-center text-sm md:text-base text-gray-500">
                       적립금 데이터를 불러오는 중입니다...
                     </td>
                   </tr>
                 ) : paginatedCashMembers.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={4} className="px-3 md:px-6 py-6 md:py-8 text-center text-sm md:text-base text-gray-500">
                       {cashSearchTerm ? '검색 결과가 없습니다.' : '회원 정보가 없습니다.'}
                     </td>
                   </tr>
                 ) : (
                   paginatedCashMembers.map((member) => (
                     <tr key={member.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">
+                      <td className="px-3 md:px-6 py-3 md:py-4">
                         <div className="flex items-center">
-                          <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center">
-                            <i className="ri-user-smile-line text-orange-500 text-lg"></i>
+                          <div className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                            <i className="ri-user-smile-line text-orange-500 text-base md:text-lg"></i>
                           </div>
-                          <div className="ml-4">
-                            <p className="text-sm font-semibold text-gray-900">
+                          <div className="ml-2 md:ml-4 min-w-0">
+                            <p className="text-xs md:text-sm font-semibold text-gray-900 truncate">
                               {member.name || '이름 없음'}
                             </p>
-                            <p className="text-xs text-gray-500">{member.email}</p>
+                            <p className="text-xs text-gray-500 truncate">{member.email}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm font-semibold text-gray-900">
+                      <td className="px-3 md:px-6 py-3 md:py-4 text-xs md:text-sm font-semibold text-gray-900">
                         {formatCurrency(member.credits ?? 0)}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
+                      <td className="px-3 md:px-6 py-3 md:py-4 text-xs md:text-sm text-gray-500">
                         {new Date(member.created_at).toLocaleDateString('ko-KR')}
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-wrap gap-2">
+                      <td className="px-3 md:px-6 py-3 md:py-4">
+                        <div className="flex flex-wrap gap-1.5 md:gap-2">
                           <button
                             onClick={() => handleOpenCashAdjustModal(member)}
-                            className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
+                            className="inline-flex items-center gap-1 md:gap-2 rounded-lg bg-orange-500 px-2 md:px-3 py-1.5 md:py-1.5 text-xs md:text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
                           >
-                            <i className="ri-edit-2-line w-4 h-4"></i>
-                            캐쉬 수정
+                            <i className="ri-edit-2-line w-3.5 h-3.5 md:w-4 md:h-4"></i>
+                            <span className="hidden sm:inline">캐쉬 수정</span>
+                            <span className="sm:hidden">수정</span>
                           </button>
                           <button
                             onClick={() => handleOpenCashHistoryModal(member)}
-                            className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
+                            className="inline-flex items-center gap-1 md:gap-2 rounded-lg bg-gray-100 px-2 md:px-3 py-1.5 md:py-1.5 text-xs md:text-sm font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
                           >
-                            <i className="ri-time-line w-4 h-4"></i>
-                            내역 보기
+                            <i className="ri-time-line w-3.5 h-3.5 md:w-4 md:h-4"></i>
+                            <span className="hidden sm:inline">내역 보기</span>
+                            <span className="sm:hidden">내역</span>
                           </button>
                         </div>
                       </td>
@@ -5563,21 +5566,21 @@ const AdminPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div className="overflow-x-auto -mx-3 md:mx-0">
+          <table className="w-full min-w-[640px] md:min-w-0">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">회원 정보</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">가입방법</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">가입일</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">관리</th>
+                <th className="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">회원 정보</th>
+                <th className="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">가입방법</th>
+                <th className="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">가입일</th>
+                <th className="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
+                <th className="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">관리</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {paginatedMembers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={5} className="px-3 md:px-6 py-6 md:py-8 text-center text-sm md:text-base text-gray-500">
                     {memberSearchTerm ? '검색 결과가 없습니다.' : '회원이 없습니다.'}
                   </td>
                 </tr>
@@ -5592,46 +5595,49 @@ const AdminPage: React.FC = () => {
                   
                   return (
                   <tr key={member.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 md:px-6 py-3 md:py-4">
                       <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
-                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                            <i className="ri-user-line text-blue-600 w-5 h-5"></i>
+                        <div className="flex-shrink-0 h-8 w-8 md:h-10 md:w-10">
+                          <div className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <i className="ri-user-line text-blue-600 w-4 h-4 md:w-5 md:h-5"></i>
                           </div>
                         </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{member.name || '이름 없음'}</div>
-                          <div className="text-sm text-gray-500">{member.email}</div>
+                        <div className="ml-2 md:ml-4 min-w-0">
+                          <div className="text-xs md:text-sm font-medium text-gray-900 truncate">{member.name || '이름 없음'}</div>
+                          <div className="text-xs md:text-sm text-gray-500 truncate">{member.email}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
+                    <td className="px-3 md:px-6 py-3 md:py-4">
+                      <div className="flex items-center flex-wrap gap-1 md:space-x-2">
                         {hasKakao && (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                            <i className="ri-kakao-talk-fill w-3 h-3 mr-1"></i>
-                            카카오
+                          <span className="inline-flex items-center px-1.5 md:px-2 py-0.5 md:py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            <i className="ri-kakao-talk-fill w-2.5 h-2.5 md:w-3 md:h-3 mr-0.5 md:mr-1"></i>
+                            <span className="hidden sm:inline">카카오</span>
+                            <span className="sm:hidden">K</span>
                           </span>
                         )}
                         {hasGoogle && (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            <i className="ri-google-fill w-3 h-3 mr-1"></i>
-                            구글
+                          <span className="inline-flex items-center px-1.5 md:px-2 py-0.5 md:py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            <i className="ri-google-fill w-2.5 h-2.5 md:w-3 md:h-3 mr-0.5 md:mr-1"></i>
+                            <span className="hidden sm:inline">구글</span>
+                            <span className="sm:hidden">G</span>
                           </span>
                         )}
                         {!hasKakao && !hasGoogle && (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            <i className="ri-mail-line w-3 h-3 mr-1"></i>
-                            이메일
+                          <span className="inline-flex items-center px-1.5 md:px-2 py-0.5 md:py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            <i className="ri-mail-line w-2.5 h-2.5 md:w-3 md:h-3 mr-0.5 md:mr-1"></i>
+                            <span className="hidden sm:inline">이메일</span>
+                            <span className="sm:hidden">E</span>
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-3 md:px-6 py-3 md:py-4 text-xs md:text-sm text-gray-900">
                       {new Date(member.created_at).toLocaleDateString()}
                     </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                  <td className="px-3 md:px-6 py-3 md:py-4">
+                    <span className={`inline-flex px-1.5 md:px-2 py-0.5 md:py-1 text-xs font-semibold rounded-full ${
                       member.is_admin 
                         ? 'bg-purple-100 text-purple-800' 
                         : 'bg-green-100 text-green-800'
@@ -5639,13 +5645,14 @@ const AdminPage: React.FC = () => {
                       {member.is_admin ? '관리자' : '일반회원'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
+                  <td className="px-3 md:px-6 py-3 md:py-4 text-xs md:text-sm font-medium">
+                    <div className="flex space-x-1 md:space-x-2">
                       <button
                         onClick={() => handleDeleteMember(member.id)}
-                        className="text-red-600 hover:text-red-900"
+                        className="text-red-600 hover:text-red-900 p-1.5 md:p-0"
+                        aria-label="회원 삭제"
                       >
-                        <i className="ri-delete-bin-line w-4 h-4"></i>
+                        <i className="ri-delete-bin-line w-4 h-4 md:w-4 md:h-4"></i>
                       </button>
                     </div>
                   </td>
@@ -10243,181 +10250,211 @@ const AdminPage: React.FC = () => {
     );
   }
 
+  const handleMenuClick = (menu: string) => {
+    setActiveMenu(menu);
+    setIsMobileMenuOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
+      {/* 모바일 오버레이 */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* 사이드바 */}
-      <div className="w-64 bg-white shadow-sm border-r border-gray-200 flex flex-col">
-        <div className="p-6 border-b border-gray-200">
-          <h1 className="text-xl font-bold text-gray-900">관리자 패널</h1>
+      <div className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-white shadow-sm border-r border-gray-200 flex flex-col transform transition-transform duration-300 ease-in-out md:transform-none ${
+        isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      }`}>
+        <div className="p-4 md:p-6 border-b border-gray-200 flex items-center justify-between">
+          <h1 className="text-lg md:text-xl font-bold text-gray-900">관리자 패널</h1>
+          <button
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="md:hidden flex items-center justify-center h-8 w-8 rounded-full hover:bg-gray-100 text-gray-500"
+            aria-label="메뉴 닫기"
+          >
+            <i className="ri-close-line text-xl"></i>
+          </button>
         </div>
 
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-3 md:p-4 space-y-2 overflow-y-auto">
           <button
-            onClick={() => setActiveMenu('dashboard')}
-            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
+            onClick={() => handleMenuClick('dashboard')}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
               activeMenu === 'dashboard' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <i className="ri-home-line w-5 h-5"></i>
-            <span>대시보드</span>
+            <span className="text-sm md:text-base">대시보드</span>
           </button>
 
           <button
-            onClick={() => setActiveMenu('member-list')}
-            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
+            onClick={() => handleMenuClick('member-list')}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
               activeMenu === 'member-list' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <i className="ri-user-line w-5 h-5"></i>
-            <span>회원 관리</span>
+            <span className="text-sm md:text-base">회원 관리</span>
           </button>
 
           <button
-            onClick={() => setActiveMenu('sheets')}
-            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
+            onClick={() => handleMenuClick('sheets')}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
               activeMenu === 'sheets' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <i className="ri-music-line w-5 h-5"></i>
-            <span>악보 관리</span>
+            <span className="text-sm md:text-base">악보 관리</span>
           </button>
 
           <button
-            onClick={() => setActiveMenu('categories')}
-            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
+            onClick={() => handleMenuClick('categories')}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
               activeMenu === 'categories' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <i className="ri-folder-open-line w-5 h-5"></i>
-            <span>카테고리 관리</span>
+            <span className="text-sm md:text-base">카테고리 관리</span>
           </button>
 
           <button
-            onClick={() => setActiveMenu('collections')}
-            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
+            onClick={() => handleMenuClick('collections')}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
               activeMenu === 'collections' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <i className="ri-bookmark-line w-5 h-5"></i>
-            <span>악보모음집 관리</span>
+            <span className="text-sm md:text-base">악보모음집 관리</span>
           </button>
 
           <button
-            onClick={() => setActiveMenu('event-discounts')}
-            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
+            onClick={() => handleMenuClick('event-discounts')}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
               activeMenu === 'event-discounts' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <i className="ri-fire-line w-5 h-5"></i>
-            <span>이벤트 할인악보</span>
+            <span className="text-sm md:text-base">이벤트 할인악보</span>
           </button>
 
           <button
-            onClick={() => setActiveMenu('orders')}
-            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
-              activeMenu === 'orders' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hoverbg-gray-100'
+            onClick={() => handleMenuClick('orders')}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+              activeMenu === 'orders' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <i className="ri-shopping-cart-line w-5 h-5"></i>
-            <span>주문 관리</span>
+            <span className="text-sm md:text-base">주문 관리</span>
           </button>
 
           <button
-            onClick={() => setActiveMenu('inquiries')}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors ${
+            onClick={() => handleMenuClick('inquiries')}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${
               activeMenu === 'inquiries' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <span className="flex items-center gap-3">
               <i className="ri-customer-service-2-line w-5 h-5"></i>
-              <span>문의 관리</span>
+              <span className="text-sm md:text-base">문의 관리</span>
             </span>
             {pendingInquiryCount > 0 && (
-              <span className="inline-flex min-w-[24px] justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">
+              <span className="inline-flex min-w-[20px] justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-xs font-semibold text-white">
                 {pendingInquiryCount > 99 ? '99+' : pendingInquiryCount}
               </span>
             )}
           </button>
 
           <button
-            onClick={() => setActiveMenu('custom-orders')}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors ${
+            onClick={() => handleMenuClick('custom-orders')}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${
               activeMenu === 'custom-orders' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <span className="flex items-center gap-3">
               <i className="ri-clipboard-line w-5 h-5"></i>
-              <span>주문 제작 관리</span>
+              <span className="text-sm md:text-base">주문 제작 관리</span>
             </span>
             {pendingCustomOrderCount > 0 && (
-              <span className="inline-flex min-w-[24px] justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">
+              <span className="inline-flex min-w-[20px] justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-xs font-semibold text-white">
                 {pendingCustomOrderCount > 99 ? '99+' : pendingCustomOrderCount}
               </span>
             )}
           </button>
 
           <button
-            onClick={() => setActiveMenu('points')}
-            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
-              activeMenu === 'points' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hoverbg-gray-100'
+            onClick={() => handleMenuClick('points')}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+              activeMenu === 'points' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <i className="ri-star-line w-5 h-5"></i>
-            <span>적립금 관리</span>
+            <span className="text-sm md:text-base">적립금 관리</span>
           </button>
 
           <button
-            onClick={() => setActiveMenu('copyright-report')}
-            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
+            onClick={() => handleMenuClick('copyright-report')}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
               activeMenu === 'copyright-report'
                 ? 'bg-blue-100 text-blue-700'
                 : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <i className="ri-file-chart-line w-5 h-5"></i>
-            <span>저작권 보고</span>
+            <span className="text-sm md:text-base">저작권 보고</span>
           </button>
 
           <button
-            onClick={() => setActiveMenu('analytics')}
-            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
+            onClick={() => handleMenuClick('analytics')}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
               activeMenu === 'analytics' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <i className="ri-bar-chart-line w-5 h-5"></i>
-            <span>분석</span>
+            <span className="text-sm md:text-base">분석</span>
           </button>
 
           <button
-            onClick={() => setActiveMenu('settings')}
-            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
-              activeMenu === 'settings' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hoverbg-gray-100'
+            onClick={() => handleMenuClick('settings')}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+              activeMenu === 'settings' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             <i className="ri-settings-line w-5 h-5"></i>
-            <span>설정</span>
+            <span className="text-sm md:text-base">설정</span>
           </button>
         </nav>
 
-        <div className="p-4 border-t border-gray-200">
+        <div className="p-3 md:p-4 border-t border-gray-200">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-red-600 hoverbg-red-50 transition-colors"
+            className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left text-red-600 hover:bg-red-50 transition-colors"
           >
             <i className="ri-logout-box-line w-5 h-5"></i>
-            <span>로그아웃</span>
+            <span className="text-sm md:text-base">로그아웃</span>
           </button>
         </div>
       </div>
 
       {/* 메인 컨텐츠 */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col w-full md:w-auto">
         {/* 헤더 */}
-        <header className="bg-white shadow-sm border-b border-gray-200">
-          <div className="px-6 py-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">
+        <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
+          <div className="px-4 md:px-6 py-3 md:py-4">
+            <div className="flex justify-between items-center gap-3">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <button
+                  onClick={() => setIsMobileMenuOpen(true)}
+                  className="md:hidden flex items-center justify-center h-10 w-10 rounded-full hover:bg-gray-100 text-gray-600"
+                  aria-label="메뉴 열기"
+                >
+                  <i className="ri-menu-line text-xl"></i>
+                </button>
+                <h2 className="text-base md:text-lg font-semibold text-gray-900 truncate">
                   {activeMenu === 'dashboard' ? '대시보드' :
                    activeMenu === 'member-list' ? '회원 관리' :
                    activeMenu === 'sheets' ? '악보 관리' :
@@ -10433,15 +10470,15 @@ const AdminPage: React.FC = () => {
                    activeMenu === 'settings' ? '설정' : '대시보드'}
                 </h2>
               </div>
-              <div className="flex items-center space-x-4">
-                <span className="text-gray-700">{user?.email?.split('@')[0]}님</span>
+              <div className="flex items-center">
+                <span className="text-sm md:text-base text-gray-700 truncate max-w-[120px] md:max-w-none">{user?.email?.split('@')[0]}님</span>
               </div>
             </div>
           </div>
         </header>
 
         {/* 메인 컨텐츠 영역 */}
-        <main className="flex-1 p-6 overflow-auto">
+        <main className="flex-1 p-3 md:p-6 overflow-auto">
           {renderMainContent()}
         </main>
       </div>
