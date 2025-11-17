@@ -13,7 +13,6 @@ import MobileSearchOverlay from './components/mobile/MobileSearchOverlay';
 import MobileCashChargeModal from './components/mobile/MobileCashChargeModal';
 import HreflangTags from './components/common/HreflangTags';
 import MaintenanceNotice from './components/common/MaintenanceNotice';
-import LoginIssueNotice from './components/common/LoginIssueNotice';
 
 console.log('VITE_MAINTENANCE_MODE =', import.meta.env.VITE_MAINTENANCE_MODE);
 
@@ -120,7 +119,6 @@ function App() {
             onClose={() => setIsCashModalOpen(false)}
             user={user ?? null}
           />
-          <LoginIssueNotice />
           <div className="min-h-screen bg-white pt-[108px] pb-[80px] md:pt-0 md:pb-0">
             <AppRoutes />
           </div>
