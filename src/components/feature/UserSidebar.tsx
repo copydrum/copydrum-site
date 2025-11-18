@@ -582,23 +582,26 @@ export default function UserSidebar({ user }: UserSidebarProps) {
             </div>
 
             <div className="mt-4 space-y-3">
-              <button 
-                onClick={handleKakaoLogin}
-                disabled={kakaoLoading}
-                className="w-full flex items-center justify-center py-3 px-4 bg-yellow-400 text-gray-900 rounded-md shadow-sm font-bold text-sm hover:bg-yellow-500 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {kakaoLoading ? (
-                  <>
-                    <i className="ri-loader-4-line animate-spin text-lg mr-2"></i>
-                    {t('sidebar.kakaoLoggingIn')}
-                  </>
-                ) : (
-                  <>
-                    <i className="ri-kakao-talk-fill text-lg mr-2"></i>
-                    {t('sidebar.kakaoLogin')}
-                  </>
-                )}
-              </button>
+              {/* 카카오톡 로그인 버튼 (한국어 사이트에서만 표시) */}
+              {!isEnglishSite && (
+                <button 
+                  onClick={handleKakaoLogin}
+                  disabled={kakaoLoading}
+                  className="w-full flex items-center justify-center py-3 px-4 bg-yellow-400 text-gray-900 rounded-md shadow-sm font-bold text-sm hover:bg-yellow-500 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {kakaoLoading ? (
+                    <>
+                      <i className="ri-loader-4-line animate-spin text-lg mr-2"></i>
+                      {t('sidebar.kakaoLoggingIn')}
+                    </>
+                  ) : (
+                    <>
+                      <i className="ri-kakao-talk-fill text-lg mr-2"></i>
+                      {t('sidebar.kakaoLogin')}
+                    </>
+                  )}
+                </button>
+              )}
 
               <button 
                 onClick={handleGoogleLogin}
@@ -724,7 +727,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                   ) : null}
                 </button>
 
-                {item.label === t('sidebar.guide') && (
+                {item.label === t('sidebar.guide') && !isEnglishSite && (
                   <div className="pt-2 pb-2">
                     <button
                       onClick={handleKakaoChatClick}
