@@ -134,50 +134,39 @@ export default function Register() {
         // 프로필 생성 (이름이 있으면 사용, 없으면 이메일 앞부분 사용)
         const userName = formData.name.trim() || formData.email.split('@')[0];
         
-        // 프로필 생성 시도 (upsert 방식으로 중복 방지)
+        // upsert를 사용하여 트리거가 먼저 생성한 프로필도 실제 이름으로 덮어쓰기
         const { error: profileError } = await supabase
           .from('profiles')
-          .insert({
-            id: data.user.id,
-            email: formData.email,
-            name: userName,
-            role: 'user'
-          });
+          .upsert(
+            {
+              id: data.user.id,
+              email: formData.email,
+              name: userName,
+              role: 'user'
+            },
+            { onConflict: 'id' } // 같은 id면 update로 덮어쓰기
+          );
 
         if (profileError) {
-          console.error('프로필 생성 오류:', profileError);
-          // 409 에러 또는 중복 키 에러는 이미 프로필이 존재하는 경우이므로 성공으로 처리
-          const isDuplicateError = 
-            profileError.code === '23505' || 
-            profileError.code === 'PGRST301' ||
-            profileError.statusCode === 409 ||
-            profileError.message?.includes('duplicate') ||
-            profileError.message?.includes('already exists');
-          
-          if (isDuplicateError) {
-            // 프로필이 이미 존재하는 경우 정상 처리 (다른 프로세스에서 생성되었을 수 있음)
-            console.log('프로필이 이미 존재합니다. 회원가입을 계속 진행합니다.');
-          } else {
-            // 프로필 생성 실패 시 Auth 사용자도 삭제 (롤백)
-            try {
-              const { error: functionError } = await supabase.functions.invoke('rollback-signup', {
-                body: { userId: data.user.id }
-              });
-              
-              if (functionError) {
-                console.error('롤백 함수 호출 오류:', functionError);
-              } else {
-                console.log('회원가입 롤백 완료');
-              }
-            } catch (rollbackError) {
-              console.error('롤백 중 오류:', rollbackError);
-            }
+          console.error('프로필 생성/업데이트 오류:', profileError);
+          // 프로필 생성 실패 시 Auth 사용자도 삭제 (롤백)
+          try {
+            const { error: functionError } = await supabase.functions.invoke('rollback-signup', {
+              body: { userId: data.user.id }
+            });
             
-            // 다른 에러는 실패로 처리
-            throw new Error('프로필 생성에 실패했습니다. 다시 시도해주세요.');
+            if (functionError) {
+              console.error('롤백 함수 호출 오류:', functionError);
+            } else {
+              console.log('회원가입 롤백 완료');
+            }
+          } catch (rollbackError) {
+            console.error('롤백 중 오류:', rollbackError);
           }
+          
+          throw new Error('프로필 생성에 실패했습니다. 다시 시도해주세요.');
         } else {
-          console.log('프로필 생성 성공');
+          console.log('프로필 생성/업데이트 성공');
         }
 
         setSuccess('회원가입이 완료되었습니다! 이메일을 확인 후 로그인해주세요.');
