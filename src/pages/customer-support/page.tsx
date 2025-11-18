@@ -1,15 +1,15 @@
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import MainHeader from '../../components/common/MainHeader';
 import Footer from '../../components/common/Footer';
 import UserSidebar from '../../components/feature/UserSidebar';
 import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
-import { isEnglishHost } from '../../i18n/languages';
 
 export default function CustomerSupport() {
-  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'faq' | 'contact'>(() =>
     searchParams.get('tab') === 'contact' ? 'contact' : 'faq',
@@ -87,111 +87,59 @@ export default function CustomerSupport() {
     }
   }, [user]);
 
-  const faqs = isEnglishSite ? [
+  const faqs = useMemo(() => [
     {
-      category: 'Order/Payment',
+      category: t('customerSupport.faq.categories.orderPayment.name'),
       items: [
         {
-          question: 'When can I download the sheet music after purchase?',
-          answer: 'You can download immediately after payment is completed from My Page. Purchased sheet music can be re-downloaded anytime.'
+          question: t('customerSupport.faq.categories.orderPayment.items.download.question'),
+          answer: t('customerSupport.faq.categories.orderPayment.items.download.answer')
         },
         {
-          question: 'What payment methods are available?',
-          answer: 'We support credit cards, debit cards, bank transfers, and convenient payment methods (Kakao Pay).'
+          question: t('customerSupport.faq.categories.orderPayment.items.payment.question'),
+          answer: t('customerSupport.faq.categories.orderPayment.items.payment.answer')
         },
         {
-          question: 'How can I get a refund?',
-          answer: 'Due to the nature of digital products, refunds are only available before download. Refunds are difficult after download, so please purchase carefully.'
+          question: t('customerSupport.faq.categories.orderPayment.items.refund.question'),
+          answer: t('customerSupport.faq.categories.orderPayment.items.refund.answer')
         }
       ]
     },
     {
-      category: 'Sheet Music/Download',
+      category: t('customerSupport.faq.categories.sheetDownload.name'),
       items: [
         {
-          question: 'What file format are the sheet music files?',
-          answer: 'All sheet music is provided in high-quality PDF format. Optimized for both printing and digital devices.'
+          question: t('customerSupport.faq.categories.sheetDownload.items.format.question'),
+          answer: t('customerSupport.faq.categories.sheetDownload.items.format.answer')
         },
         {
-          question: 'Can I print the downloaded sheet music?',
-          answer: 'Yes, you can print for personal practice use. However, commercial use or redistribution is prohibited.'
+          question: t('customerSupport.faq.categories.sheetDownload.items.print.question'),
+          answer: t('customerSupport.faq.categories.sheetDownload.items.print.answer')
         },
         {
-          question: 'How are difficulty levels classified?',
-          answer: 'They are classified as Beginner (basic patterns), Intermediate (including variation patterns), and Advanced (including complex techniques).'
+          question: t('customerSupport.faq.categories.sheetDownload.items.difficulty.question'),
+          answer: t('customerSupport.faq.categories.sheetDownload.items.difficulty.answer')
         }
       ]
     },
     {
-      category: 'Custom Order',
+      category: t('customerSupport.faq.categories.customOrder.name'),
       items: [
         {
-          question: 'What is the custom order service?',
-          answer: 'It is a customized service where professionals create drum sheet music for your desired song.'
+          question: t('customerSupport.faq.categories.customOrder.items.what.question'),
+          answer: t('customerSupport.faq.categories.customOrder.items.what.answer')
         },
         {
-          question: 'How long does production take?',
-          answer: 'It usually takes 1-7 days depending on the complexity of the song. Exact schedule will be provided individually after application.'
+          question: t('customerSupport.faq.categories.customOrder.items.duration.question'),
+          answer: t('customerSupport.faq.categories.customOrder.items.duration.answer')
         },
         {
-          question: 'How is the production cost determined?',
-          answer: 'We provide quotes by comprehensively considering the song\'s length, complexity, and difficulty level.'
+          question: t('customerSupport.faq.categories.customOrder.items.cost.question'),
+          answer: t('customerSupport.faq.categories.customOrder.items.cost.answer')
         }
       ]
     }
-  ] : [
-    {
-      category: '주문/결제',
-      items: [
-        {
-          question: '악보를 구매한 후 언제 다운로드할 수 있나요?',
-          answer: '결제 완료 즉시 마이페이지에서 다운로드가 가능합니다. 구매한 악보는 언제든지 재다운로드할 수 있습니다.'
-        },
-        {
-          question: '결제 방법은 어떤 것들이 있나요?',
-          answer: '신용카드, 체크카드, 계좌이체, 간편결제(카카오페이) 등을 지원합니다.'
-        },
-        {
-          question: '환불은 어떻게 받을 수 있나요?',
-          answer: '디지털 상품 특성상 다운로드 전에만 환불이 가능합니다. 다운로드 후에는 환불이 어려우니 신중히 구매해 주세요.'
-        }
-      ]
-    },
-    {
-      category: '악보/다운로드',
-      items: [
-        {
-          question: '악보 파일 형식은 무엇인가요?',
-          answer: '모든 악보는 고화질 PDF 형식으로 제공됩니다. 인쇄와 디지털 기기에서 모두 최적화되어 있습니다.'
-        },
-        {
-          question: '다운로드한 악보를 인쇄할 수 있나요?',
-          answer: '네, 개인 연습용으로 인쇄하실 수 있습니다. 단, 상업적 이용이나 재배포는 금지되어 있습니다.'
-        },
-        {
-          question: '악보 난이도는 어떻게 구분되나요?',
-          answer: '초급(기본 패턴), 중급(변형 패턴 포함), 고급(복잡한 테크닉 포함)으로 구분됩니다.'
-        }
-      ]
-    },
-    {
-      category: '주문제작',
-      items: [
-        {
-          question: '주문제작은 어떤 서비스인가요?',
-          answer: '원하시는 곡의 드럼 악보를 전문가가 직접 제작해드리는 맞춤 서비스입니다.'
-        },
-        {
-          question: '제작 기간은 얼마나 걸리나요?',
-          answer: '곡의 복잡도에 따라 1-7일 정도 소요됩니다. 정확한 일정은 신청 후 개별 안내드립니다.'
-        },
-        {
-          question: '제작 비용은 어떻게 결정되나요?',
-          answer: '곡의 길이, 복잡도, 난이도 등을 종합적으로 고려하여 견적을 제공합니다.'
-        }
-      ]
-    }
-  ];
+  ], [t]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -205,7 +153,7 @@ export default function CustomerSupport() {
     e.preventDefault();
     
     if (!formData.name || !formData.email || !formData.category || !formData.subject || !formData.message) {
-      alert(isEnglishSite ? 'Please fill in all fields.' : '모든 필드를 입력해주세요.');
+      alert(t('customerSupport.errors.fillAllFields'));
       return;
     }
 
@@ -230,9 +178,7 @@ export default function CustomerSupport() {
         throw insertError;
       }
 
-      alert(isEnglishSite 
-        ? 'Your inquiry has been successfully submitted. We will respond as soon as possible.' 
-        : '문의가 성공적으로 접수되었습니다. 빠른 시일 내에 답변드리겠습니다.');
+      alert(t('customerSupport.messages.submitSuccess'));
       setFormData({
         name: user
           ? ((user.user_metadata?.name as string) ?? trimmedName)
@@ -243,10 +189,8 @@ export default function CustomerSupport() {
         message: ''
       });
     } catch (error) {
-      console.error('고객 문의 저장 실패:', error);
-      alert(isEnglishSite 
-        ? 'An error occurred while sending your inquiry. Please try again.' 
-        : '문의 전송 중 오류가 발생했습니다. 다시 시도해주세요.');
+      console.error(t('customerSupport.console.inquiryError'), error);
+      alert(t('customerSupport.errors.submitError'));
     } finally {
       setSubmitting(false);
     }
@@ -268,11 +212,9 @@ export default function CustomerSupport() {
         {/* Hero Section */}
         <section className="bg-gradient-to-r from-blue-600 to-blue-800 text-white pt-24 pb-12 md:py-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-3 md:space-y-4">
-          <h1 className="text-3xl font-bold md:text-4xl">{isEnglishSite ? 'Customer Support' : '고객센터'}</h1>
+          <h1 className="text-3xl font-bold md:text-4xl">{t('customerSupport.title')}</h1>
           <p className="text-sm text-blue-100 md:text-xl">
-            {isEnglishSite 
-              ? 'If you have any questions, please contact us anytime. We will provide quick and accurate answers.'
-              : '궁금한 점이 있으시면 언제든지 문의해주세요. 빠르고 정확한 답변을 드리겠습니다.'}
+            {t('customerSupport.subtitle')}
           </p>
         </div>
         </section>
@@ -289,7 +231,7 @@ export default function CustomerSupport() {
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              {isEnglishSite ? 'FAQ' : '자주 묻는 질문'}
+              {t('customerSupport.tabs.faq')}
             </button>
             <button
               onClick={() => handleTabChange('contact')}
@@ -299,7 +241,7 @@ export default function CustomerSupport() {
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              {isEnglishSite ? 'Contact Us' : '문의하기'}
+              {t('customerSupport.tabs.contact')}
             </button>
           </div>
         </div>
@@ -339,11 +281,9 @@ export default function CustomerSupport() {
           <div className="max-w-2xl mx-auto">
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8">
               <div className="text-center mb-6 md:mb-8">
-                <h2 className="text-xl font-bold text-gray-900 md:text-2xl md:mb-2">{isEnglishSite ? 'Contact Us' : '문의하기'}</h2>
+                <h2 className="text-xl font-bold text-gray-900 md:text-2xl md:mb-2">{t('customerSupport.contact.title')}</h2>
                 <p className="text-gray-600">
-                  {isEnglishSite 
-                    ? 'If you have any questions or issues, please fill out the form below. We will respond as soon as possible.'
-                    : '궁금한 점이나 문제가 있으시면 아래 양식을 작성해 주세요. 빠른 시일 내에 답변드리겠습니다.'}
+                  {t('customerSupport.contact.description')}
                 </p>
               </div>
 
@@ -351,7 +291,7 @@ export default function CustomerSupport() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
                   <div>
                     <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                      {isEnglishSite ? 'Name' : '이름'} *
+                      {t('customerSupport.contact.form.name')} *
                     </label>
                     <input
                       type="text"
@@ -361,12 +301,12 @@ export default function CustomerSupport() {
                       onChange={handleInputChange}
                       required
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder={isEnglishSite ? 'Enter your name' : '이름을 입력하세요'}
+                      placeholder={t('customerSupport.contact.form.namePlaceholder')}
                     />
                   </div>
                   <div>
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                      {isEnglishSite ? 'Email' : '이메일'} *
+                      {t('customerSupport.contact.form.email')} *
                     </label>
                     <input
                       type="email"
@@ -376,14 +316,14 @@ export default function CustomerSupport() {
                       onChange={handleInputChange}
                       required
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder={isEnglishSite ? 'Enter your email' : '이메일을 입력하세요'}
+                      placeholder={t('customerSupport.contact.form.emailPlaceholder')}
                     />
                   </div>
                 </div>
 
                 <div>
                   <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
-                    {isEnglishSite ? 'Inquiry Type' : '문의 유형'} *
+                    {t('customerSupport.contact.form.inquiryType')} *
                   </label>
                   <select
                     id="category"
@@ -393,18 +333,18 @@ export default function CustomerSupport() {
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-8"
                   >
-                    <option value="">{isEnglishSite ? 'Select inquiry type' : '문의 유형을 선택하세요'}</option>
-                    <option value="주문/결제">{isEnglishSite ? 'Order/Payment Inquiry' : '주문/결제 문의'}</option>
-                    <option value="악보/다운로드">{isEnglishSite ? 'Sheet Music/Download Inquiry' : '악보/다운로드 문의'}</option>
-                    <option value="주문제작">{isEnglishSite ? 'Custom Order Inquiry' : '주문제작 문의'}</option>
-                    <option value="기술지원">{isEnglishSite ? 'Technical Support' : '기술지원'}</option>
-                    <option value="기타">{isEnglishSite ? 'Other Inquiry' : '기타 문의'}</option>
+                    <option value="">{t('customerSupport.contact.form.inquiryTypePlaceholder')}</option>
+                    <option value="주문/결제">{t('customerSupport.contact.categories.orderPayment')}</option>
+                    <option value="악보/다운로드">{t('customerSupport.contact.categories.sheetDownload')}</option>
+                    <option value="주문제작">{t('customerSupport.contact.categories.customOrder')}</option>
+                    <option value="기술지원">{t('customerSupport.contact.categories.technical')}</option>
+                    <option value="기타">{t('customerSupport.contact.categories.other')}</option>
                   </select>
                 </div>
 
                 <div>
                   <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-2">
-                    {isEnglishSite ? 'Subject' : '제목'} *
+                    {t('customerSupport.contact.form.subject')} *
                   </label>
                   <input
                     type="text"
@@ -414,13 +354,13 @@ export default function CustomerSupport() {
                     onChange={handleInputChange}
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder={isEnglishSite ? 'Enter inquiry subject' : '문의 제목을 입력하세요'}
+                    placeholder={t('customerSupport.contact.form.subjectPlaceholder')}
                   />
                 </div>
 
                 <div className="space-y-1">
                   <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">
-                    {isEnglishSite ? 'Message' : '문의 내용'} *
+                    {t('customerSupport.contact.form.message')} *
                   </label>
                   <textarea
                     id="message"
@@ -431,10 +371,10 @@ export default function CustomerSupport() {
                     rows={6}
                     maxLength={500}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                    placeholder={isEnglishSite ? 'Please write your inquiry in detail (max 500 characters)' : '문의 내용을 자세히 작성해 주세요 (최대 500자)'}
+                    placeholder={t('customerSupport.contact.form.messagePlaceholder')}
                   />
                   <div className="text-right text-sm text-gray-500 mt-1">
-                    {formData.message.length}/500{isEnglishSite ? ' characters' : '자'}
+                    {formData.message.length}/500{t('customerSupport.contact.form.characters')}
                   </div>
                 </div>
 
@@ -445,13 +385,11 @@ export default function CustomerSupport() {
                     className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 font-medium transition-colors whitespace-nowrap cursor-pointer disabled:bg-blue-300 disabled:cursor-not-allowed"
                   >
                     {submitting 
-                      ? (isEnglishSite ? 'Sending...' : '전송 중...')
-                      : (isEnglishSite ? 'Send Inquiry' : '문의 보내기')}
+                      ? t('customerSupport.contact.form.submitting')
+                      : t('customerSupport.contact.form.submit')}
                   </button>
                   <p className="text-xs text-gray-400 text-center">
-                    {isEnglishSite 
-                      ? 'We will respond to your inquiry within 24 hours on business days.'
-                      : '접수하신 문의는 영업일 기준 24시간 이내에 답변드리겠습니다.'}
+                    {t('customerSupport.contact.form.note')}
                   </p>
                 </div>
               </form>
@@ -464,9 +402,9 @@ export default function CustomerSupport() {
       <section className="bg-gray-50 py-12 md:py-16">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 md:space-y-12">
           <div className="text-center md:text-left">
-            <h2 className="text-2xl font-bold text-gray-900 md:text-3xl">{isEnglishSite ? 'Contact Information' : '연락처 정보'}</h2>
+            <h2 className="text-2xl font-bold text-gray-900 md:text-3xl">{t('customerSupport.contactInfo.title')}</h2>
             <p className="mt-2 text-sm text-gray-600 md:text-lg">
-              {isEnglishSite ? 'You can contact us through various methods' : '다양한 방법으로 문의하실 수 있습니다'}
+              {t('customerSupport.contactInfo.subtitle')}
             </p>
           </div>
           
@@ -476,9 +414,9 @@ export default function CustomerSupport() {
                 <i className="ri-mail-line" />
               </div>
               <div className="md:space-y-2">
-                <h3 className="text-base font-semibold text-gray-900 md:text-lg">{isEnglishSite ? 'Email Inquiry' : '이메일 문의'}</h3>
-                <p className="text-sm text-gray-600">copydrum@hanmail.net</p>
-                <p className="text-xs text-gray-500 md:text-sm">{isEnglishSite ? '24/7 reception, response within 1 day' : '24시간 접수, 1일 내 답변'}</p>
+                <h3 className="text-base font-semibold text-gray-900 md:text-lg">{t('customerSupport.contactInfo.email.title')}</h3>
+                <p className="text-sm text-gray-600">{t('customerSupport.contactInfo.email.address')}</p>
+                <p className="text-xs text-gray-500 md:text-sm">{t('customerSupport.contactInfo.email.description')}</p>
               </div>
             </div>
             
@@ -487,13 +425,13 @@ export default function CustomerSupport() {
                 <i className="ri-kakao-talk-fill" />
               </div>
               <div className="md:space-y-2">
-                <h3 className="text-base font-semibold text-gray-900 md:text-lg">{isEnglishSite ? 'KakaoTalk Consultation' : '카카오톡 상담'}</h3>
-                <p className="text-sm text-gray-600">{isEnglishSite ? 'You can use real-time chat consultation.' : '실시간 채팅 상담을 이용할 수 있습니다.'}</p>
+                <h3 className="text-base font-semibold text-gray-900 md:text-lg">{t('customerSupport.contactInfo.kakao.title')}</h3>
+                <p className="text-sm text-gray-600">{t('customerSupport.contactInfo.kakao.description')}</p>
                 <button
                   onClick={handleOpenKakaoChannel}
                   className="mt-3 inline-flex items-center px-4 py-2 border border-transparent text-xs font-semibold rounded-lg text-gray-900 bg-yellow-400 hover:bg-yellow-500 shadow-sm transition-colors md:text-sm"
                 >
-                  {isEnglishSite ? 'Open KakaoTalk Chat' : '카카오톡 상담 바로가기'}
+                  {t('customerSupport.contactInfo.kakao.button')}
                 </button>
               </div>
             </div>
@@ -503,9 +441,9 @@ export default function CustomerSupport() {
                 <i className="ri-time-line" />
               </div>
               <div className="md:space-y-2">
-                <h3 className="text-base font-semibold text-gray-900 md:text-lg">{isEnglishSite ? 'Business Hours' : '운영 시간'}</h3>
-                <p className="text-sm text-gray-600">{isEnglishSite ? 'Weekdays 09:00 - 17:00' : '평일 09:00 - 17:00'}</p>
-                <p className="text-xs text-gray-500 md:text-sm">{isEnglishSite ? 'Closed on weekends and holidays' : '주말 및 공휴일 휴무'}</p>
+                <h3 className="text-base font-semibold text-gray-900 md:text-lg">{t('customerSupport.contactInfo.hours.title')}</h3>
+                <p className="text-sm text-gray-600">{t('customerSupport.contactInfo.hours.weekdays')}</p>
+                <p className="text-xs text-gray-500 md:text-sm">{t('customerSupport.contactInfo.hours.closed')}</p>
               </div>
             </div>
           </div>

@@ -1,58 +1,60 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
-
-const STATUS_META: Record<
-  string,
-  { label: string; badgeClass: string; infoClass?: string; message?: string; icon?: string }
-> = {
-  pending: {
-    label: '견적중',
-    badgeClass: 'bg-amber-100 text-amber-700',
-    infoClass: 'bg-amber-50 border-l-4 border-amber-400 text-amber-800',
-    message: '요청을 확인하고 맞춤 견적을 준비 중입니다.',
-    icon: 'ri-time-line',
-  },
-  quoted: {
-    label: '결제대기',
-    badgeClass: 'bg-sky-100 text-sky-700',
-    infoClass: 'bg-sky-50 border-l-4 border-sky-400 text-sky-800',
-    message: '견적이 도착했습니다. 안내된 금액으로 입금해주시면 제작이 시작됩니다.',
-    icon: 'ri-information-line',
-  },
-  payment_confirmed: {
-    label: '입금확인',
-    badgeClass: 'bg-emerald-100 text-emerald-700',
-    infoClass: 'bg-emerald-50 border-l-4 border-emerald-400 text-emerald-800',
-    message: '입금이 확인되었습니다. 제작 순서에 맞춰 준비 중입니다.',
-    icon: 'ri-check-line',
-  },
-  in_progress: {
-    label: '작업중',
-    badgeClass: 'bg-indigo-100 text-indigo-700',
-    infoClass: 'bg-indigo-50 border-l-4 border-indigo-400 text-indigo-800',
-    message: '전문가가 악보를 제작하고 있습니다. 완료 시 알림을 드립니다.',
-    icon: 'ri-tools-line',
-  },
-  completed: {
-    label: '작업완료',
-    badgeClass: 'bg-purple-100 text-purple-700',
-    infoClass: 'bg-green-50 border-l-4 border-green-400 text-green-800',
-    message: '악보 제작이 완료되었습니다. 아래에서 PDF 파일을 다운로드하세요.',
-    icon: 'ri-star-smile-line',
-  },
-  cancelled: {
-    label: '취소됨',
-    badgeClass: 'bg-gray-200 text-gray-600',
-  },
-};
 
 const CustomOrdersPage = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const { t } = useTranslation();
+
+  const STATUS_META: Record<
+    string,
+    { label: string; badgeClass: string; infoClass?: string; message?: string; icon?: string }
+  > = useMemo(() => ({
+    pending: {
+      label: t('customOrders.status.pending.label'),
+      badgeClass: 'bg-amber-100 text-amber-700',
+      infoClass: 'bg-amber-50 border-l-4 border-amber-400 text-amber-800',
+      message: t('customOrders.status.pending.message'),
+      icon: 'ri-time-line',
+    },
+    quoted: {
+      label: t('customOrders.status.quoted.label'),
+      badgeClass: 'bg-sky-100 text-sky-700',
+      infoClass: 'bg-sky-50 border-l-4 border-sky-400 text-sky-800',
+      message: t('customOrders.status.quoted.message'),
+      icon: 'ri-information-line',
+    },
+    payment_confirmed: {
+      label: t('customOrders.status.payment_confirmed.label'),
+      badgeClass: 'bg-emerald-100 text-emerald-700',
+      infoClass: 'bg-emerald-50 border-l-4 border-emerald-400 text-emerald-800',
+      message: t('customOrders.status.payment_confirmed.message'),
+      icon: 'ri-check-line',
+    },
+    in_progress: {
+      label: t('customOrders.status.in_progress.label'),
+      badgeClass: 'bg-indigo-100 text-indigo-700',
+      infoClass: 'bg-indigo-50 border-l-4 border-indigo-400 text-indigo-800',
+      message: t('customOrders.status.in_progress.message'),
+      icon: 'ri-tools-line',
+    },
+    completed: {
+      label: t('customOrders.status.completed.label'),
+      badgeClass: 'bg-purple-100 text-purple-700',
+      infoClass: 'bg-green-50 border-l-4 border-green-400 text-green-800',
+      message: t('customOrders.status.completed.message'),
+      icon: 'ri-star-smile-line',
+    },
+    cancelled: {
+      label: t('customOrders.status.cancelled.label'),
+      badgeClass: 'bg-gray-200 text-gray-600',
+    },
+  }), [t]);
 
   useEffect(() => {
     if (user) {
@@ -84,14 +86,14 @@ const CustomOrdersPage = () => {
     const usedCount = order.download_count ?? 0;
     const hasLimit = typeof maxDownload === 'number' && maxDownload > 0;
     if (hasLimit && usedCount >= maxDownload) {
-      alert('다운로드 횟수를 모두 사용했습니다. 고객센터에 문의해주세요.');
+      alert(t('customOrders.alerts.downloadLimitExceeded'));
       return;
     }
 
     if (order.download_expires_at) {
       const expires = new Date(order.download_expires_at);
       if (!Number.isNaN(expires.getTime()) && new Date() > expires) {
-        alert('다운로드 기간이 만료되었습니다. 고객센터에 문의해주세요.');
+        alert(t('customOrders.alerts.downloadExpired'));
         return;
       }
     }
@@ -113,7 +115,7 @@ const CustomOrdersPage = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = order.completed_pdf_filename || `${order.song_title}_악보.pdf`;
+      a.download = order.completed_pdf_filename || `${order.song_title}_${t('customOrders.order.sheetMusicSuffix')}.pdf`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -122,10 +124,10 @@ const CustomOrdersPage = () => {
       // 상태 새로고침
       await fetchOrders();
 
-      alert('악보 다운로드가 완료되었습니다.');
+      alert(t('customOrders.alerts.downloadSuccess'));
     } catch (error) {
       console.error('Error downloading file:', error);
-      alert('다운로드에 실패했습니다. 다시 시도해주세요.');
+      alert(t('customOrders.alerts.downloadFailed'));
     }
   };
 
@@ -140,10 +142,10 @@ const CustomOrdersPage = () => {
                 logo
               </a>
               <div className="hidden md:flex space-x-6">
-                <a href="/" className="text-gray-600 hover:text-gray-800">홈</a>
-                <a href="/categories" className="text-gray-600 hover:text-gray-800">악보 카테고리</a>
-                <a href="/custom-order" className="text-gray-600 hover:text-gray-800">주문제작</a>
-                <a href="/custom-orders" className="text-blue-600 font-medium">주문제작 신청내역</a>
+                <a href="/" className="text-gray-600 hover:text-gray-800">{t('customOrders.nav.home')}</a>
+                <a href="/categories" className="text-gray-600 hover:text-gray-800">{t('customOrders.nav.categories')}</a>
+                <a href="/custom-order" className="text-gray-600 hover:text-gray-800">{t('customOrders.nav.customOrder')}</a>
+                <a href="/custom-orders" className="text-blue-600 font-medium">{t('customOrders.nav.customOrderHistory')}</a>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -160,19 +162,19 @@ const CustomOrdersPage = () => {
 
       <main className="max-w-4xl mx-auto px-4 py-8">
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h1 className="text-2xl font-bold text-gray-800 mb-6">주문제작 신청내역</h1>
+          <h1 className="text-2xl font-bold text-gray-800 mb-6">{t('customOrders.title')}</h1>
 
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-gray-600 mt-2">로딩 중...</p>
+              <p className="text-gray-600 mt-2">{t('customOrders.loading')}</p>
             </div>
           ) : orders.length === 0 ? (
             <div className="text-center py-12">
               <i className="ri-file-list-3-line text-4xl text-gray-400 mb-4"></i>
-              <p className="text-gray-600">주문제작 신청내역이 없습니다.</p>
+              <p className="text-gray-600">{t('customOrders.empty.message')}</p>
               <a href="/custom-order" className="inline-block mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                주문제작 신청하기
+                {t('customOrders.empty.button')}
               </a>
             </div>
           ) : (
@@ -194,13 +196,13 @@ const CustomOrdersPage = () => {
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <h3 className="text-lg font-semibold text-gray-800">{order.song_title}</h3>
-                        <p className="text-sm text-gray-600">아티스트: {order.artist}</p>
+                        <p className="text-sm text-gray-600">{t('customOrders.order.artist')}: {order.artist}</p>
                         <p className="text-xs text-gray-500">
-                          신청일: {new Date(order.created_at).toLocaleDateString()}
+                          {t('customOrders.order.applicationDate')}: {new Date(order.created_at).toLocaleDateString()}
                         </p>
                         {typeof order.estimated_price === 'number' && order.estimated_price > 0 && (
                           <p className="mt-1 text-xs text-blue-600">
-                            견적 금액: ₩{order.estimated_price.toLocaleString('ko-KR')}
+                            {t('customOrders.order.estimatedPrice')}: ₩{order.estimated_price.toLocaleString('ko-KR')}
                           </p>
                         )}
                       </div>
@@ -213,29 +215,29 @@ const CustomOrdersPage = () => {
                         {order.status === 'quoted' && (
                           <p className="text-xs font-semibold text-gray-700">
                             {order.estimated_price && typeof order.estimated_price === 'number' && order.estimated_price > 0
-                              ? `견적: ₩${order.estimated_price.toLocaleString('ko-KR')}`
-                              : '견적 확인'}
+                              ? `${t('customOrders.order.quote')}: ₩${order.estimated_price.toLocaleString('ko-KR')}`
+                              : t('customOrders.order.checkQuote')}
                           </p>
                         )}
                         {order.status === 'completed' && !order.estimated_price && (
-                          <p className="text-xs font-semibold text-gray-700">작업완료</p>
+                          <p className="text-xs font-semibold text-gray-700">{t('customOrders.order.workCompleted')}</p>
                         )}
                       </div>
                     </div>
 
                     <div className="mb-4">
                       <p className="text-sm text-gray-700 mb-2">
-                        <strong>요청사항:</strong>
+                        <strong>{t('customOrders.order.requirements')}:</strong>
                       </p>
                       <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-                        {order.requirements || '추가 요청사항이 없습니다.'}
+                        {order.requirements || t('customOrders.order.noRequirements')}
                       </p>
                     </div>
 
                     {order.song_url && (
                       <div className="mb-4">
                         <p className="text-sm text-gray-700 mb-2">
-                          <strong>참고 영상:</strong>
+                          <strong>{t('customOrders.order.referenceVideo')}:</strong>
                         </p>
                         <a
                           href={order.song_url}
@@ -253,12 +255,12 @@ const CustomOrdersPage = () => {
                         <div className="flex items-start gap-2">
                           <i className="ri-admin-line text-blue-600 text-lg mt-0.5"></i>
                           <div>
-                            <p className="text-sm font-medium text-blue-800 mb-1">관리자 답글</p>
+                            <p className="text-sm font-medium text-blue-800 mb-1">{t('customOrders.order.adminReply')}</p>
                             <p className="text-sm text-blue-700 whitespace-pre-wrap">
                               {order.admin_reply}
                             </p>
                             <p className="text-xs text-blue-600 mt-2">
-                              답글일:{' '}
+                              {t('customOrders.order.replyDate')}:{' '}
                               {order.updated_at
                                 ? new Date(order.updated_at).toLocaleDateString()
                                 : '-'}
@@ -274,16 +276,16 @@ const CustomOrdersPage = () => {
                           <div className="flex items-start gap-3">
                             <i className="ri-file-download-line text-green-600 text-lg mt-1"></i>
                             <div>
-                              <p className="text-sm font-medium text-green-800 mb-1">완성된 악보</p>
+                              <p className="text-sm font-medium text-green-800 mb-1">{t('customOrders.order.completedSheet')}</p>
                               <p className="text-sm text-green-700">
-                                {order.completed_pdf_filename ?? '완성된 악보.pdf'}
+                                {order.completed_pdf_filename ?? t('customOrders.order.completedSheetFilename')}
                               </p>
                               <div className="mt-2 flex flex-wrap gap-4 text-xs text-green-700">
                                 <span>
-                                  다운로드 {usedCount}/{maxDownload}회
+                                  {t('customOrders.order.downloadCount')} {usedCount}/{maxDownload}{t('customOrders.order.times')}
                                 </span>
                                 {downloadExpiresAt && !Number.isNaN(downloadExpiresAt.getTime()) && (
-                                  <span>만료일 {downloadExpiresAt.toLocaleDateString()}</span>
+                                  <span>{t('customOrders.order.expiryDate')} {downloadExpiresAt.toLocaleDateString()}</span>
                                 )}
                               </div>
                             </div>
@@ -294,21 +296,21 @@ const CustomOrdersPage = () => {
                             className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                           >
                             <i className="ri-download-line"></i>
-                            다운로드
+                            {t('customOrders.order.download')}
                           </button>
                         </div>
 
                         {usedCount >= maxDownload && (
                           <div className="mt-3 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">
                             <i className="ri-error-warning-line mr-1"></i>
-                            다운로드 횟수를 초과했습니다. 추가 다운로드가 필요하시면 고객센터에 문의해주세요.
+                            {t('customOrders.warnings.downloadLimitExceeded')}
                           </div>
                         )}
 
                         {downloadExpired && (
                           <div className="mt-3 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">
                             <i className="ri-time-line mr-1"></i>
-                            다운로드 가능 기간이 만료되었습니다. 고객센터에 문의해주세요.
+                            {t('customOrders.warnings.downloadPeriodExpired')}
                           </div>
                         )}
                       </div>
@@ -323,7 +325,7 @@ const CustomOrdersPage = () => {
 
                     <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
                       <p className="text-xs text-gray-400">
-                        최근 업데이트:{' '}
+                        {t('customOrders.order.recentUpdate')}:{' '}
                         {order.updated_at
                           ? new Date(order.updated_at).toLocaleString('ko-KR')
                           : new Date(order.created_at).toLocaleString('ko-KR')}
@@ -333,7 +335,7 @@ const CustomOrdersPage = () => {
                         className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
                       >
                         <i className="ri-chat-1-line"></i>
-                        상세 보기
+                        {t('customOrders.order.viewDetails')}
                       </button>
                     </div>
                   </div>

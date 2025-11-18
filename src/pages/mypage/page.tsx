@@ -13,8 +13,7 @@ import type { FavoriteSheet } from '../../lib/favorites';
 import { fetchUserFavorites, removeFavorite } from '../../lib/favorites';
 import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
 import { buildDownloadKey, downloadFile, getDownloadFileName, requestSignedDownloadUrl } from '../../utils/downloadHelpers';
-import { convertUSDToKRW } from '../../lib/priceFormatter';
-import { isEnglishHost } from '../../i18n/languages';
+// convertUSDToKRW is not used in this component anymore
 import { useTranslation } from 'react-i18next';
 
 type TabKey = 'profile' | 'purchases' | 'downloads' | 'favorites' | 'cash' | 'inquiries' | 'custom-orders';
@@ -113,72 +112,78 @@ interface CashHistoryEntry {
   order_id?: string | null;
 }
 
-const CASH_TYPE_META: Record<CashTransactionType, { label: string; badgeClass: string; amountClass: string }> = {
-  charge: {
-    label: '캐쉬 충전',
-    badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    amountClass: 'text-emerald-600',
-  },
-  use: {
-    label: '캐쉬 사용',
-    badgeClass: 'bg-red-50 text-red-600 border border-red-200',
-    amountClass: 'text-red-500',
-  },
-  admin_add: {
-    label: '관리자 추가',
-    badgeClass: 'bg-purple-50 text-purple-700 border border-purple-200',
-    amountClass: 'text-purple-600',
-  },
-  admin_deduct: {
-    label: '관리자 차감',
-    badgeClass: 'bg-amber-50 text-amber-700 border border-amber-200',
-    amountClass: 'text-amber-600',
-  },
-};
+// CASH_TYPE_META는 컴포넌트 내부에서 t()를 사용하여 동적으로 생성
 
 const formatCurrency = (value: number) => `₩${value.toLocaleString('ko-KR')}`;
 const formatDate = (value: MaybeDateString) => (value ? new Date(value).toLocaleDateString('ko-KR') : '-');
 const formatDateTime = (value: MaybeDateString) => (value ? new Date(value).toLocaleString('ko-KR') : '-');
 
-const orderStatusStyles: Record<string, { label: string; className: string }> = {
-  completed: { label: '완료', className: 'bg-green-100 text-green-800' },
-  pending: { label: '대기', className: 'bg-yellow-100 text-yellow-800' },
-  cancelled: { label: '취소', className: 'bg-red-100 text-red-700' },
-  refunded: { label: '환불', className: 'bg-purple-100 text-purple-700' },
-};
-
-const customOrderStatusMap: Record<string, { label: string; className: string }> = {
-  pending: { label: '견적중', className: 'bg-blue-100 text-blue-800' },
-  quoted: { label: '결제대기', className: 'bg-amber-100 text-amber-700' },
-  payment_confirmed: { label: '입금확인', className: 'bg-emerald-100 text-emerald-700' },
-  in_progress: { label: '작업중', className: 'bg-indigo-100 text-indigo-700' },
-  completed: { label: '작업완료', className: 'bg-purple-100 text-purple-700' },
-  cancelled: { label: '취소됨', className: 'bg-red-100 text-red-700' },
-};
-
-const inquiryStatusMap: Record<string, { label: string; className: string }> = {
-  pending: { label: '답변 대기', className: 'bg-yellow-100 text-yellow-800' },
-  answered: { label: '답변 완료', className: 'bg-emerald-100 text-emerald-700' },
-};
-
-const getInquiryStatusMeta = (status: string) =>
-  inquiryStatusMap[status] ?? { label: '처리 중', className: 'bg-gray-100 text-gray-600' };
-
-const getTabs = (isEnglishSite: boolean): { id: TabKey; label: string; icon: string; description?: string }[] => [
-  { id: 'profile', label: isEnglishSite ? 'Profile Management' : '프로필 관리', icon: 'ri-user-line', description: isEnglishSite ? 'Manage your personal information and contact details.' : '개인 정보 및 연락처를 관리하세요.' },
-  { id: 'purchases', label: isEnglishSite ? 'Purchase History' : '구매 내역', icon: 'ri-shopping-bag-line', description: isEnglishSite ? 'Check your purchased sheet music order information.' : '구매한 악보 주문 정보를 확인하세요.' },
-  { id: 'downloads', label: isEnglishSite ? 'Download Management' : '다운로드 관리', icon: 'ri-download-2-line', description: isEnglishSite ? 'Download and preview your purchased sheet music.' : '구매한 악보를 다운로드하고 미리보기 하세요.' },
-  { id: 'favorites', label: isEnglishSite ? 'Favorite Sheets' : '찜한 악보', icon: 'ri-heart-line', description: isEnglishSite ? 'View your favorite sheet music.' : '관심 있는 악보를 모아보세요.' },
-  { id: 'cash', label: isEnglishSite ? 'Cash History' : '캐시 내역', icon: 'ri-coin-line', description: isEnglishSite ? 'Check your cash balance and usage history.' : '보유 캐시와 사용 내역을 확인하세요.' },
-  { id: 'inquiries', label: isEnglishSite ? '1:1 Inquiry' : '1:1 문의', icon: 'ri-question-answer-line', description: isEnglishSite ? 'Check your inquiries and responses.' : '문의와 답변을 확인하세요.' },
-  { id: 'custom-orders', label: isEnglishSite ? 'Custom Orders' : '주문제작 신청', icon: 'ri-file-text-line', description: isEnglishSite ? 'Check the status of your custom order requests.' : '맞춤 제작 신청 현황을 확인하세요.' },
-];
+// Status maps and helper functions will be created inside component using t()
 
 export default function MyPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { cartItems, addToCart, isInCart } = useCart();
   const { t } = useTranslation();
+
+  // Status maps using t()
+  const orderStatusStyles = useMemo(() => ({
+    completed: { label: t('mypage.status.order.completed'), className: 'bg-green-100 text-green-800' },
+    pending: { label: t('mypage.status.order.pending'), className: 'bg-yellow-100 text-yellow-800' },
+    cancelled: { label: t('mypage.status.order.cancelled'), className: 'bg-red-100 text-red-700' },
+    refunded: { label: t('mypage.status.order.refunded'), className: 'bg-purple-100 text-purple-700' },
+  }), [t]);
+
+  const customOrderStatusMap = useMemo(() => ({
+    pending: { label: t('mypage.status.customOrder.pending'), className: 'bg-blue-100 text-blue-800' },
+    quoted: { label: t('mypage.status.customOrder.quoted'), className: 'bg-amber-100 text-amber-700' },
+    payment_confirmed: { label: t('mypage.status.customOrder.paymentConfirmed'), className: 'bg-emerald-100 text-emerald-700' },
+    in_progress: { label: t('mypage.status.customOrder.inProgress'), className: 'bg-indigo-100 text-indigo-700' },
+    completed: { label: t('mypage.status.customOrder.completed'), className: 'bg-purple-100 text-purple-700' },
+    cancelled: { label: t('mypage.status.customOrder.cancelled'), className: 'bg-red-100 text-red-700' },
+  }), [t]);
+
+  const inquiryStatusMap = useMemo(() => ({
+    pending: { label: t('mypage.status.inquiry.pending'), className: 'bg-yellow-100 text-yellow-800' },
+    answered: { label: t('mypage.status.inquiry.answered'), className: 'bg-emerald-100 text-emerald-700' },
+  }), [t]);
+
+  const getInquiryStatusMeta = useCallback((status: string) =>
+    (inquiryStatusMap[status as keyof typeof inquiryStatusMap] ?? { label: t('mypage.status.inquiry.processing'), className: 'bg-gray-100 text-gray-600' }),
+  [inquiryStatusMap, t]);
+
+  const CASH_TYPE_META = useMemo(() => ({
+    charge: {
+      label: t('mypage.cash.types.charge'),
+      badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+      amountClass: 'text-emerald-600',
+    },
+    use: {
+      label: t('mypage.cash.types.use'),
+      badgeClass: 'bg-red-50 text-red-600 border border-red-200',
+      amountClass: 'text-red-500',
+    },
+    admin_add: {
+      label: t('mypage.cash.types.adminAdd'),
+      badgeClass: 'bg-purple-50 text-purple-700 border border-purple-200',
+      amountClass: 'text-purple-600',
+    },
+    admin_deduct: {
+      label: t('mypage.cash.types.adminDeduct'),
+      badgeClass: 'bg-amber-50 text-amber-700 border border-amber-200',
+      amountClass: 'text-amber-600',
+    },
+  }), [t]);
+
+  const getTabs = useCallback((): { id: TabKey; label: string; icon: string; description?: string }[] => [
+    { id: 'profile', label: t('mypage.tabs.profile.label'), icon: 'ri-user-line', description: t('mypage.tabs.profile.description') },
+    { id: 'purchases', label: t('mypage.tabs.purchases.label'), icon: 'ri-shopping-bag-line', description: t('mypage.tabs.purchases.description') },
+    { id: 'downloads', label: t('mypage.tabs.downloads.label'), icon: 'ri-download-2-line', description: t('mypage.tabs.downloads.description') },
+    { id: 'favorites', label: t('mypage.tabs.favorites.label'), icon: 'ri-heart-line', description: t('mypage.tabs.favorites.description') },
+    { id: 'cash', label: t('mypage.tabs.cash.label'), icon: 'ri-coin-line', description: t('mypage.tabs.cash.description') },
+    { id: 'inquiries', label: t('mypage.tabs.inquiries.label'), icon: 'ri-question-answer-line', description: t('mypage.tabs.inquiries.description') },
+    { id: 'custom-orders', label: t('mypage.tabs.customOrders.label'), icon: 'ri-file-text-line', description: t('mypage.tabs.customOrders.description') },
+  ], [t]);
 
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -208,67 +213,50 @@ export default function MyPage() {
   
   // 캐시충전 모달 상태
   const [showCashChargeModal, setShowCashChargeModal] = useState(false);
-  const isEnglishSiteForState = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return isEnglishHost(window.location.host);
-  }, []);
-  const [chargeAmount, setChargeAmount] = useState(
-    isEnglishSiteForState ? convertUSDToKRW(10) : 10000
-  );
+  const [chargeAmount, setChargeAmount] = useState(10000);
   const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank'>('bank');
   const [chargeAgreementChecked, setChargeAgreementChecked] = useState(false);
   const [chargeProcessing, setChargeProcessing] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
   const [showDepositorInput, setShowDepositorInput] = useState(false);
   const [depositorName, setDepositorName] = useState('');
-  
-  const isEnglishSite = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return isEnglishHost(window.location.host);
-  }, []);
 
-  const chargeOptions = useMemo(() => {
-    if (isEnglishSite) {
-      // 영문 사이트: 달러 단위
-      return [
-        { amount: convertUSDToKRW(3), bonus: 0, label: '$3', amountUSD: 3, bonusUSD: 0 },
-        { amount: convertUSDToKRW(5), bonus: convertUSDToKRW(0.5), label: '$5', amountUSD: 5, bonusUSD: 0.5 },
-        { amount: convertUSDToKRW(10), bonus: convertUSDToKRW(1), label: '$10', amountUSD: 10, bonusUSD: 1 },
-        { amount: convertUSDToKRW(30), bonus: convertUSDToKRW(6), label: '$30', amountUSD: 30, bonusUSD: 6 },
-        { amount: convertUSDToKRW(50), bonus: convertUSDToKRW(11), label: '$50', amountUSD: 50, bonusUSD: 11 },
-        { amount: convertUSDToKRW(100), bonus: convertUSDToKRW(25), label: '$100', amountUSD: 100, bonusUSD: 25 },
-      ];
-    }
-    // 한국어 사이트: 원화 단위
-    return [
-      { amount: 3000, bonus: 0, label: '3천원' },
-      { amount: 5000, bonus: 500, label: '5천원', bonusPercent: '10%' },
-      { amount: 10000, bonus: 1500, label: '1만원', bonusPercent: '15%' },
-      { amount: 30000, bonus: 6000, label: '3만원', bonusPercent: '20%' },
-      { amount: 50000, bonus: 11000, label: '5만원', bonusPercent: '22%' },
-      { amount: 100000, bonus: 25000, label: '10만원', bonusPercent: '25%' },
-    ];
-  }, [isEnglishSite]);
+  // Charge options - 기본값은 한국어 사이트 기준 (원화)
+  const chargeOptions = useMemo(() => [
+    { amount: 3000, bonus: 0, label: '3천원' },
+    { amount: 5000, bonus: 500, label: '5천원', bonusPercent: '10%' },
+    { amount: 10000, bonus: 1500, label: '1만원', bonusPercent: '15%' },
+    { amount: 30000, bonus: 6000, label: '3만원', bonusPercent: '20%' },
+    { amount: 50000, bonus: 11000, label: '5만원', bonusPercent: '22%' },
+    { amount: 100000, bonus: 25000, label: '10만원', bonusPercent: '25%' },
+  ], []);
 
-  const paymentMethods = [
+  const paymentMethods = useMemo(() => [
     { 
       id: 'card', 
-      name: '신용카드', 
+      name: t('mypage.paymentMethods.creditCard'), 
       icon: 'ri-bank-card-line', 
       color: 'text-blue-600',
       disabled: true,
-      badge: '준비 중',
+      badge: t('mypage.paymentMethods.preparing'),
     },
     {
       id: 'kakaopay',
-      name: '카카오페이',
+      name: t('mypage.paymentMethods.kakaoPay'),
       icon: 'ri-kakao-talk-fill',
       color: 'text-yellow-600',
       disabled: true,
-      badge: '준비 중',
+      badge: t('mypage.paymentMethods.preparing'),
     },
-    { id: 'bank', name: '무통장입금', icon: 'ri-bank-line', color: 'text-green-600' },
-  ] as const;
+    { 
+      id: 'bank', 
+      name: t('mypage.paymentMethods.bankTransfer'), 
+      icon: 'ri-bank-line', 
+      color: 'text-green-600',
+      disabled: false,
+      badge: undefined,
+    },
+  ], [t]);
 
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [downloads, setDownloads] = useState<DownloadableItem[]>([]);
@@ -333,7 +321,7 @@ export default function MyPage() {
 
       setCashHistory(normalized);
     } catch (error) {
-      console.error('캐쉬 내역 로드 오류:', error);
+      console.error(t('mypage.console.cashHistoryError'), error);
       setCashHistory([]);
     } finally {
       setCashHistoryLoading(false);
@@ -366,7 +354,7 @@ export default function MyPage() {
 
       setUserInquiries(normalized);
     } catch (error) {
-      console.error('문의 내역 로드 오류:', error);
+      console.error(t('mypage.console.inquiryHistoryError'), error);
       setUserInquiries([]);
     } finally {
       setInquiriesLoading(false);
@@ -470,7 +458,7 @@ export default function MyPage() {
         phone: profileData.phone ?? '',
       });
     } catch (error) {
-      console.error('프로필 로드 오류:', error);
+      console.error(t('mypage.console.profileLoadError'), error);
       const fallbackProfile: ProfileInfo = {
         id: currentUser.id,
         email: currentUser.email ?? null,
@@ -594,7 +582,7 @@ export default function MyPage() {
         return prev.filter((key) => validKeys.has(key));
       });
     } catch (error) {
-      console.error('구매 내역 로드 오류:', error);
+      console.error(t('mypage.console.orderHistoryError'), error);
       // 오류가 발생해도 빈 배열로 설정하여 다른 데이터 로드는 계속 진행
       setOrders([]);
       setDownloads([]);
@@ -606,7 +594,7 @@ export default function MyPage() {
       const data = await fetchUserFavorites(currentUser.id);
       setFavorites(data);
     } catch (error) {
-      console.error('찜한 악보 로드 오류:', error);
+      console.error(t('mypage.console.favoritesLoadError'), error);
       setFavorites([]);
     }
   }, []);
@@ -625,7 +613,7 @@ export default function MyPage() {
 
       setCustomOrders((data ?? []) as CustomOrderSummary[]);
     } catch (error) {
-      console.error('주문제작 내역 로드 오류:', error);
+      console.error(t('mypage.console.customOrderHistoryError'), error);
       setCustomOrders([]);
     }
   }, []);
@@ -675,7 +663,7 @@ export default function MyPage() {
           setLoading(false);
         }
       } catch (error) {
-        console.error('마이페이지 초기화 오류:', error);
+        console.error(t('mypage.console.initError'), error);
         setLoading(false);
       }
     };
@@ -737,13 +725,13 @@ export default function MyPage() {
 
   const stats = useMemo(
     () => [
-      { label: isEnglishSite ? 'Purchased Sheets' : '구매한 악보', value: totalPurchasedSheets },
-      { label: isEnglishSite ? 'Available Downloads' : '다운로드 가능', value: downloads.length },
-      { label: isEnglishSite ? 'Favorite Sheets' : '찜한 악보', value: favorites.length },
-      { label: isEnglishSite ? '1:1 Inquiries' : '1:1 문의', value: userInquiries.length },
-      { label: isEnglishSite ? 'Custom Orders' : '주문제작 신청', value: customOrders.length },
+      { label: t('mypage.stats.purchasedSheets'), value: totalPurchasedSheets },
+      { label: t('mypage.stats.availableDownloads'), value: downloads.length },
+      { label: t('mypage.stats.favoriteSheets'), value: favorites.length },
+      { label: t('mypage.stats.inquiries'), value: userInquiries.length },
+      { label: t('mypage.stats.customOrders'), value: customOrders.length },
     ],
-    [totalPurchasedSheets, downloads.length, favorites.length, userInquiries.length, customOrders.length, isEnglishSite]
+    [totalPurchasedSheets, downloads.length, favorites.length, userInquiries.length, customOrders.length, t]
   );
 
   const handleCashCharge = () => {
@@ -764,23 +752,23 @@ export default function MyPage() {
 
   const handleChargeConfirm = async () => {
     if (!user) {
-      alert('로그인이 필요합니다.');
+      alert(t('mypage.errors.loginRequired'));
       return;
     }
 
     if (!chargeAgreementChecked) {
-      alert('결제 약관에 동의해 주세요.');
+      alert(t('mypage.errors.agreementRequired'));
       return;
     }
 
     const selectedOption = chargeOptions.find((option) => option.amount === chargeAmount);
     if (!selectedOption) {
-      alert('선택한 충전 금액을 확인할 수 없습니다.');
+      alert(t('mypage.errors.amountNotFound'));
       return;
     }
 
     if (selectedPayment === 'kakaopay') {
-      alert('해당 결제수단은 현재 준비 중입니다.');
+      alert(t('mypage.errors.paymentMethodNotReady'));
       return;
     }
 
@@ -788,7 +776,7 @@ export default function MyPage() {
       // 카드 결제 처리
       setChargeProcessing(true);
       try {
-        const description = `캐쉬 충전 ${selectedOption.amount.toLocaleString('ko-KR')}원`;
+        const description = `${t('mypage.cash.types.charge')} ${selectedOption.amount.toLocaleString('ko-KR')}원`;
         const result = await startCashCharge({
           userId: user.id,
           amount: selectedOption.amount,
@@ -802,13 +790,13 @@ export default function MyPage() {
         });
 
         if (result.paymentIntent?.requestForm) {
-          alert('결제창이 열립니다. 결제를 완료해 주세요.');
+          alert(t('mypage.errors.paymentWindowOpen'));
         } else {
-          alert('결제 처리 중 오류가 발생했습니다.');
+          alert(t('mypage.errors.paymentError'));
         }
       } catch (error) {
-        console.error('캐쉬 충전 오류:', error);
-        alert(error instanceof Error ? error.message : '캐쉬 충전 중 오류가 발생했습니다.');
+        console.error(t('mypage.console.cashChargeError'), error);
+        alert(error instanceof Error ? error.message : t('mypage.errors.paymentError'));
       } finally {
         setChargeProcessing(false);
       }
@@ -826,20 +814,20 @@ export default function MyPage() {
     if (!user) return;
 
     if (!depositorName.trim()) {
-      alert('입금자명을 입력해 주세요.');
+      alert(t('mypage.errors.depositorNameRequired'));
       return;
     }
 
     const selectedOption = chargeOptions.find((option) => option.amount === chargeAmount);
     if (!selectedOption) {
-      alert('선택한 충전 금액을 확인할 수 없습니다.');
+      alert(t('mypage.errors.amountNotFound'));
       return;
     }
 
     setChargeProcessing(true);
 
     try {
-      const description = `캐쉬 충전 ${selectedOption.amount.toLocaleString('ko-KR')}원`;
+      const description = `${t('mypage.cash.types.charge')} ${selectedOption.amount.toLocaleString('ko-KR')}원`;
       const result = await startCashCharge({
         userId: user.id,
         amount: selectedOption.amount,
@@ -856,11 +844,11 @@ export default function MyPage() {
       setBankTransferInfo(result.virtualAccountInfo ?? null);
       setShowDepositorInput(false);
       await loadCashTransactions(user);
-      alert('주문이 접수되었습니다.\n입금 확인 후 관리자가 캐시 충전을 완료합니다.');
+      alert(t('mypage.errors.orderReceived'));
       setChargeAgreementChecked(false);
     } catch (error) {
-      console.error('캐쉬 충전 오류:', error);
-      alert(error instanceof Error ? error.message : '캐쉬 충전 중 오류가 발생했습니다.');
+      console.error(t('mypage.console.cashChargeError'), error);
+      alert(error instanceof Error ? error.message : t('mypage.errors.paymentError'));
     } finally {
       setChargeProcessing(false);
     }
@@ -885,7 +873,7 @@ export default function MyPage() {
     event.preventDefault();
 
     if (!user) {
-      alert('로그인이 필요합니다.');
+      alert(t('mypage.errors.loginRequired'));
       return;
     }
 
@@ -896,7 +884,7 @@ export default function MyPage() {
       !inquiryForm.subject.trim() ||
       !inquiryForm.message.trim()
     ) {
-      alert('모든 필드를 입력해주세요.');
+      alert(t('mypage.errors.allFieldsRequired'));
       return;
     }
 
@@ -923,7 +911,7 @@ export default function MyPage() {
         throw error;
       }
 
-      alert('문의가 접수되었습니다. 빠른 시일 내에 답변드리겠습니다.');
+      alert(t('mypage.errors.inquirySubmitted'));
       setInquiryForm((prev) => ({
         ...prev,
         category: '',
@@ -932,8 +920,8 @@ export default function MyPage() {
       }));
       await loadUserInquiries(user);
     } catch (error) {
-      console.error('문의 등록 실패:', error);
-      alert('문의 전송 중 오류가 발생했습니다. 다시 시도해주세요.');
+      console.error(t('mypage.console.inquirySubmitError'), error);
+      alert(t('mypage.errors.inquiryError'));
     } finally {
       setInquirySubmitting(false);
     }
@@ -942,7 +930,7 @@ export default function MyPage() {
   const handleProfileSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) {
-      alert('로그인이 필요합니다.');
+      alert(t('mypage.errors.loginRequired'));
       return;
     }
 
@@ -981,10 +969,10 @@ export default function MyPage() {
             }
       );
 
-      alert('프로필 정보가 업데이트되었습니다.');
+      alert(t('mypage.errors.profileUpdated'));
     } catch (error) {
-      console.error('프로필 업데이트 오류:', error);
-      alert('프로필 업데이트에 실패했습니다. 잠시 후 다시 시도해주세요.');
+      console.error(t('mypage.console.profileUpdateError'), error);
+      alert(t('mypage.errors.profileUpdateError'));
     } finally {
       setProfileSaving(false);
     }
@@ -1075,13 +1063,13 @@ export default function MyPage() {
 
   const handleDownloadSelectedInOrder = async (order: OrderSummary) => {
     if (!DOWNLOADABLE_STATUSES.includes((order.status ?? '').toLowerCase())) {
-      alert('환불되었거나 다운로드가 제한된 주문입니다.');
+      alert(t('mypage.errors.downloadRestricted'));
       return;
     }
 
     const selectedIds = selectedPurchaseIds[order.id] ?? [];
     if (selectedIds.length === 0) {
-      alert('다운로드할 악보를 선택해주세요.');
+      alert(t('mypage.errors.selectDownloadItems'));
       return;
     }
 
@@ -1099,7 +1087,7 @@ export default function MyPage() {
 
   const handleDownloadAllInOrder = async (order: OrderSummary) => {
     if (!DOWNLOADABLE_STATUSES.includes((order.status ?? '').toLowerCase())) {
-      alert('환불되었거나 다운로드가 제한된 주문입니다.');
+      alert(t('mypage.errors.downloadRestricted'));
       return;
     }
 
@@ -1113,7 +1101,7 @@ export default function MyPage() {
       }));
 
     if (items.length === 0) {
-      alert('다운로드 가능한 악보가 없습니다.');
+      alert(t('mypage.errors.noDownloadableItems'));
       return;
     }
 
@@ -1130,11 +1118,11 @@ export default function MyPage() {
 
   const downloadSheetItem = async (item: DownloadableItem, accessToken: string) => {
     if (!item.sheet_id) {
-      throw new Error('다운로드 가능한 악보 정보를 찾을 수 없습니다.');
+      throw new Error(t('mypage.errors.sheetInfoNotFound'));
     }
 
     if (!item.drum_sheets) {
-      throw new Error('다운로드 링크를 찾을 수 없습니다. 관리자에게 문의해주세요.');
+      throw new Error(t('mypage.errors.downloadLinkNotFound'));
     }
 
     const fileName = getDownloadFileName({
@@ -1154,7 +1142,7 @@ export default function MyPage() {
 
   const handleDownloadMultiple = async (items: DownloadableItem[]) => {
     if (items.length === 0) {
-      alert('다운로드할 악보를 선택해주세요.');
+      alert(t('mypage.errors.selectDownloadItems'));
       return;
     }
 
@@ -1162,7 +1150,7 @@ export default function MyPage() {
       (item) => !DOWNLOADABLE_STATUSES.includes((item.order_status ?? '').toLowerCase()),
     );
     if (invalidItems.length > 0) {
-      alert('환불되었거나 다운로드가 제한된 악보는 다운로드할 수 없습니다.');
+      alert(t('mypage.errors.downloadRestrictedMultiple'));
       return;
     }
 
@@ -1171,7 +1159,7 @@ export default function MyPage() {
     } = await supabase.auth.getSession();
 
     if (!session?.access_token) {
-      alert('로그인이 필요합니다. 다시 로그인한 후 이용해주세요.');
+      alert(t('mypage.errors.loginRequiredForDownload'));
       return;
     }
 
@@ -1195,7 +1183,7 @@ export default function MyPage() {
     }
 
     if (failed.length > 0) {
-      alert(`${failed.length}개의 파일을 다운로드하지 못했습니다. 잠시 후 다시 시도해주세요.`);
+      alert(t('mypage.errors.downloadFailed', { count: failed.length }));
     }
   };
 
@@ -1217,7 +1205,7 @@ export default function MyPage() {
 
   const handleDownload = async (item: DownloadableItem) => {
     if (!DOWNLOADABLE_STATUSES.includes((item.order_status ?? '').toLowerCase())) {
-      alert('환불되었거나 다운로드가 제한된 악보는 다운로드할 수 없습니다.');
+      alert(t('mypage.errors.downloadRestrictedMultiple'));
       return;
     }
 
@@ -1229,7 +1217,7 @@ export default function MyPage() {
       } = await supabase.auth.getSession();
 
       if (!session?.access_token) {
-        throw new Error('로그인이 필요합니다. 다시 로그인해주세요.');
+        throw new Error(t('mypage.errors.loginRequiredForDownload'));
       }
 
       await downloadSheetItem(item, session.access_token);
@@ -1237,7 +1225,7 @@ export default function MyPage() {
       if (error instanceof Error) {
         alert(error.message);
       } else {
-        alert('파일 다운로드에 실패했습니다. 잠시 후 다시 시도해주세요.');
+        alert(t('mypage.errors.downloadFailedSingle'));
       }
     } finally {
       finishDownloading(key);
@@ -1247,7 +1235,7 @@ export default function MyPage() {
   const handlePreview = (item: DownloadableItem) => {
     const previewUrl = item.drum_sheets?.preview_image_url;
     if (!previewUrl) {
-      alert('미리보기 파일을 찾을 수 없습니다.');
+      alert(t('mypage.errors.previewNotFound'));
       return;
     }
     window.open(previewUrl, '_blank', 'noopener,noreferrer');
@@ -1259,8 +1247,8 @@ export default function MyPage() {
       await removeFavorite(sheetId, user.id);
       await loadFavoritesList(user);
     } catch (error) {
-      console.error('찜 해제 오류:', error);
-      alert('찜 해제에 실패했습니다.');
+      console.error(t('mypage.console.favoriteRemoveError'), error);
+      alert(t('mypage.errors.favoriteRemoveFailed'));
     }
   };
 
@@ -1274,18 +1262,18 @@ export default function MyPage() {
 
   const renderOrderStatusBadge = (status: string) => {
     const normalized = status?.toLowerCase();
-    const badge = orderStatusStyles[normalized];
+    const badge = orderStatusStyles[normalized as keyof typeof orderStatusStyles];
     if (!badge) {
-      return <span className="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">{status || '미정'}</span>;
+      return <span className="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">{status || t('mypage.status.order.undetermined')}</span>;
     }
     return <span className={`px-3 py-1 text-xs font-semibold rounded-full ${badge.className}`}>{badge.label}</span>;
   };
 
   const renderCustomOrderStatusBadge = (status: string) => {
     const normalized = status?.toLowerCase();
-    const badge = customOrderStatusMap[normalized];
+    const badge = customOrderStatusMap[normalized as keyof typeof customOrderStatusMap];
     if (!badge) {
-      return <span className="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">{status || '미정'}</span>;
+      return <span className="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">{status || t('mypage.status.customOrder.undetermined')}</span>;
     }
     return <span className={`px-3 py-1 text-xs font-semibold rounded-full ${badge.className}`}>{badge.label}</span>;
   };
@@ -1293,7 +1281,7 @@ export default function MyPage() {
   const renderLoader = () => (
     <div className="py-24 flex flex-col items-center justify-center text-center">
       <div className="h-12 w-12 rounded-full border-b-2 border-blue-600 animate-spin mb-4" />
-      <p className="text-gray-600 font-medium">마이페이지 데이터를 불러오는 중이에요...</p>
+      <p className="text-gray-600 font-medium">{t('mypage.loading.message')}</p>
     </div>
   );
 
@@ -1301,21 +1289,21 @@ export default function MyPage() {
     <div className="py-24 flex flex-col items-center justify-center text-center space-y-4">
       <i className="ri-user-line text-5xl text-gray-400" />
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">로그인이 필요합니다</h2>
-        <p className="text-gray-600">구매 내역, 다운로드, 찜한 악보 등 마이페이지 기능을 이용하려면 로그인해주세요.</p>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">{t('mypage.guest.title')}</h2>
+        <p className="text-gray-600">{t('mypage.guest.description')}</p>
       </div>
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate('/login')}
           className="px-6 py-3 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
         >
-          로그인하러 가기
+          {t('mypage.guest.login')}
         </button>
         <button
           onClick={() => navigate('/auth/signup')}
           className="px-6 py-3 rounded-lg border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition"
         >
-          회원가입
+          {t('mypage.guest.signup')}
         </button>
       </div>
     </div>
@@ -1340,11 +1328,9 @@ export default function MyPage() {
           ) : (
             <div className="space-y-10">
             <header>
-              <h2 className="text-3xl font-extrabold text-gray-900">{isEnglishSite ? 'My Page' : '마이페이지'}</h2>
+              <h2 className="text-3xl font-extrabold text-gray-900">{t('mypage.title')}</h2>
               <p className="mt-2 text-gray-600">
-                {isEnglishSite 
-                  ? 'View all your activities from sheet music purchases to custom orders at a glance.'
-                  : '악보 구매부터 주문제작까지, 나의 활동을 한눈에 살펴보세요.'}
+                {t('mypage.subtitle')}
               </p>
             </header>
 
@@ -1355,26 +1341,26 @@ export default function MyPage() {
                     {(profile?.name ?? profile?.email ?? 'U').slice(0, 1).toUpperCase()}
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">{isEnglishSite ? 'Member Information' : '회원 정보'}</p>
-                    <h3 className="text-xl font-bold text-gray-900">{profile?.name || (isEnglishSite ? 'Name not set' : '이름 미설정')}</h3>
+                    <p className="text-sm text-gray-500">{t('mypage.profile.memberInfo')}</p>
+                    <h3 className="text-xl font-bold text-gray-900">{profile?.name || t('mypage.profile.nameNotSet')}</h3>
                     <p className="text-sm text-gray-600">{profile?.email}</p>
-                    <p className="mt-2 text-xs text-gray-400">{isEnglishSite ? 'Joined on' : '가입일'} {formatDate(profile?.created_at)}</p>
+                    <p className="mt-2 text-xs text-gray-400">{t('mypage.profile.joinedOn')} {formatDate(profile?.created_at)}</p>
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-red-100 bg-gradient-to-r from-red-50 via-rose-50 to-orange-50 shadow-sm p-6 flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-red-500">{isEnglishSite ? 'Cash Balance' : '보유 캐시'}</p>
+                    <p className="text-sm font-semibold text-red-500">{t('mypage.profile.cashBalance')}</p>
                     <p className="mt-2 text-3xl font-black text-gray-900">
                       {formatCurrency(profile?.credits ?? 0)}
                     </p>
-                    <p className="mt-1 text-xs text-gray-500">{isEnglishSite ? 'Available for your next sheet music purchase.' : '다음 악보 구매 시 사용 가능합니다.'}</p>
+                    <p className="mt-1 text-xs text-gray-500">{t('mypage.profile.cashBalanceDescription')}</p>
                   </div>
                   <button
                     onClick={handleCashCharge}
                     className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-semibold shadow-lg hover:bg-red-600 transition"
                   >
-                    {isEnglishSite ? 'Charge Cash' : '캐시 충전'}
+                    {t('mypage.profile.chargeCash')}
                   </button>
                 </div>
               </div>
@@ -1391,7 +1377,7 @@ export default function MyPage() {
 
             <section className="grid grid-cols-1 lg:grid-cols-4 gap-8">
               <aside className="lg:col-span-1 space-y-4">
-                {getTabs(isEnglishSite).map((tab) => (
+                {getTabs().map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
@@ -1413,11 +1399,11 @@ export default function MyPage() {
               <section className="lg:col-span-3">
                 {activeTab === 'profile' && (
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                    <h3 className="text-xl font-bold text-gray-900 mb-6">{isEnglishSite ? 'Profile Management' : '프로필 관리'}</h3>
+                    <h3 className="text-xl font-bold text-gray-900 mb-6">{t('mypage.profile.title')}</h3>
                     <form onSubmit={handleProfileSubmit} className="space-y-6">
                       <div className="grid gap-6 md:grid-cols-2">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">{isEnglishSite ? 'Email' : '이메일'}</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">{t('mypage.profile.email')}</label>
                           <input
                             type="email"
                             value={profile?.email ?? ''}
@@ -1426,27 +1412,27 @@ export default function MyPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">{isEnglishSite ? 'Name' : '이름'}</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">{t('mypage.profile.name')}</label>
                           <input
                             type="text"
                             value={profileForm.name}
                             onChange={(event) => setProfileForm((prev) => ({ ...prev, name: event.target.value }))}
-                            placeholder={isEnglishSite ? 'Enter your name' : '이름을 입력하세요'}
+                            placeholder={t('mypage.profile.namePlaceholder')}
                             className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">{isEnglishSite ? 'Phone Number' : '전화번호'}</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">{t('mypage.profile.phoneNumber')}</label>
                           <input
                             type="tel"
                             value={profileForm.phone}
                             onChange={(event) => setProfileForm((prev) => ({ ...prev, phone: event.target.value }))}
-                            placeholder={isEnglishSite ? 'Enter your phone number' : '전화번호를 입력하세요'}
+                            placeholder={t('mypage.profile.phonePlaceholder')}
                             className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">{isEnglishSite ? 'Join Date' : '가입 날짜'}</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">{t('mypage.profile.joinDate')}</label>
                           <input
                             type="text"
                             value={formatDate(profile?.created_at)}
@@ -1463,7 +1449,7 @@ export default function MyPage() {
                             profileSaving ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
                           }`}
                         >
-                          {profileSaving ? (isEnglishSite ? 'Saving...' : '저장 중...') : (isEnglishSite ? 'Update Profile' : '프로필 업데이트')}
+                          {profileSaving ? t('mypage.profile.saving') : t('mypage.profile.updateProfile')}
                         </button>
                       </div>
                     </form>
@@ -1474,21 +1460,21 @@ export default function MyPage() {
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900">{isEnglishSite ? 'Purchase History' : '구매 내역'}</h3>
-                        <p className="text-sm text-gray-500">{isEnglishSite ? 'Sorted by most recent orders.' : '최근 주문 순으로 정렬되었습니다.'}</p>
+                        <h3 className="text-xl font-bold text-gray-900">{t('mypage.purchases.title')}</h3>
+                        <p className="text-sm text-gray-500">{t('mypage.purchases.description')}</p>
                       </div>
                       <Link
                         to="/categories"
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-blue-200 text-blue-600 text-sm font-semibold hover:bg-blue-50"
                       >
-                        <i className="ri-add-line text-lg" /> {isEnglishSite ? 'Browse More Sheets' : '악보 더 둘러보기'}
+                        <i className="ri-add-line text-lg" /> {t('mypage.purchases.browseMore')}
                       </Link>
                     </div>
 
                     {orders.length === 0 ? (
                       <div className="py-16 text-center text-gray-500">
                         <i className="ri-shopping-bag-line text-4xl text-gray-300 mb-4" />
-                        <p className="font-medium">{isEnglishSite ? 'No purchased sheet music yet.' : '아직 구매한 악보가 없습니다.'}</p>
+                        <p className="font-medium">{t('mypage.purchases.noPurchases')}</p>
                       </div>
                     ) : (
                       <div className="space-y-4">
@@ -1504,7 +1490,7 @@ export default function MyPage() {
                             <div key={order.id} className="border border-gray-100 rounded-xl p-4 space-y-4">
                               <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div>
-                                  <p className="text-sm text-gray-500">{isEnglishSite ? t('mypage.orderNumber') : '주문 번호'}</p>
+                                  <p className="text-sm text-gray-500">{t('mypage.purchases.orderNumber')}</p>
                                   <h4 className="text-lg font-semibold text-gray-900">
                                     #{order.id.slice(0, 8).toUpperCase()}
                                   </h4>
@@ -1513,7 +1499,7 @@ export default function MyPage() {
                                 <div className="flex flex-wrap items-center gap-3">
                                   {renderOrderStatusBadge(order.status)}
                                   <p className="text-base font-semibold text-gray-900">
-                                    {isEnglishSite ? `${t('mypage.total')} ${formatCurrency(order.total_amount)}` : `총 ${formatCurrency(order.total_amount)}`}
+                                    {t('mypage.purchases.total')} {formatCurrency(order.total_amount)}
                                   </p>
                                   {hasSelectableItems ? (
                                     <button
@@ -1526,7 +1512,7 @@ export default function MyPage() {
                                       }`}
                                     >
                                       <i className="ri-stack-line text-base" />
-                                      {bulkDownloading ? '다운로드 중...' : '이 주문 전체 다운로드'}
+                                      {bulkDownloading ? t('mypage.purchases.downloading') : t('mypage.purchases.downloadAllInOrder')}
                                     </button>
                                   ) : null}
                                 </div>
@@ -1545,7 +1531,7 @@ export default function MyPage() {
                                       }`}
                                     >
                                       <i className="ri-checkbox-multiple-line text-base" />
-                                      {allSelectableSelected ? '전체 해제' : '전체 선택'}
+                                      {allSelectableSelected ? t('mypage.purchases.deselectAll') : t('mypage.purchases.selectAll')}
                                     </button>
                                     <button
                                       onClick={() => clearPurchaseSelection(order.id)}
@@ -1557,10 +1543,10 @@ export default function MyPage() {
                                       }`}
                                     >
                                       <i className="ri-close-circle-line text-base" />
-                                      선택 해제
+                                      {t('mypage.purchases.deselectAll')}
                                     </button>
                                     <span className="text-xs text-gray-500">
-                                      선택 {selectedCount.toLocaleString('ko-KR')}개
+                                      {t('mypage.purchases.selected')} {selectedCount.toLocaleString('ko-KR')}
                                     </span>
                                   </div>
                                   <div className="flex flex-wrap items-center gap-2">
@@ -1574,7 +1560,7 @@ export default function MyPage() {
                                       }`}
                                     >
                                       <i className="ri-download-2-line text-base" />
-                                      {bulkDownloading ? '다운로드 중...' : '선택 다운로드'}
+                                      {bulkDownloading ? t('mypage.purchases.downloading') : t('mypage.purchases.downloadSelected')}
                                     </button>
                                   </div>
                                 </div>
@@ -1623,10 +1609,10 @@ export default function MyPage() {
                                         />
                                         <div>
                                           <p className="text-sm text-gray-500">
-                                            {item.drum_sheets?.categories?.name ?? '카테고리 미지정'}
+                                            {item.drum_sheets?.categories?.name ?? t('mypage.purchases.categoryNotSet')}
                                           </p>
                                           <h5 className="font-semibold text-gray-900">
-                                            {item.drum_sheets?.title ?? '삭제된 악보'}
+                                            {item.drum_sheets?.title ?? t('mypage.purchases.deletedSheet')}
                                           </h5>
                                           <p className="text-sm text-gray-500">{item.drum_sheets?.artist ?? '-'}</p>
                                         </div>
@@ -1641,13 +1627,13 @@ export default function MyPage() {
                                               : 'bg-blue-600 hover:bg-blue-700'
                                           }`}
                                         >
-                                          {isDownloading ? '다운로드 중...' : '다운로드'}
+                                          {isDownloading ? t('mypage.purchases.downloading') : t('mypage.purchases.download')}
                                         </button>
                                         <button
                                           onClick={() => handleGoToSheet(item.sheet_id)}
                                           className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50"
                                         >
-                                          상세보기
+                                          {t('mypage.purchases.viewDetails')}
                                         </button>
                                       </div>
                                     </div>
@@ -1666,13 +1652,13 @@ export default function MyPage() {
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900">{isEnglishSite ? t('mypage.downloadManagement') : '다운로드 관리'}</h3>
-                        <p className="text-sm text-gray-500">{isEnglishSite ? t('mypage.downloadDescription') : '구매한 악보를 언제든지 다시 다운로드할 수 있습니다.'}</p>
+                        <h3 className="text-xl font-bold text-gray-900">{t('mypage.downloads.title')}</h3>
+                        <p className="text-sm text-gray-500">{t('mypage.downloads.description')}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm text-gray-500">{isEnglishSite ? t('mypage.totalItems', { count: downloads.length }) : `총 ${downloads.length}개`}</p>
+                        <p className="text-sm text-gray-500">{t('mypage.downloads.totalItems', { count: downloads.length })}</p>
                         {selectedDownloadIds.length > 0 ? (
-                          <p className="mt-1 text-xs text-blue-600">{isEnglishSite ? t('mypage.selectedItems', { count: selectedDownloadIds.length }) : `선택 ${selectedDownloadIds.length}개`}</p>
+                          <p className="mt-1 text-xs text-blue-600">{t('mypage.downloads.selectedItems', { count: selectedDownloadIds.length })}</p>
                         ) : null}
                       </div>
                     </div>
@@ -1690,7 +1676,7 @@ export default function MyPage() {
                             }`}
                           >
                             <i className="ri-checkbox-multiple-line text-base" />
-                            {downloads.length > 0 && selectedDownloadIds.length === downloads.length ? '전체 해제' : '전체 선택'}
+                            {downloads.length > 0 && selectedDownloadIds.length === downloads.length ? t('mypage.downloads.deselectAll') : t('mypage.downloads.selectAll')}
                           </button>
                           <button
                             onClick={clearDownloadSelection}
@@ -1702,7 +1688,7 @@ export default function MyPage() {
                             }`}
                           >
                             <i className="ri-close-circle-line text-base" />
-                            선택 해제
+                            {t('mypage.downloads.deselectAll')}
                           </button>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -1716,7 +1702,7 @@ export default function MyPage() {
                             }`}
                           >
                             <i className="ri-download-2-line text-base" />
-                            {bulkDownloading ? '다운로드 중...' : '선택 다운로드'}
+                            {bulkDownloading ? t('mypage.downloads.downloading') : t('mypage.downloads.downloadSelected')}
                           </button>
                           <button
                             onClick={handleDownloadAll}
@@ -1728,7 +1714,7 @@ export default function MyPage() {
                             }`}
                           >
                             <i className="ri-stack-line text-base" />
-                            {bulkDownloading ? '다운로드 중...' : '전체 다운로드'}
+                            {bulkDownloading ? t('mypage.downloads.downloading') : t('mypage.downloads.downloadAll')}
                           </button>
                         </div>
                       </div>
@@ -1737,7 +1723,7 @@ export default function MyPage() {
                     {downloads.length === 0 ? (
                       <div className="py-16 text-center text-gray-500">
                         <i className="ri-download-2-line text-4xl text-gray-300 mb-4" />
-                        <p className="font-medium">다운로드 가능한 악보가 없습니다.</p>
+                        <p className="font-medium">{t('mypage.downloads.noDownloads')}</p>
                       </div>
                     ) : (
                       <div className="grid gap-4 md:grid-cols-2">
@@ -1772,7 +1758,7 @@ export default function MyPage() {
                                       item.drum_sheets?.thumbnail_url ||
                                       generateDefaultThumbnail(96, 96)
                                     }
-                                    alt={item.drum_sheets?.title ?? '악보 썸네일'}
+                                    alt={item.drum_sheets?.title ?? t('mypage.downloads.noDownloads')}
                                     className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
                                     onError={(event) => {
                                       (event.target as HTMLImageElement).src = generateDefaultThumbnail(96, 96);
@@ -1780,10 +1766,10 @@ export default function MyPage() {
                                   />
                                   <div>
                                     <h4 className="font-semibold text-gray-900">
-                                      {item.drum_sheets?.title ?? '삭제된 악보'}
+                                      {item.drum_sheets?.title ?? t('mypage.favorites.deletedSheet')}
                                     </h4>
                                     <p className="text-sm text-gray-500">{item.drum_sheets?.artist ?? '-'}</p>
-                                    <p className="text-xs text-gray-400">구매일 {formatDate(item.order_created_at)}</p>
+                                    <p className="text-xs text-gray-400">{t('mypage.downloads.purchaseDate')} {formatDate(item.order_created_at)}</p>
                                   </div>
                                 </div>
                               </div>
@@ -1798,10 +1784,10 @@ export default function MyPage() {
                                   }`}
                                 >
                                   {isDownloading
-                                    ? '다운로드 중...'
+                                    ? t('mypage.downloads.downloading')
                                     : isDownloadableStatus
-                                    ? '다운로드'
-                                    : '다운로드 불가'}
+                                    ? t('mypage.downloads.download')
+                                    : t('mypage.downloads.downloadUnavailable')}
                                 </button>
                                 <button
                                   onClick={() => handlePreview(item)}
@@ -1812,7 +1798,7 @@ export default function MyPage() {
                                       : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
                                   }`}
                                 >
-                                  미리보기
+                                  {t('mypage.downloads.preview')}
                                 </button>
                               </div>
                             </div>
@@ -1827,17 +1813,17 @@ export default function MyPage() {
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900">{isEnglishSite ? t('mypage.favoriteSheets') : '찜한 악보'}</h3>
-                        <p className="text-sm text-gray-500">{isEnglishSite ? t('mypage.favoriteDescription') : '관심 있는 악보를 빠르게 찾아보세요.'}</p>
+                        <h3 className="text-xl font-bold text-gray-900">{t('mypage.favorites.title')}</h3>
+                        <p className="text-sm text-gray-500">{t('mypage.favorites.description')}</p>
                       </div>
-                      <p className="text-sm text-gray-500">{isEnglishSite ? t('mypage.totalCount', { count: favorites.length }) : `총 ${favorites.length}개`}</p>
+                      <p className="text-sm text-gray-500">{t('mypage.favorites.totalCount', { count: favorites.length })}</p>
                     </div>
 
                     {favorites.length === 0 ? (
                       <div className="py-16 text-center text-gray-500">
                         <i className="ri-heart-line text-4xl text-gray-300 mb-4" />
-                        <p className="font-medium">{isEnglishSite ? t('mypage.noFavorites') : '찜한 악보가 없습니다.'}</p>
-                        <p className="text-sm">{isEnglishSite ? t('mypage.addFavorites') : '마음에 드는 악보를 찜해보세요!'}</p>
+                        <p className="font-medium">{t('mypage.favorites.noFavorites')}</p>
+                        <p className="text-sm">{t('mypage.favorites.addFavorites')}</p>
                       </div>
                     ) : (
                       <div className="grid gap-4 sm:grid-cols-2">
@@ -1857,7 +1843,7 @@ export default function MyPage() {
                               />
                               <div className="min-w-0">
                                 <h4 className="font-semibold text-gray-900 truncate">
-                                  {favorite.sheet?.title ?? '삭제된 악보'}
+                                  {favorite.sheet?.title ?? t('mypage.favorites.deletedSheet')}
                                 </h4>
                                 <p className="text-sm text-gray-500 truncate">{favorite.sheet?.artist ?? '-'}</p>
                                 <p className="text-base font-bold text-blue-600 mt-1">
@@ -1870,7 +1856,7 @@ export default function MyPage() {
                                 onClick={() => handleGoToSheet(favorite.sheet_id)}
                                 className="flex-1 min-w-[120px] px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
                               >
-                                상세보기
+                                {t('mypage.favorites.viewDetails')}
                               </button>
                               <button
                                 onClick={() => handleAddToCart(favorite.sheet_id)}
@@ -1881,13 +1867,13 @@ export default function MyPage() {
                                 }`}
                                 disabled={isInCart(favorite.sheet_id)}
                               >
-                                {isInCart(favorite.sheet_id) ? (isEnglishSite ? t('mypage.inCart') : '장바구니에 있음') : (isEnglishSite ? t('mypage.cart') : '장바구니')}
+                                {isInCart(favorite.sheet_id) ? t('mypage.favorites.inCart') : t('mypage.favorites.cart')}
                               </button>
                               <button
                                 onClick={() => handleFavoriteRemove(favorite.sheet_id)}
                                 className="flex-1 min-w-[120px] px-3 py-2 rounded-lg border border-red-200 text-sm font-semibold text-red-600 hover:bg-red-50"
                               >
-                                찜 해제
+                                {t('mypage.favorites.removeFavorite')}
                               </button>
                             </div>
                           </div>
@@ -1901,9 +1887,9 @@ export default function MyPage() {
                   <div className="space-y-6">
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900">{isEnglishSite ? t('mypage.inquiry') : '1:1 문의하기'}</h3>
+                        <h3 className="text-xl font-bold text-gray-900">{t('mypage.inquiries.title')}</h3>
                         <p className="text-sm text-gray-500">
-                          {isEnglishSite ? t('mypage.inquiryDescription') : '문의를 등록하면 관리자 답변을 마이페이지에서 바로 확인할 수 있습니다.'}
+                          {t('mypage.inquiries.description')}
                         </p>
                       </div>
 
@@ -1911,7 +1897,7 @@ export default function MyPage() {
                         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                           <div>
                             <label htmlFor="inquiry-name" className="block text-sm font-medium text-gray-700 mb-2">
-                              이름 *
+                              {t('mypage.inquiries.name')} *
                             </label>
                             <input
                               id="inquiry-name"
@@ -1922,12 +1908,12 @@ export default function MyPage() {
                               required
                               disabled={inquirySubmitting}
                               className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                              placeholder="이름을 입력하세요"
+                              placeholder={t('mypage.inquiries.namePlaceholder')}
                             />
                           </div>
                           <div>
                             <label htmlFor="inquiry-email" className="block text-sm font-medium text-gray-700 mb-2">
-                              이메일 *
+                              {t('mypage.inquiries.email')} *
                             </label>
                             <input
                               id="inquiry-email"
@@ -1938,14 +1924,14 @@ export default function MyPage() {
                               required
                               disabled={inquirySubmitting}
                               className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                              placeholder="연락 가능한 이메일을 입력하세요"
+                              placeholder={t('mypage.inquiries.emailPlaceholder')}
                             />
                           </div>
                         </div>
 
                         <div>
                           <label htmlFor="inquiry-category" className="block text-sm font-medium text-gray-700 mb-2">
-                            문의 유형 *
+                            {t('mypage.inquiries.category')} *
                           </label>
                           <select
                             id="inquiry-category"
@@ -1956,18 +1942,18 @@ export default function MyPage() {
                             disabled={inquirySubmitting}
                             className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                           >
-                            <option value="">문의 유형을 선택하세요</option>
-                            <option value="주문/결제">주문/결제 문의</option>
-                            <option value="악보/다운로드">악보/다운로드 문의</option>
-                            <option value="주문제작">주문제작 문의</option>
-                            <option value="기술지원">기술지원</option>
-                            <option value="기타">기타 문의</option>
+                            <option value="">{t('mypage.inquiries.categoryPlaceholder')}</option>
+                            <option value="주문/결제">{t('mypage.inquiries.categories.orderPayment')}</option>
+                            <option value="악보/다운로드">{t('mypage.inquiries.categories.sheetDownload')}</option>
+                            <option value="주문제작">{t('mypage.inquiries.categories.customOrder')}</option>
+                            <option value="기술지원">{t('mypage.inquiries.categories.technical')}</option>
+                            <option value="기타">{t('mypage.inquiries.categories.other')}</option>
                           </select>
                         </div>
 
                         <div>
                           <label htmlFor="inquiry-subject" className="block text-sm font-medium text-gray-700 mb-2">
-                            제목 *
+                            {t('mypage.inquiries.subject')} *
                           </label>
                           <input
                             id="inquiry-subject"
@@ -1978,13 +1964,13 @@ export default function MyPage() {
                             required
                             disabled={inquirySubmitting}
                             className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                            placeholder="문의 제목을 입력하세요"
+                            placeholder={t('mypage.inquiries.subjectPlaceholder')}
                           />
                         </div>
 
                         <div>
                           <label htmlFor="inquiry-message" className="block text-sm font-medium text-gray-700 mb-2">
-                            문의 내용 *
+                            {t('mypage.inquiries.message')} *
                           </label>
                           <textarea
                             id="inquiry-message"
@@ -1996,10 +1982,10 @@ export default function MyPage() {
                             rows={6}
                             maxLength={500}
                             className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 resize-none"
-                            placeholder="문의 내용을 자세히 작성해 주세요 (최대 500자)"
+                            placeholder={t('mypage.inquiries.messagePlaceholder')}
                           />
                           <div className="mt-1 text-right text-xs text-gray-400">
-                            {inquiryForm.message.length}/500자
+                            {inquiryForm.message.length}/500{t('mypage.inquiries.characters')}
                           </div>
                         </div>
 
@@ -2008,7 +1994,7 @@ export default function MyPage() {
                           disabled={inquirySubmitting}
                           className="w-full rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:bg-blue-300"
                         >
-                          {inquirySubmitting ? '전송 중...' : '문의 등록'}
+                          {inquirySubmitting ? t('mypage.inquiries.submitting') : t('mypage.inquiries.submit')}
                         </button>
                       </form>
                     </div>
@@ -2016,21 +2002,21 @@ export default function MyPage() {
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
                       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div>
-                          <h3 className="text-xl font-bold text-gray-900">내 문의 내역</h3>
-                          <p className="text-sm text-gray-500">등록된 문의와 관리자 답변을 확인하세요.</p>
+                          <h3 className="text-xl font-bold text-gray-900">{t('mypage.inquiries.history.title')}</h3>
+                          <p className="text-sm text-gray-500">{t('mypage.inquiries.history.description')}</p>
                         </div>
-                        <span className="text-sm text-gray-500">총 {userInquiries.length}건</span>
+                        <span className="text-sm text-gray-500">{t('mypage.inquiries.history.total', { count: userInquiries.length })}</span>
                       </div>
 
                       {inquiriesLoading ? (
                         <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
-                          <p className="font-medium">문의 내역을 불러오는 중입니다...</p>
+                          <p className="font-medium">{t('mypage.inquiries.history.loading')}</p>
                         </div>
                       ) : userInquiries.length === 0 ? (
                         <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
                           <i className="ri-question-answer-line text-4xl text-gray-300 mb-4" />
-                          <p className="font-medium">등록된 문의가 없습니다.</p>
-                          <p className="text-sm">궁금한 점이 있다면 위 양식을 통해 문의를 남겨주세요.</p>
+                          <p className="font-medium">{t('mypage.inquiries.history.noInquiries')}</p>
+                          <p className="text-sm">{t('mypage.inquiries.history.noInquiriesDescription')}</p>
                         </div>
                       ) : (
                         <div className="space-y-4">
@@ -2039,12 +2025,12 @@ export default function MyPage() {
                               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-                                    {inquiry.category || '문의'}
+                                    {inquiry.category || t('mypage.inquiries.history.category')}
                                   </span>
                                   {renderInquiryStatusBadge(inquiry.status)}
                                 </div>
                                 <span className="text-xs text-gray-400">
-                                  접수 {formatDateTime(inquiry.created_at)}
+                                  {t('mypage.inquiries.history.received')} {formatDateTime(inquiry.created_at)}
                                 </span>
                               </div>
 
@@ -2058,10 +2044,10 @@ export default function MyPage() {
                               {inquiry.admin_reply ? (
                                 <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
                                   <div className="flex flex-col gap-1 text-sm text-blue-700 md:flex-row md:items-center md:justify-between">
-                                    <span className="font-semibold">관리자 답변</span>
+                                    <span className="font-semibold">{t('mypage.inquiries.history.adminReply')}</span>
                                     {inquiry.replied_at ? (
                                       <span className="text-xs text-blue-500">
-                                        답변 {formatDateTime(inquiry.replied_at)}
+                                        {t('mypage.inquiries.history.replied')} {formatDateTime(inquiry.replied_at)}
                                       </span>
                                     ) : null}
                                   </div>
@@ -2071,7 +2057,7 @@ export default function MyPage() {
                                 </div>
                               ) : (
                                 <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">
-                                  답변 준비 중입니다. 담당자가 확인 후 안내드리겠습니다.
+                                  {t('mypage.inquiries.history.preparing')}
                                 </div>
                               )}
                             </div>
@@ -2086,19 +2072,19 @@ export default function MyPage() {
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900">{isEnglishSite ? t('mypage.cashHistory') : '캐시 내역'}</h3>
-                        <p className="text-sm text-gray-500">{isEnglishSite ? t('mypage.cashDescription') : '보유 캐시와 사용 내역을 확인하세요.'}</p>
+                        <h3 className="text-xl font-bold text-gray-900">{t('mypage.cash.title')}</h3>
+                        <p className="text-sm text-gray-500">{t('mypage.cash.description')}</p>
                       </div>
                       <button
                         onClick={handleCashCharge}
                         className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
                       >
-                        {isEnglishSite ? t('mypage.chargeCash') : '캐시 충전'}
+                        {t('mypage.cash.chargeCash')}
                       </button>
                     </div>
 
                     <div className="rounded-xl border border-blue-100 bg-blue-50 p-6">
-                      <p className="text-sm text-blue-600">{isEnglishSite ? t('mypage.availableCash') : '보유 캐시'}</p>
+                      <p className="text-sm text-blue-600">{t('mypage.cash.availableCash')}</p>
                       <p className="mt-2 text-3xl font-bold text-blue-900">
                         {formatCurrency(profile?.credits ?? 0)}
                       </p>
@@ -2107,25 +2093,25 @@ export default function MyPage() {
                     <div className="space-y-3">
                       {cashHistoryLoading ? (
                         <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
-                          <p className="font-medium">{isEnglishSite ? t('mypage.loadingCashHistory') : '캐쉬 내역을 불러오는 중입니다...'}</p>
+                          <p className="font-medium">{t('mypage.cash.loadingHistory')}</p>
                         </div>
                       ) : cashHistory.length === 0 ? (
                         <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
-                          <p className="font-medium">{isEnglishSite ? t('mypage.noCashHistory') : '표시할 캐시 내역이 없습니다.'}</p>
-                          <p className="text-sm">{isEnglishSite ? 'Cash transactions will be recorded here when you charge or use cash.' : '캐시를 충전하거나 사용하면 이곳에 기록됩니다.'}</p>
+                          <p className="font-medium">{t('mypage.cash.noHistory')}</p>
+                          <p className="text-sm">{t('mypage.cash.noHistoryDescription')}</p>
                         </div>
                       ) : (
                         cashHistory.map((entry) => {
                           const meta =
                             CASH_TYPE_META[entry.transaction_type] ?? {
-                              label: '기록',
+                              label: t('mypage.cash.types.record'),
                               badgeClass: 'bg-gray-100 text-gray-600 border border-gray-200',
                               amountClass: 'text-gray-700',
                             };
                           const amount = entry.amount ?? 0;
                           const amountSign = amount >= 0 ? '+' : '-';
                           const description =
-                            entry.description || (entry.sheet?.title ? `악보: ${entry.sheet.title}` : '기록된 설명이 없습니다.');
+                            entry.description || (entry.sheet?.title ? `${t('mypage.cash.sheet')}: ${entry.sheet.title}` : t('mypage.cash.noDescription'));
                           return (
                             <div
                               key={entry.id}
@@ -2149,12 +2135,12 @@ export default function MyPage() {
                                 </p>
                                 {entry.bonus_amount > 0 && (
                                   <p className="text-xs text-emerald-600 mt-1">
-                                    보너스 +{formatCurrency(entry.bonus_amount)}
+                                    {t('mypage.cash.bonus')} +{formatCurrency(entry.bonus_amount)}
                                   </p>
                                 )}
                                 {entry.balance_after !== undefined && (
                                   <p className="text-xs text-gray-400 mt-1">
-                                    잔액 {formatCurrency(entry.balance_after)}
+                                    {t('mypage.cash.balance')} {formatCurrency(entry.balance_after)}
                                   </p>
                                 )}
                               </div>
@@ -2170,22 +2156,22 @@ export default function MyPage() {
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900">{isEnglishSite ? t('mypage.customOrders') : '주문제작 신청 내역'}</h3>
-                        <p className="text-sm text-gray-500">{isEnglishSite ? t('mypage.customOrdersDescription') : '맞춤 제작 진행 상황을 확인하세요.'}</p>
+                        <h3 className="text-xl font-bold text-gray-900">{t('mypage.customOrders.title')}</h3>
+                        <p className="text-sm text-gray-500">{t('mypage.customOrders.description')}</p>
                       </div>
                       <button
                         onClick={() => navigate('/custom-order')}
                         className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
                       >
-                        {isEnglishSite ? t('mypage.newOrderRequest') : '새 주문 신청'}
+                        {t('mypage.customOrders.newOrderRequest')}
                       </button>
                     </div>
 
                     {customOrders.length === 0 ? (
                       <div className="py-16 text-center text-gray-500">
                         <i className="ri-file-text-line text-4xl text-gray-300 mb-4" />
-                        <p className="font-medium">{isEnglishSite ? t('mypage.noCustomOrders') : '주문제작 신청 내역이 없습니다.'}</p>
-                        <p className="text-sm">{isEnglishSite ? t('mypage.customOrderService') : '맞춤 제작 서비스를 이용해 특별한 악보를 만들어보세요.'}</p>
+                        <p className="font-medium">{t('mypage.customOrders.noOrders')}</p>
+                        <p className="text-sm">{t('mypage.customOrders.serviceDescription')}</p>
                       </div>
                     ) : (
                       <div className="space-y-4">
@@ -2202,18 +2188,18 @@ export default function MyPage() {
                                   {order.status === 'quoted' && order.estimated_price
                                     ? formatCurrency(order.estimated_price)
                                     : order.status === 'quoted' && !order.estimated_price
-                                    ? '견적 확인'
+                                    ? t('mypage.customOrders.quoteConfirm')
                                     : order.status === 'completed' && !order.estimated_price
-                                    ? '작업완료'
+                                    ? t('mypage.customOrders.workCompleted')
                                     : order.estimated_price
                                     ? formatCurrency(order.estimated_price)
-                                    : '견적 미정'}
+                                    : t('mypage.customOrders.quotePending')}
                                 </p>
                               </div>
                             </div>
                             <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-400">
-                              <span>신청일 {formatDateTime(order.created_at)}</span>
-                              <span>최근 업데이트 {formatDateTime(order.updated_at)}</span>
+                              <span>{t('mypage.customOrders.requestDate')} {formatDateTime(order.created_at)}</span>
+                              <span>{t('mypage.customOrders.lastUpdate')} {formatDateTime(order.updated_at)}</span>
                             </div>
                             <div className="mt-4 flex justify-end">
                               <button
@@ -2221,7 +2207,7 @@ export default function MyPage() {
                                 className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100"
                               >
                                 <i className="ri-chat-1-line"></i>
-                                상세 보기
+                                {t('mypage.customOrders.viewDetails')}
                               </button>
                             </div>
                           </div>
@@ -2243,7 +2229,7 @@ export default function MyPage() {
           <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
             {/* 헤더 */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">캐쉬충전</h2>
+              <h2 className="text-lg font-bold text-gray-900">{t('mypage.cashCharge.title')}</h2>
               <button onClick={handleCloseCashChargeModal} className="text-gray-400 hover:text-gray-600 cursor-pointer">
                 <i className="ri-close-line text-xl"></i>
               </button>
@@ -2253,7 +2239,7 @@ export default function MyPage() {
               {/* 현재 포인트 */}
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6 flex items-center">
                 <i className="ri-coins-line text-yellow-600 text-lg mr-2"></i>
-                <span className="text-sm text-gray-700">보유 악보캐쉬</span>
+                <span className="text-sm text-gray-700">{t('mypage.cashCharge.currentCash')}</span>
                 <span className="ml-auto font-bold text-yellow-600">
                   {(profile?.credits ?? 0).toLocaleString()} P
                 </span>
@@ -2261,11 +2247,11 @@ export default function MyPage() {
 
               {showDepositorInput ? (
                 <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-gray-900">무통장 입금 정보</h3>
+                  <h3 className="text-sm font-semibold text-gray-900">{t('mypage.cashCharge.bankTransferInfo.title')}</h3>
                   
                   <div className="bg-blue-50 rounded-lg px-4 py-3 border border-blue-200">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">입금하실 금액</span>
+                      <span className="text-sm font-medium text-gray-700">{t('mypage.cashCharge.bankTransferInfo.amount')}</span>
                       <span className="text-lg font-bold text-blue-600">
                         {formatCurrency(chargeAmount)}
                       </span>
@@ -2273,35 +2259,35 @@ export default function MyPage() {
                   </div>
 
                   <div className="bg-gray-50 rounded-lg px-4 py-3 space-y-2">
-                    <h4 className="text-xs font-semibold text-gray-900 mb-2">입금 계좌 정보</h4>
+                    <h4 className="text-xs font-semibold text-gray-900 mb-2">{t('mypage.cashCharge.bankTransferInfo.title')}</h4>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-600">은행</span>
+                      <span className="text-xs text-gray-600">{t('mypage.cashCharge.bankTransferInfo.bank')}</span>
                       <span className="text-xs font-medium text-gray-900">농협</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-600">계좌번호</span>
+                      <span className="text-xs text-gray-600">{t('mypage.cashCharge.bankTransferInfo.accountNumber')}</span>
                       <span className="text-xs font-medium text-gray-900">106-02-303742</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-600">예금주</span>
+                      <span className="text-xs text-gray-600">{t('mypage.cashCharge.bankTransferInfo.accountHolder')}</span>
                       <span className="text-xs font-medium text-gray-900">강만수</span>
                     </div>
                   </div>
 
                   <div className="space-y-2">
                     <label htmlFor="depositor-name" className="block text-sm font-semibold text-gray-900">
-                      입금자명 <span className="text-red-500">*</span>
+                      {t('mypage.cashCharge.depositorName')} <span className="text-red-500">*</span>
                     </label>
                     <input
                       id="depositor-name"
                       type="text"
                       value={depositorName}
                       onChange={(e) => setDepositorName(e.target.value)}
-                      placeholder="입금자명을 입력하세요"
+                      placeholder={t('mypage.cashCharge.depositorNamePlaceholder')}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <p className="text-xs text-gray-500">
-                      * 회원명과 입금자가 다른 경우, 입금자명을 기입해 주시기 바랍니다.
+                      {t('mypage.cashCharge.depositorNameHint')}
                     </p>
                   </div>
 
@@ -2309,9 +2295,9 @@ export default function MyPage() {
                     <div className="flex gap-2">
                       <i className="ri-information-line text-yellow-600 text-base flex-shrink-0 mt-0.5"></i>
                       <div className="text-xs text-gray-700 space-y-1">
-                        <p>• 입금 확인 후 관리자가 수동으로 캐시 충전을 완료합니다.</p>
-                        <p>• 입금자명이 일치하지 않으면 확인이 지연될 수 있습니다.</p>
-                        <p>• 입금 확인은 영업일 기준 1~2일 소요될 수 있습니다.</p>
+                        <p>• {t('mypage.cashCharge.bankTransferNotice.line1')}</p>
+                        <p>• {t('mypage.cashCharge.bankTransferNotice.line2')}</p>
+                        <p>• {t('mypage.cashCharge.bankTransferNotice.line3')}</p>
                       </div>
                     </div>
                   </div>
@@ -2321,39 +2307,39 @@ export default function MyPage() {
                       onClick={() => setShowDepositorInput(false)}
                       className="flex-1 border border-gray-300 text-gray-700 py-2.5 px-4 rounded-lg hover:bg-gray-50 font-medium text-sm transition-colors"
                     >
-                      이전
+                      {t('mypage.cashCharge.back')}
                     </button>
                     <button
                       onClick={handleBankTransferConfirm}
                       disabled={chargeProcessing}
                       className="flex-1 bg-blue-600 text-white py-2.5 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-70 font-medium text-sm transition-colors"
                     >
-                      {chargeProcessing ? '처리 중...' : '확인'}
+                      {chargeProcessing ? t('mypage.cashCharge.processing') : t('mypage.cashCharge.confirm')}
                     </button>
                   </div>
                 </div>
               ) : bankTransferInfo ? (
                 <div className="space-y-5">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h3 className="text-sm font-semibold text-blue-800 mb-3">무통장입금 안내</h3>
+                    <h3 className="text-sm font-semibold text-blue-800 mb-3">{t('mypage.cashCharge.bankTransferGuide.title')}</h3>
                     <ul className="space-y-2 text-sm text-gray-700">
                       <li>
-                        <span className="font-medium text-gray-900">은행</span> {bankTransferInfo.bankName}
+                        <span className="font-medium text-gray-900">{t('mypage.cashCharge.bankTransferGuide.bank')}</span> {bankTransferInfo.bankName}
                       </li>
                       <li>
-                        <span className="font-medium text-gray-900">계좌번호</span>{' '}
+                        <span className="font-medium text-gray-900">{t('mypage.cashCharge.bankTransferGuide.accountNumber')}</span>{' '}
                         {bankTransferInfo.accountNumber}
                       </li>
                       <li>
-                        <span className="font-medium text-gray-900">예금주</span> {bankTransferInfo.depositor}
+                        <span className="font-medium text-gray-900">{t('mypage.cashCharge.bankTransferGuide.accountHolder')}</span> {bankTransferInfo.depositor}
                       </li>
                       <li>
-                        <span className="font-medium text-gray-900">입금금액</span>{' '}
+                        <span className="font-medium text-gray-900">{t('mypage.cashCharge.bankTransferGuide.amount')}</span>{' '}
                         {formatCurrency(bankTransferInfo.amount ?? chargeAmount)}
                       </li>
                       {bankTransferInfo.expectedDepositor ? (
                         <li>
-                          <span className="font-medium text-gray-900">입금자명</span>{' '}
+                          <span className="font-medium text-gray-900">{t('mypage.cashCharge.bankTransferInfo.depositorName')}</span>{' '}
                           <span className="text-blue-600 font-semibold">
                             {bankTransferInfo.expectedDepositor}
                           </span>
@@ -2369,14 +2355,14 @@ export default function MyPage() {
                     onClick={handleCloseCashChargeModal}
                     className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 font-bold text-sm transition-colors"
                   >
-                    확인
+                    {t('mypage.cashCharge.confirm')}
                   </button>
                 </div>
               ) : (
                 <>
                   {/* 결제금액 */}
                   <div className="mb-6">
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">결제금액</h3>
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">{t('mypage.cashCharge.paymentAmountTitle')}</h3>
                     <div className="grid grid-cols-2 gap-3">
                       {chargeOptions.map((option, index) => (
                         <button
@@ -2399,11 +2385,9 @@ export default function MyPage() {
                           {option.bonus > 0 && (
                             <div className="mt-1">
                               <span className="text-xs text-gray-500">
-                                {isEnglishSite && 'amountUSD' in option
-                                  ? `+$${option.bonusUSD} 적립`
-                                  : `+${option.bonus.toLocaleString()} 적립`}
+                                {`+${option.bonus.toLocaleString()} 적립`}
                               </span>
-                              {!isEnglishSite && option.bonusPercent && (
+                              {option.bonusPercent && (
                                 <span className="ml-1 bg-red-500 text-white text-xs px-1 py-0.5 rounded">
                                   {option.bonusPercent}
                                 </span>
@@ -2417,7 +2401,7 @@ export default function MyPage() {
 
                   {/* 결제방법 */}
                   <div className="mb-6">
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">결제방법</h3>
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">{t('mypage.cashCharge.paymentMethod')}</h3>
                     <div className="grid grid-cols-2 gap-3">
                       {paymentMethods.map((method) => {
                         const isSelected = selectedPayment === method.id;
@@ -2428,10 +2412,10 @@ export default function MyPage() {
                             type="button"
                             onClick={() => {
                               if (isDisabled) {
-                                alert('해당 결제수단은 현재 준비 중입니다.');
+                                alert(t('mypage.errors.paymentMethodNotReady'));
                                 return;
                               }
-                              setSelectedPayment(method.id);
+                              setSelectedPayment(method.id as 'card' | 'kakaopay' | 'bank');
                             }}
                             disabled={isDisabled}
                             className={`p-3 border rounded-lg text-left transition-colors ${
@@ -2472,7 +2456,7 @@ export default function MyPage() {
                         className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
                       />
                       <span className="ml-2 text-xs text-gray-600 leading-relaxed">
-                        결제 내용을 확인하였으며, 약관에 동의합니다.
+                        {t('mypage.cashCharge.agreement')}
                         <button type="button" className="text-blue-600 hover:text-blue-800 ml-1">
                           <i className="ri-arrow-down-s-line"></i>
                         </button>
@@ -2488,7 +2472,7 @@ export default function MyPage() {
                       chargeProcessing ? 'opacity-70 cursor-not-allowed' : 'hover:from-blue-700 hover:to-purple-700'
                     }`}
                   >
-                    {chargeProcessing ? '처리 중...' : '다음'}
+                    {chargeProcessing ? t('mypage.cashCharge.processing') : t('mypage.cashCharge.next')}
                   </button>
                 </>
               )}
@@ -2502,7 +2486,7 @@ export default function MyPage() {
         className="hidden md:fixed md:bottom-6 md:right-6 md:z-40 md:flex items-center gap-2 rounded-full bg-blue-600 text-white px-5 py-3 shadow-lg hover:bg-blue-700"
       >
         <i className="ri-shopping-cart-line text-lg" />
-        {isEnglishSite ? t('mypage.cart') : '장바구니'}
+        {t('mypage.cart')}
         {cartItems.length > 0 ? (
           <span className="ml-2 rounded-full bg-white text-blue-600 text-xs font-bold px-2 py-0.5">
             {cartItems.length}

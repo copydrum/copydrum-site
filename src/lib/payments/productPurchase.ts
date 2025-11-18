@@ -1,15 +1,18 @@
 import { createOrderWithItems } from './orderUtils';
-import {
-  createInicisPaymentIntent,
-  ensureInicisSdkLoaded,
-  submitInicisPaymentForm,
-  getInicisReturnUrl,
-} from './inicis';
-import {
-  createPayPalPaymentIntent,
-  getPayPalReturnUrl,
-  getPayPalCancelUrl,
-} from './paypal';
+// KG이니시스 관련 import 주석 처리 (포트원으로 전환)
+// import {
+//   createInicisPaymentIntent,
+//   ensureInicisSdkLoaded,
+//   submitInicisPaymentForm,
+//   getInicisReturnUrl,
+// } from './inicis';
+// 직접 PayPal 연동 관련 import 주석 처리 (포트원으로 전환)
+// import {
+//   createPayPalPaymentIntent,
+//   getPayPalReturnUrl,
+//   getPayPalCancelUrl,
+// } from './paypal';
+import { requestPayPalPayment, getPortOneReturnUrl } from './portone';
 import { updateOrderPaymentStatus } from './paymentService';
 import type { VirtualAccountInfo, PaymentIntentResponse } from './types';
 
@@ -100,74 +103,71 @@ export const startSheetPurchase = async ({
   }
 
   if (paymentMethod === 'paypal') {
-    // PayPal 결제 처리
-    const finalReturnUrl = returnUrl || getPayPalReturnUrl();
-    const cancelUrl = getPayPalCancelUrl();
+    // 포트원을 통한 PayPal 결제 처리
+    const finalReturnUrl = returnUrl || getPortOneReturnUrl();
 
-    const paypalIntent = await createPayPalPaymentIntent({
-      userId,
-      orderId,
-      amount,
-      description,
-      buyerEmail: buyerEmail ?? undefined,
-      buyerName: buyerName ?? undefined,
-      returnUrl: finalReturnUrl,
-      cancelUrl,
-    });
+    try {
+      const result = await requestPayPalPayment({
+        amount,
+        orderId,
+        buyerEmail: buyerEmail ?? undefined,
+        buyerName: buyerName ?? undefined,
+        buyerTel: buyerTel ?? undefined,
+        description,
+        returnUrl: finalReturnUrl,
+      });
 
-    // PayPal 승인 URL로 리다이렉트
-    if (paypalIntent.approvalUrl) {
-      // 주문 ID를 sessionStorage에 저장
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('paypal_order_id', orderId);
-        sessionStorage.setItem('paypal_paypal_order_id', paypalIntent.paypalOrderId);
+      if (result.success) {
+        // 결제 성공 - 포트원 콜백에서 이미 처리됨
+        // 리다이렉트는 포트원이 자동으로 처리
+        return {
+          orderId,
+          orderNumber,
+          amount,
+          paymentMethod,
+        };
+      } else {
+        // 결제 실패
+        throw new Error(result.error_msg || 'PayPal 결제가 실패했습니다.');
       }
-      
-      window.location.href = paypalIntent.approvalUrl;
+    } catch (error) {
+      console.error('[productPurchase] PayPal 결제 오류', error);
+      throw error;
     }
-
-    return {
-      orderId,
-      orderNumber,
-      amount,
-      paymentMethod,
-    };
   }
 
-  // returnUrl이 지정되지 않으면 클라이언트 페이지 URL 사용 (GET 파라미터 방식)
-  // KG이니시스 관리자 콘솔에서 GET 전달 방식 활성화 필요
-  const finalReturnUrl = returnUrl || getInicisReturnUrl();
+  // 카드 결제는 현재 비활성화 (포트원으로 전환 예정)
+  // TODO: 포트원을 통한 카드 결제 연동 필요
+  throw new Error('카드 결제는 현재 사용할 수 없습니다. PayPal을 사용해주세요.');
 
-  const intent = await createInicisPaymentIntent({
-    userId,
-    amount,
-    description,
-    method: 'card',
-    orderId,
-    bonusAmount: 0,
-    returnUrl: finalReturnUrl,
-    buyerName: buyerName ?? undefined,
-    buyerEmail: buyerEmail ?? undefined,
-    buyerTel: buyerTel ?? undefined,
-  });
-
-  if (intent.requestForm) {
-    // 주문 ID를 sessionStorage에 저장 (결제 반환 페이지에서 사용)
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('inicis_order_id', orderId);
-    }
-    
-    await ensureInicisSdkLoaded();
-    submitInicisPaymentForm(intent.requestForm);
-  }
-
-  return {
-    orderId,
-    orderNumber,
-    amount,
-    paymentMethod,
-    paymentIntent: intent,
-  };
+  // 기존 KG이니시스 코드 (주석 처리)
+  // const finalReturnUrl = returnUrl || getInicisReturnUrl();
+  // const intent = await createInicisPaymentIntent({
+  //   userId,
+  //   amount,
+  //   description,
+  //   method: 'card',
+  //   orderId,
+  //   bonusAmount: 0,
+  //   returnUrl: finalReturnUrl,
+  //   buyerName: buyerName ?? undefined,
+  //   buyerEmail: buyerEmail ?? undefined,
+  //   buyerTel: buyerTel ?? undefined,
+  // });
+  // if (intent.requestForm) {
+  //   if (typeof window !== 'undefined') {
+  //     sessionStorage.setItem('inicis_order_id', orderId);
+  //   }
+  //   await ensureInicisSdkLoaded();
+  //   submitInicisPaymentForm(intent.requestForm);
+  // }
+  // return {
+  //   orderId,
+  //   orderNumber,
+  //   amount,
+  //   paymentMethod,
+  //   paymentIntent: intent,
+  // };
 };
 
 

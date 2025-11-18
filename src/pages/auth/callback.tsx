@@ -1,18 +1,16 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import MainHeader from '../../components/common/MainHeader';
 
 export default function AuthCallback() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        // 현재 호스트 확인 (로그인 후 올바른 호스트로 리다이렉트하기 위해)
-        const currentHost = typeof window !== 'undefined' ? window.location.host : '';
-        const isEnglishSite = currentHost.includes('en.copydrum.com');
-        
         // URL에서 hash fragment 추출
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const accessToken = hashParams.get('access_token');
@@ -21,8 +19,8 @@ export default function AuthCallback() {
         const errorDescription = hashParams.get('error_description');
 
         if (error) {
-          console.error('OAuth 오류:', error, errorDescription);
-          alert(`로그인에 실패했습니다: ${errorDescription || error}`);
+          console.error(t('authCallback.console.oauthError'), error, errorDescription);
+          alert(`${t('authCallback.errors.oauthError')}: ${errorDescription || error}`);
           navigate('/login');
           return;
         }
@@ -55,7 +53,7 @@ export default function AuthCallback() {
               const userName = userMetadata.name || 
                                userMetadata.full_name || 
                                userMetadata.nickname || 
-                               (data.user.email ? data.user.email.split('@')[0] : '사용자');
+                               (data.user.email ? data.user.email.split('@')[0] : t('authCallback.defaultUserName'));
               
               const { error: insertError } = await supabase
                 .from('profiles')
@@ -70,7 +68,7 @@ export default function AuthCallback() {
                 });
 
               if (insertError) {
-                console.error('프로필 생성 오류:', insertError);
+                console.error(t('authCallback.console.profileCreationError'), insertError);
               }
             } else if (profile) {
               // 기존 프로필 업데이트 (소셜 ID가 없으면 추가)
@@ -122,8 +120,8 @@ export default function AuthCallback() {
           navigate('/login');
         }
       } catch (err: any) {
-        console.error('인증 콜백 처리 오류:', err);
-        alert('로그인 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
+        console.error(t('authCallback.console.callbackError'), err);
+        alert(t('authCallback.errors.callbackError'));
         navigate('/login');
       }
     };
@@ -137,7 +135,7 @@ export default function AuthCallback() {
       <main className="flex-1 flex items-center justify-center">
         <div className="text-center">
           <i className="ri-loader-4-line animate-spin text-4xl text-blue-600 mb-4"></i>
-          <p className="text-gray-600">로그인 처리 중...</p>
+          <p className="text-gray-600">{t('authCallback.loading')}</p>
         </div>
       </main>
     </div>

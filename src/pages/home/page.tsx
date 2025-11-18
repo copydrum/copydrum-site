@@ -19,7 +19,6 @@ import MainHeader from '../../components/common/MainHeader';
 import Footer from '../../components/common/Footer';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
-import { isEnglishHost } from '../../i18n/languages';
 
 interface DrumSheet {
   id: string;
@@ -68,23 +67,24 @@ export default function Home() {
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoriteLoadingIds, setFavoriteLoadingIds] = useState<Set<string>>(new Set());
   const { i18n, t } = useTranslation();
-  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
 
   const loadLatestSheets = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      const query = supabase
         .from('drum_sheets')
-        .select('id, title, artist, price, thumbnail_url, youtube_url')
+        .select('id, title, artist, price, thumbnail_url, youtube_url, category_id')
         .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(12);
 
+      const { data, error } = await query;
+
       if (error) throw error;
       setLatestSheets(data || []);
     } catch (error) {
-      console.error('최신 악보 로드 오류:', error);
+      console.error(t('home.console.latestSheetsLoadError'), error);
     }
-  }, []);
+  }, [t]);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -94,24 +94,18 @@ export default function Home() {
 
       if (error) throw error;
       
-      // 카테고리 페이지와 동일한 장르 순서
-      // 한글 사이트용 순서
-      const genreOrderKo = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
-      // 영문 사이트용 순서
-      const genreOrderEn = ['팝', '락', '가요', '재즈', 'J-POP', 'OST', 'CCM', '트로트/성인가요', '드럼솔로', '드럼커버'];
+      // Genre order matching category page
+      const genreOrder = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
       
-      // 현재 사이트에 맞는 장르 순서 선택
-      const genreOrder = isEnglishSite ? genreOrderEn : genreOrderKo;
-      
-      // 드럼레슨 제외하고 필터링
+      // Filter out drum lesson category
       const filteredCategories = (data || []).filter(cat => cat.name !== '드럼레슨');
       
-      // 순서에 맞게 정렬
+      // Sort by genre order
       const sortedCategories = filteredCategories.sort((a, b) => {
         const indexA = genreOrder.indexOf(a.name);
         const indexB = genreOrder.indexOf(b.name);
         
-        // 순서에 없는 경우 맨 뒤로
+        // Move items not in order to the end
         if (indexA === -1 && indexB === -1) return 0;
         if (indexA === -1) return 1;
         if (indexB === -1) return -1;
@@ -121,18 +115,18 @@ export default function Home() {
       
       setCategories(sortedCategories);
     } catch (error) {
-      console.error('카테고리 로드 오류:', error);
+      console.error(t('home.console.categoryLoadError'), error);
     }
-  }, [isEnglishSite]);
+  }, [t]);
 
   const loadEventDiscounts = useCallback(async () => {
     try {
       const data = await fetchEventDiscountList();
       setEventDiscounts(buildEventDiscountMap(data));
     } catch (error) {
-      console.error('이벤트 할인 악보 로드 오류:', error);
+      console.error(t('home.console.eventDiscountLoadError'), error);
     }
-  }, []);
+  }, [t]);
 
   const loadCollections = useCallback(async () => {
     try {
@@ -157,7 +151,7 @@ export default function Home() {
             .eq('collection_id', collection.id);
 
           if (countError) {
-            console.error('모음집 악보 수 조회 오류:', countError);
+            console.error(t('home.console.collectionSheetCountError'), countError);
           }
 
           const { is_active: _isActive, ...rest } = collection;
@@ -171,12 +165,12 @@ export default function Home() {
 
       setCollections(collectionsWithCount);
     } catch (error) {
-      console.error('모음집 로드 오류:', error);
+      console.error(t('home.console.collectionLoadError'), error);
       setCollections([]);
     } finally {
       setCollectionsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadActiveEvents = useCallback(async () => {
     try {
@@ -191,12 +185,12 @@ export default function Home() {
       setActiveEvents(sortedActiveEvents);
       setEventCarouselIndex(0);
     } catch (error) {
-      console.error('100원 특가 이벤트 로드 오류:', error);
+      console.error(t('home.console.activeEventLoadError'), error);
       setActiveEvents([]);
     } finally {
       setEventsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadPopularSheets = useCallback(async () => {
     try {
@@ -218,9 +212,9 @@ export default function Home() {
       if (error) throw error;
       setPopularSheets(data || []);
     } catch (error) {
-      console.error('인기 악보 로드 오류:', error);
+      console.error(t('home.console.popularSheetsLoadError'), error);
     }
-  }, [selectedGenre]);
+  }, [selectedGenre, t]);
 
   const loadFavorites = useCallback(async () => {
     if (!user) {
@@ -234,9 +228,9 @@ export default function Home() {
       setFavoriteIds(new Set(favorites.map((favorite) => favorite.sheet_id)));
       setFavoriteLoadingIds(new Set());
     } catch (error) {
-      console.error('찜 목록 로드 오류:', error);
+      console.error(t('home.console.favoritesLoadError'), error);
     }
-  }, [user]);
+  }, [user, t]);
 
   useEffect(() => {
     let isMounted = true;
@@ -252,7 +246,7 @@ export default function Home() {
         setUser(currentUser ?? null);
         setLoading(false);
       } catch (error) {
-        console.error('사용자 정보 로드 오류:', error);
+        console.error(t('home.console.userInfoLoadError'), error);
         if (isMounted) {
           setUser(null);
           setLoading(false);
@@ -274,7 +268,7 @@ export default function Home() {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadLatestSheets();
@@ -297,7 +291,7 @@ export default function Home() {
   }, [loadActiveEvents]);
 
   useEffect(() => {
-    // 선택된 장르가 변경되면 인기악보 다시 로드
+    // Reload popular sheets when selected genre changes
     loadPopularSheets();
   }, [loadPopularSheets]);
 
@@ -446,7 +440,7 @@ export default function Home() {
         return next;
       });
     } catch (error) {
-      console.error('찜하기 처리 오류:', error);
+      console.error(t('home.console.favoriteToggleError'), error);
       alert(t('home.favoriteError'));
       setFavoriteIds((prev) => {
         const next = new Set(prev);
@@ -895,7 +889,8 @@ export default function Home() {
                                     >
                                       {remaining.totalMilliseconds > 0
                                         ? t('home.remainingTime', { 
-                                            time: `${remaining.days > 0 ? `${remaining.days}일 ` : ''}${formatRemainingTime(remaining)}`
+                                            days: remaining.days > 0 ? t('home.remainingDays', { count: remaining.days }) : '',
+                                            time: formatRemainingTime(remaining)
                                           })
                                         : t('home.saleEnded')}
                                     </p>
@@ -977,7 +972,7 @@ export default function Home() {
                 </button>
               </div>
             <div className="flex gap-4 overflow-x-auto pb-2">
-                {popularSheets.slice(0, 10).map((sheet, index) => {
+                {popularSheets.slice(0, 10).map((sheet) => {
                   const eventInfo = getEventForSheet(sheet.id);
                   const isFavorite = favoriteIds.has(sheet.id);
                   const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
@@ -1038,7 +1033,7 @@ export default function Home() {
                 </a>
               </div>
 
-              {/* 장르 필터 */}
+              {/* Genre filter */}
               <div className="mb-6 flex flex-wrap gap-2">
                 <button
                   onClick={() => setSelectedGenre('')}
@@ -1051,10 +1046,8 @@ export default function Home() {
                   {t('home.all')}
                 </button>
                 {categories.map((category) => {
-                  // 장르 이름을 번역하는 함수 (영어 사이트일 때만)
+                  // Translate genre name
                   const getGenreName = (genreKo: string): string => {
-                    if (!isEnglishSite) return genreKo;
-                    
                     const genreMap: Record<string, string> = {
                       '가요': t('category.kpop'),
                       '팝': t('category.pop'),
@@ -1106,7 +1099,7 @@ export default function Home() {
                           <div className="relative flex-shrink-0">
                             {isTop3 && (
                               <div className="absolute -top-2 -left-2 rounded px-2 py-0.5 text-xs font-semibold text-white bg-blue-600 z-10">
-                                BEST
+                                {t('home.best')}
                               </div>
                             )}
                             <div className="flex h-12 w-12 items-center justify-center">

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import CustomOrderDetail from '@/components/customer/CustomOrderDetail';
 import MainHeader from '@/components/common/MainHeader';
@@ -9,6 +10,7 @@ const CustomOrderDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (!id) {
@@ -29,9 +31,9 @@ const CustomOrderDetailPage = () => {
         <main className="max-w-4xl mx-auto px-4 py-12">
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">주문제작 상세</h1>
+              <h1 className="text-2xl font-bold text-gray-900">{t('customOrderDetail.title')}</h1>
               <p className="mt-1 text-sm text-gray-500">
-                진행 상황과 관리자와의 대화를 확인하고 완료된 악보를 다운로드하세요.
+                {t('customOrderDetail.description')}
               </p>
             </div>
             <button
@@ -39,7 +41,7 @@ const CustomOrderDetailPage = () => {
               className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
             >
               <i className="ri-arrow-left-line"></i>
-              목록으로
+              {t('customOrderDetail.backToList')}
             </button>
           </div>
 
@@ -49,7 +51,7 @@ const CustomOrderDetailPage = () => {
 
           {!user && (
             <div className="mt-6 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-700">
-              주문제작 상세를 확인하려면 로그인해주세요.
+              {t('customOrderDetail.loginRequired')}
             </div>
           )}
         </main>

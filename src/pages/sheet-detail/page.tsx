@@ -21,7 +21,6 @@ import type { VirtualAccountInfo } from '../../lib/payments';
 import { openCashChargeModal } from '../../lib/cashChargeModal';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
-import { isEnglishHost } from '../../i18n/languages';
 
 interface DrumSheet {
   id: string;
@@ -61,7 +60,6 @@ export default function SheetDetailPage() {
   const eventIsActive = eventDiscount ? isEventActive(eventDiscount) : false;
   const displayPrice = sheet ? (eventDiscount && eventIsActive ? eventDiscount.discount_price : sheet.price) : 0;
   const { i18n, t } = useTranslation();
-  const isEnglish = typeof window !== 'undefined' ? isEnglishHost(window.location.host) : false;
   const formatCurrency = (value: number) => formatPrice({ 
     amountKRW: value, 
     language: i18n.language,
@@ -314,7 +312,7 @@ export default function SheetDetailPage() {
       }
     } catch (error) {
       console.error('구매 오류:', error);
-      alert(error instanceof Error ? error.message : '구매 중 오류가 발생했습니다.');
+      alert(error instanceof Error ? error.message : t('sheetDetail.purchaseError'));
     } finally {
       setPurchasing(false);
       setPaymentProcessing(false);
@@ -460,7 +458,7 @@ export default function SheetDetailPage() {
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">{isEnglish ? 'Loading...' : '로딩 중...'}</p>
+          <p className="text-gray-600">{t('sheetDetail.loading')}</p>
         </div>
       </div>
     );
@@ -470,12 +468,12 @@ export default function SheetDetailPage() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">{isEnglish ? 'Sheet music not found' : '악보를 찾을 수 없습니다'}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">{t('sheetDetail.sheetNotFound')}</h1>
           <button
             onClick={() => navigate('/categories')}
             className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 whitespace-nowrap cursor-pointer"
           >
-            {isEnglish ? 'Back to Categories' : '카테고리로 돌아가기'}
+            {t('sheetDetail.backToCategories')}
           </button>
         </div>
       </div>
@@ -505,7 +503,7 @@ export default function SheetDetailPage() {
             className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>{isEnglish ? 'Back to Categories' : '카테고리로 돌아가기'}</span>
+            <span>{t('sheetDetail.backToCategories')}</span>
           </button>
         </div>
 
@@ -514,32 +512,32 @@ export default function SheetDetailPage() {
           {bankTransferInfo ? (
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-blue-900">{isEnglish ? 'Bank Transfer Information' : '무통장입금 안내'}</h3>
+                <h3 className="font-semibold text-blue-900">{t('sheetDetail.bankTransferInfo')}</h3>
                 <button
                   type="button"
                   onClick={() => setBankTransferInfo(null)}
                   className="text-blue-600 hover:text-blue-800 text-xs"
                 >
-                  {isEnglish ? 'Close' : '닫기'}
+                  {t('sheetDetail.close')}
                 </button>
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <div>
-                  <span className="font-medium text-gray-900">{isEnglish ? 'Bank' : '은행'}</span> {bankTransferInfo.bankName}
+                  <span className="font-medium text-gray-900">{t('sheetDetail.bank')}</span> {bankTransferInfo.bankName}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-900">{isEnglish ? 'Account Number' : '계좌번호'}</span> {bankTransferInfo.accountNumber}
+                  <span className="font-medium text-gray-900">{t('sheetDetail.accountNumber')}</span> {bankTransferInfo.accountNumber}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-900">{isEnglish ? 'Account Holder' : '예금주'}</span> {bankTransferInfo.depositor}
+                  <span className="font-medium text-gray-900">{t('sheetDetail.accountHolder')}</span> {bankTransferInfo.depositor}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-900">{isEnglish ? 'Amount' : '입금금액'}</span>{' '}
+                  <span className="font-medium text-gray-900">{t('sheetDetail.amount')}</span>{' '}
                   {formatCurrency(bankTransferInfo.amount ?? getSheetPrice())}
                 </div>
                 {bankTransferInfo.expectedDepositor ? (
                   <div className="sm:col-span-2">
-                    <span className="font-medium text-gray-900">{isEnglish ? 'Depositor Name' : '입금자명'}</span>{' '}
+                    <span className="font-medium text-gray-900">{t('sheetDetail.depositorName')}</span>{' '}
                     <span className="text-blue-600 font-semibold">{bankTransferInfo.expectedDepositor}</span>
                   </div>
                 ) : null}
@@ -556,7 +554,7 @@ export default function SheetDetailPage() {
               <div className="bg-gray-50 rounded-lg overflow-hidden">
                 <img
                   src={getThumbnailUrl()}
-                  alt={`${sheet.title} ${sheet.youtube_url ? (isEnglish ? 'YouTube Thumbnail' : '유튜브 썸네일') : (isEnglish ? 'Album Cover' : '앨범 커버')}`}
+                  alt={`${sheet.title} ${sheet.youtube_url ? t('sheetDetail.youtubeThumbnail') : t('sheetDetail.albumCover')}`}
                   className="w-full h-auto object-cover object-top"
                   onError={(e) => {
                     const img = e.target as HTMLImageElement;
@@ -573,17 +571,17 @@ export default function SheetDetailPage() {
                   </div>
                   <div>
                     <h4 className="text-sm font-medium text-blue-800 mb-1">
-                      {sheet.youtube_url ? (isEnglish ? 'YouTube Thumbnail' : '유튜브 썸네일') : (isEnglish ? 'Album Cover' : '앨범 커버')}
+                      {sheet.youtube_url ? t('sheetDetail.youtubeThumbnail') : t('sheetDetail.albumCover')}
                     </h4>
                     <p className="text-sm text-blue-700">
                       {getThumbnailUrl() ? 
                         (sheet.youtube_url ? 
-                          (isEnglish ? 'The image above is the YouTube thumbnail for this song.' : '위 이미지는 해당 곡의 유튜브 썸네일입니다.') :
-                          (isEnglish ? 'The image above is the album cover for this song.' : '위 이미지는 해당 곡의 앨범 커버입니다.')
+                          t('sheetDetail.youtubeThumbnailDescription') :
+                          t('sheetDetail.albumCoverDescription')
                         ) :
-                        (isEnglish ? 'Thumbnail information not available.' : '썸네일 정보가 없습니다.')
+                        t('sheetDetail.thumbnailNotAvailable')
                       } 
-                      {isEnglish ? ' You can preview the actual sheet music below.' : ' 실제 악보 미리보기는 아래에서 확인하실 수 있습니다.'}
+                      {' '}{t('sheetDetail.previewBelow')}
                     </p>
                   </div>
                 </div>
@@ -600,7 +598,7 @@ export default function SheetDetailPage() {
                       </svg>
                     </div>
                     <div>
-                      <h4 className="text-sm font-medium text-red-800">{isEnglish ? 'Watch on YouTube' : '유튜브에서 보기'}</h4>
+                      <h4 className="text-sm font-medium text-red-800">{t('sheetDetail.watchOnYouTube')}</h4>
                       <p className="text-sm text-red-700">{t('sheetDetail.checkPerformanceVideo')}</p>
                     </div>
                   </div>
@@ -613,7 +611,7 @@ export default function SheetDetailPage() {
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                     </svg>
-                    <span>{isEnglish ? 'Watch on YouTube' : '유튜브 보기'}</span>
+                    <span>{t('sheetDetail.watchOnYouTubeShort')}</span>
                   </a>
                 </div>
               </div>
@@ -631,7 +629,7 @@ export default function SheetDetailPage() {
               </div>
               <p className="text-xl text-gray-600 mb-2">{sheet.artist}</p>
               {sheet.album_name && (
-                <p className="text-lg text-gray-500 mb-2">{isEnglish ? 'Album' : '앨범'}: {sheet.album_name}</p>
+                <p className="text-lg text-gray-500 mb-2">{t('sheetDetail.album')}: {sheet.album_name}</p>
               )}
               <div className="flex items-center space-x-4 text-sm text-gray-500">
                 <span className="flex items-center space-x-1">
@@ -652,7 +650,7 @@ export default function SheetDetailPage() {
               {sheet.page_count && (
                 <span className="text-sm text-gray-600">
                   <i className="ri-file-line mr-1"></i>
-                  {sheet.page_count}{isEnglish ? ' pages' : '페이지'}
+                  {sheet.page_count}{t('sheetDetail.pages')}
                 </span>
               )}
               {sheet.tempo && (
@@ -667,17 +665,17 @@ export default function SheetDetailPage() {
               <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
                 {eventIsActive ? (
                   <p>
-                    {isEnglish ? '100 KRW Special Event in Progress!' : '100원 특가 이벤트 진행 중!'}{' '}
+                    {t('sheetDetail.eventInProgress')}{' '}
                     <span className="font-semibold">
-                      {new Date(eventDiscount.event_start).toLocaleString(isEnglish ? 'en-US' : 'ko-KR')} ~ {new Date(eventDiscount.event_end).toLocaleString(isEnglish ? 'en-US' : 'ko-KR')}
+                      {new Date(eventDiscount.event_start).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')} ~ {new Date(eventDiscount.event_end).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')}
                     </span>
                   </p>
                 ) : eventDiscount.status === 'scheduled' ? (
                   <p>
-                    {isEnglish ? `100 KRW special event starts from ${new Date(eventDiscount.event_start).toLocaleString('en-US')}.` : `${new Date(eventDiscount.event_start).toLocaleString('ko-KR')}부터 100원 특가 이벤트가 시작됩니다.`}
+                    {t('sheetDetail.eventStartsFrom', { date: new Date(eventDiscount.event_start).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US') })}
                   </p>
                 ) : (
-                  <p>{isEnglish ? 'The event has ended. You can purchase at the regular price.' : '이벤트가 종료되었습니다. 정상가로 구매하실 수 있습니다.'}</p>
+                  <p>{t('sheetDetail.eventEnded')}</p>
                 )}
               </div>
             )}
@@ -689,7 +687,7 @@ export default function SheetDetailPage() {
                   {eventDiscount && (
                     <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600">
                       <span>🔥</span>
-                      {eventIsActive ? (isEnglish ? 'Event Discount Sheet' : '이벤트 할인악보') : eventDiscount.status === 'scheduled' ? (isEnglish ? 'Event Scheduled' : '이벤트 예정') : (isEnglish ? 'Event Ended' : '이벤트 종료')}
+                      {eventIsActive ? t('sheetDetail.eventDiscountSheet') : eventDiscount.status === 'scheduled' ? t('sheetDetail.eventScheduled') : t('sheetDetail.eventEndedBadge')}
                     </span>
                   )}
                   <div className="flex flex-col">
@@ -704,15 +702,15 @@ export default function SheetDetailPage() {
                     {eventDiscount && !eventIsActive && (
                       <span className="text-xs text-gray-500 mt-1">
                         {eventDiscount.status === 'scheduled'
-                          ? (isEnglish ? `100 KRW special event starts from ${new Date(eventDiscount.event_start).toLocaleString('en-US')}.` : `${new Date(eventDiscount.event_start).toLocaleString('ko-KR')}부터 100원으로 이벤트가 시작됩니다.`)
-                          : (isEnglish ? 'The event has ended and is being sold at the regular price.' : '이벤트가 종료되어 정상가로 판매됩니다.')}
+                          ? t('sheetDetail.eventStartsFromPrice', { date: new Date(eventDiscount.event_start).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US') })
+                          : t('sheetDetail.eventEndedPrice')}
                       </span>
                     )}
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-gray-500 mb-2">{isEnglish ? 'Instant Download' : '즉시 다운로드'}</p>
-                  <p className="text-sm text-gray-500">{isEnglish ? 'PDF Format' : 'PDF 형식'}</p>
+                  <p className="text-sm text-gray-500 mb-2">{t('sheetDetail.instantDownload')}</p>
+                  <p className="text-sm text-gray-500">{t('sheetDetail.pdfFormat')}</p>
                 </div>
               </div>
             </div>
@@ -729,7 +727,7 @@ export default function SheetDetailPage() {
                       ? 'border-red-200 bg-red-50 text-red-500'
                       : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
                   } ${favoriteProcessing ? 'opacity-60 cursor-not-allowed' : ''}`}
-                  aria-label={isFavoriteSheet ? (isEnglish ? 'Remove from favorites' : '찜 해제') : (isEnglish ? 'Add to favorites' : '찜하기')}
+                  aria-label={isFavoriteSheet ? t('sheetDetail.removeFromFavorites') : t('sheetDetail.addToFavorites')}
                 >
                   <i className={`ri-heart-${isFavoriteSheet ? 'fill' : 'line'} text-xl`} />
                 </button>
@@ -776,19 +774,19 @@ export default function SheetDetailPage() {
               <ul className="space-y-2 text-sm text-gray-600">
                 <li className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                  <span>{isEnglish ? 'High-quality PDF sheet music' : '고품질 PDF 악보'}</span>
+                  <span>{t('sheetDetail.highQualityPdf')}</span>
                 </li>
                 <li className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                  <span>{isEnglish ? 'Printable format' : '인쇄 가능한 형식'}</span>
+                  <span>{t('sheetDetail.printableFormat')}</span>
                 </li>
                 <li className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                  <span>{isEnglish ? 'Instant download' : '즉시 다운로드'}</span>
+                  <span>{t('sheetDetail.instantDownloadFeature')}</span>
                 </li>
                 <li className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                  <span>{isEnglish ? 'Lifetime access' : '평생 이용 가능'}</span>
+                  <span>{t('sheetDetail.lifetimeAccess')}</span>
                 </li>
                 <li className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
@@ -830,7 +828,7 @@ export default function SheetDetailPage() {
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                   </svg>
-                  <span>{isEnglish ? 'Watch on YouTube' : '유튜브에서 보기'}</span>
+                  <span>{t('sheetDetail.watchOnYouTube')}</span>
                 </a>
               </div>
             </div>
@@ -838,12 +836,12 @@ export default function SheetDetailPage() {
 
           {/* 악보 미리보기 섹션 */}
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">{isEnglish ? 'Sheet Music Preview' : '악보 미리보기'}</h3>
+            <h3 className="text-xl font-bold text-gray-900 mb-4">{t('sheetDetail.sheetMusicPreview')}</h3>
             <div className="relative">
               <div className="aspect-[3/4] bg-gray-50 rounded-lg overflow-hidden relative">
                 <img
                   src={getPreviewImageUrl(sheet)}
-                  alt={`${sheet.title} ${isEnglish ? 'Sheet Music Preview' : '악보 미리보기'}`}
+                  alt={`${sheet.title} ${t('sheetDetail.sheetMusicPreview')}`}
                   className="w-full h-full object-cover cursor-pointer"
                   onClick={() => setShowPreviewModal(true)}
                   onError={handlePreviewImageError}
@@ -876,7 +874,7 @@ export default function SheetDetailPage() {
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden">
             <div className="p-4 border-b flex justify-between items-center">
-              <h3 className="text-lg font-semibold">{isEnglish ? 'Sheet Music Preview' : '악보 미리보기'}</h3>
+              <h3 className="text-lg font-semibold">{t('sheetDetail.sheetMusicPreview')}</h3>
               <button
                 onClick={() => setShowPreviewModal(false)}
                 className="text-gray-400 hover:text-gray-600 cursor-pointer"
@@ -888,7 +886,7 @@ export default function SheetDetailPage() {
               <div className="relative">
                 <img
                   src={getPreviewImageUrl(sheet)}
-                  alt={`${sheet.title} ${isEnglish ? 'Sheet Music Preview' : '악보 미리보기'}`}
+                  alt={`${sheet.title} ${t('sheetDetail.sheetMusicPreview')}`}
                   className="w-full h-auto rounded"
                   onError={handlePreviewImageError}
                 />

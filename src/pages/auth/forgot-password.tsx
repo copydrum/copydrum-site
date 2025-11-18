@@ -1,12 +1,14 @@
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import { getSiteUrl } from '../../lib/siteUrl';
 import MainHeader from '../../components/common/MainHeader';
 import Footer from '../../components/common/Footer';
 
 export default function ForgotPassword() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -21,7 +23,7 @@ export default function ForgotPassword() {
     // 이메일 검증
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setError('이메일 주소를 입력해주세요.');
+      setError(t('authForgotPassword.errors.emailRequired'));
       setLoading(false);
       return;
     }
@@ -29,24 +31,24 @@ export default function ForgotPassword() {
     try {
       // 로컬 개발 환경에서는 localhost를 사용
       const redirectBase = window.location.origin || getSiteUrl();
-      console.log('비밀번호 재설정 요청:', { email: trimmedEmail, redirectBase });
+      console.log(t('authForgotPassword.console.resetRequest'), { email: trimmedEmail, redirectBase });
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
         redirectTo: `${redirectBase}/auth/reset-password`,
       });
-      console.log('비밀번호 재설정 응답:', { error: resetError });
+      console.log(t('authForgotPassword.console.resetResponse'), { error: resetError });
 
       if (resetError) {
         throw resetError;
       }
 
-      setMessage('비밀번호 재설정 링크가 이메일로 전송되었습니다. 이메일을 확인해주세요.');
+      setMessage(t('authForgotPassword.messages.resetLinkSent'));
       setEmail(''); // 성공 시 이메일 필드 비우기
     } catch (err: any) {
-      console.error('비밀번호 재설정 오류:', err);
+      console.error(t('authForgotPassword.console.resetError'), err);
       if (err.message.includes('Invalid email')) {
-        setError('올바른 이메일 형식을 입력해주세요.');
+        setError(t('authForgotPassword.errors.invalidEmail'));
       } else {
-        setError('비밀번호 재설정 요청에 실패했습니다. 다시 시도해주세요.');
+        setError(t('authForgotPassword.errors.resetFailed'));
       }
     } finally {
       setLoading(false);
@@ -60,9 +62,9 @@ export default function ForgotPassword() {
       <main className="flex-1 flex flex-col items-center px-4 sm:px-6 lg:px-8 py-12">
         <div className="w-full max-w-md">
           <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900">비밀번호 찾기</h2>
+            <h2 className="text-3xl font-bold text-gray-900">{t('authForgotPassword.title')}</h2>
             <p className="mt-2 text-sm text-gray-600">
-              가입하신 이메일 주소를 입력하시면 비밀번호 재설정 링크를 보내드립니다.
+              {t('authForgotPassword.description')}
             </p>
           </div>
 
@@ -83,7 +85,7 @@ export default function ForgotPassword() {
 
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                    이메일 주소
+                    {t('authForgotPassword.form.email')}
                   </label>
                   <div className="mt-1">
                     <input
@@ -95,7 +97,7 @@ export default function ForgotPassword() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      placeholder="가입하신 이메일을 입력하세요"
+                      placeholder={t('authForgotPassword.form.emailPlaceholder')}
                     />
                   </div>
                 </div>
@@ -109,10 +111,10 @@ export default function ForgotPassword() {
                     {loading ? (
                       <div className="flex items-center">
                         <i className="ri-loader-4-line animate-spin mr-2"></i>
-                        전송 중...
+                        {t('authForgotPassword.form.submitting')}
                       </div>
                     ) : (
-                      '비밀번호 재설정 링크 전송'
+                      t('authForgotPassword.form.submit')
                     )}
                   </button>
                 </div>
@@ -121,11 +123,11 @@ export default function ForgotPassword() {
               <div className="mt-6 text-center">
                 <div className="text-sm space-y-2">
                   <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer">
-                    로그인으로 돌아가기
+                    {t('authForgotPassword.links.backToLogin')}
                   </Link>
-                  <div className="text-gray-500">또는</div>
+                  <div className="text-gray-500">{t('authForgotPassword.links.or')}</div>
                   <Link to="/register" className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer">
-                    새 계정 만들기
+                    {t('authForgotPassword.links.createAccount')}
                   </Link>
                 </div>
               </div>

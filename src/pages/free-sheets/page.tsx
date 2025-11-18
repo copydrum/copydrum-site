@@ -8,7 +8,6 @@ import { supabase } from '../../lib/supabase';
 import { fetchUserFavorites, toggleFavorite } from '../../lib/favorites';
 import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
 import { useTranslation } from 'react-i18next';
-import { isEnglishHost } from '../../i18n/languages';
 
 interface SupabaseDrumSheetRow {
   id: string;
@@ -49,14 +48,14 @@ interface FreeSheet {
   categories: string[];
 }
 
-const getSubCategoryOptions = (isEnglishSite: boolean) => [
-  { key: 'all', label: isEnglishSite ? 'All' : '전체' },
-  { key: '드럼테크닉', label: isEnglishSite ? 'Drum Technique' : '드럼테크닉' },
-  { key: '루디먼트', label: isEnglishSite ? 'Rudiment' : '루디먼트' },
-  { key: '드럼솔로', label: isEnglishSite ? 'Drum Solo' : '드럼솔로' },
-  { key: '기초/입문', label: isEnglishSite ? 'Beginner/Basics' : '기초/입문' },
-  { key: '리듬패턴', label: isEnglishSite ? 'Rhythm Pattern' : '리듬패턴' },
-  { key: '필인', label: isEnglishSite ? 'Fill-in' : '필인' },
+const getSubCategoryOptions = (t: (key: string) => string) => [
+  { key: 'all', label: t('freeSheets.categories.all') },
+  { key: '드럼테크닉', label: t('freeSheets.categories.drumTechnique') },
+  { key: '루디먼트', label: t('freeSheets.categories.rudiment') },
+  { key: '드럼솔로', label: t('freeSheets.categories.drumSolo') },
+  { key: '기초/입문', label: t('freeSheets.categories.beginnerBasics') },
+  { key: '리듬패턴', label: t('freeSheets.categories.rhythmPattern') },
+  { key: '필인', label: t('freeSheets.categories.fillIn') },
 ] as const;
 
 const SHEET_SELECT_FIELDS = `
@@ -104,9 +103,9 @@ const normalizeDifficultyKey = (value: string | null | undefined): string => {
   return value;
 };
 
-const getDifficultyLabel = (value: string | null | undefined, isEnglishSite: boolean = false): string => {
+const getDifficultyLabel = (value: string | null | undefined, t: (key: string) => string): string => {
   if (!value) {
-    return isEnglishSite ? 'Difficulty not available' : '난이도 정보 없음';
+    return t('freeSheets.difficulty.notAvailable');
   }
 
   const key = normalizeDifficultyKey(value);
@@ -114,19 +113,19 @@ const getDifficultyLabel = (value: string | null | undefined, isEnglishSite: boo
   switch (key) {
     case 'beginner':
     case '초급':
-      return isEnglishSite ? 'Beginner' : '초급';
+      return t('freeSheets.difficulty.beginner');
     case 'intermediate':
     case '중급':
-      return isEnglishSite ? 'Intermediate' : '중급';
+      return t('freeSheets.difficulty.intermediate');
     case 'advanced':
     case '고급':
-      return isEnglishSite ? 'Advanced' : '고급';
+      return t('freeSheets.difficulty.advanced');
     default:
       return value;
   }
 };
 
-const extractYouTubeVideoId = (url: string | null): string | null => {
+const extractYouTubeVideoId = (url: string | null, t: (key: string) => string): string | null => {
   if (!url) {
     return null;
   }
@@ -147,18 +146,18 @@ const extractYouTubeVideoId = (url: string | null): string | null => {
       return pathMatch[1];
     }
   } catch (error) {
-    console.warn('유튜브 URL 파싱 실패:', error);
+    console.warn(t('freeSheets.console.youtubeUrlParseError'), error);
   }
 
   return null;
 };
 
-const buildThumbnailUrl = (sheet: SupabaseDrumSheetRow): string => {
+const buildThumbnailUrl = (sheet: SupabaseDrumSheetRow, t: (key: string) => string): string => {
   if (sheet.thumbnail_url) {
     return sheet.thumbnail_url;
   }
 
-  const youtubeId = extractYouTubeVideoId(sheet.youtube_url);
+  const youtubeId = extractYouTubeVideoId(sheet.youtube_url, t);
   if (youtubeId) {
     return `https://i.ytimg.com/vi/${youtubeId}/hq720.jpg`;
   }
@@ -193,21 +192,18 @@ const FreeSheetsPage = () => {
   const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
 
   // 카테고리 이름을 번역하는 함수
   const getCategoryName = (categoryKo: string): string => {
-    if (!isEnglishSite) return categoryKo;
-    
     const categoryMap: Record<string, string> = {
-      '드럼테크닉': 'Drum Technique',
-      '루디먼트': 'Rudiment',
-      '드럼솔로': 'Drum Solo',
-      '기초/입문': 'Beginner/Basics',
-      '리듬패턴': 'Rhythm Pattern',
-      '필인': 'Fill-in',
-      '드럼레슨': 'Drum Lesson',
-      '카테고리 준비 중': 'Category pending',
+      '드럼테크닉': t('freeSheets.categories.drumTechnique'),
+      '루디먼트': t('freeSheets.categories.rudiment'),
+      '드럼솔로': t('freeSheets.categories.drumSolo'),
+      '기초/입문': t('freeSheets.categories.beginnerBasics'),
+      '리듬패턴': t('freeSheets.categories.rhythmPattern'),
+      '필인': t('freeSheets.categories.fillIn'),
+      '드럼레슨': t('freeSheets.categories.drumLesson'),
+      '카테고리 준비 중': t('freeSheets.categories.categoryPending'),
     };
     
     return categoryMap[categoryKo] || categoryKo;
@@ -228,14 +224,14 @@ const FreeSheetsPage = () => {
         .maybeSingle();
 
       if (lessonCategoryError) {
-        console.error('드럼레슨 카테고리 조회 오류:', lessonCategoryError);
-        setErrorMessage('드럼레슨 카테고리를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+        console.error(t('freeSheets.console.lessonCategoryError'), lessonCategoryError);
+        setErrorMessage(t('freeSheets.errors.lessonCategoryLoadError'));
         setSheets([]);
         return;
       }
 
       if (!lessonCategory) {
-        setErrorMessage('드럼레슨 카테고리가 존재하지 않습니다. 관리자에게 문의해 주세요.');
+        setErrorMessage(t('freeSheets.errors.lessonCategoryNotFound'));
         setSheets([]);
         return;
       }
@@ -253,8 +249,8 @@ const FreeSheetsPage = () => {
         .order('created_at', { ascending: false });
 
       if (primaryError) {
-        console.error('드럼레슨 기본 카테고리 악보 로드 오류:', primaryError);
-        setErrorMessage('무료 드럼레슨 악보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+        console.error(t('freeSheets.console.primarySheetsError'), primaryError);
+        setErrorMessage(t('freeSheets.errors.sheetsLoadError'));
         setSheets([]);
         return;
       }
@@ -271,7 +267,7 @@ const FreeSheetsPage = () => {
         .eq('category_id', lessonCategoryId);
 
       if (relationsError) {
-        console.error('드럼레슨 카테고리 관계 로드 오류:', relationsError);
+        console.error(t('freeSheets.console.relationsError'), relationsError);
       }
 
       const relationIdSet = new Set<string>();
@@ -297,7 +293,7 @@ const FreeSheetsPage = () => {
           .eq('is_active', true);
 
         if (additionalError) {
-          console.error('추가 드럼레슨 악보 로드 오류:', additionalError);
+          console.error(t('freeSheets.console.additionalSheetsError'), additionalError);
         } else {
           additionalList = additionalSheets ?? [];
         }
@@ -332,7 +328,7 @@ const FreeSheetsPage = () => {
           .in('sheet_id', sheetIds);
 
         if (extraError) {
-          console.error('추가 카테고리 로드 오류:', extraError);
+          console.error(t('freeSheets.console.extraCategoriesError'), extraError);
         } else {
           const typedExtraCategories = (extraCategories ?? []) as DrumSheetCategoryRow[];
           typedExtraCategories.forEach((relation) => {
@@ -375,7 +371,7 @@ const FreeSheetsPage = () => {
           artist: sheet.artist,
           difficulty: sheet.difficulty,
           createdAt: sheet.created_at,
-          thumbnailUrl: buildThumbnailUrl(sheet),
+          thumbnailUrl: buildThumbnailUrl(sheet, t),
           youtubeUrl: sheet.youtube_url,
           pdfUrl: sheet.pdf_url,
           pageCount: sheet.page_count,
@@ -385,13 +381,13 @@ const FreeSheetsPage = () => {
 
       setSheets(mappedSheets);
     } catch (error) {
-      console.error('무료 악보 페이지 처리 오류:', error);
-      setErrorMessage('무료 드럼레슨 악보를 불러오는 중 오류가 발생했습니다.');
+      console.error(t('freeSheets.console.generalError'), error);
+      setErrorMessage(t('freeSheets.errors.generalError'));
       setSheets([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadFavorites = useCallback(async () => {
     if (!user) {
@@ -403,9 +399,9 @@ const FreeSheetsPage = () => {
       const favorites = await fetchUserFavorites(user.id);
       setFavoriteIds(new Set(favorites.map((favorite) => favorite.sheet_id)));
     } catch (error) {
-      console.error('찜 목록 로드 오류:', error);
+      console.error(t('freeSheets.console.favoritesLoadError'), error);
     }
-  }, [user]);
+  }, [user, t]);
 
   useEffect(() => {
     const init = async () => {
@@ -415,7 +411,7 @@ const FreeSheetsPage = () => {
         } = await supabase.auth.getUser();
         setUser(user ?? null);
       } catch (error) {
-        console.error('사용자 정보를 불러오지 못했습니다:', error);
+        console.error(t('freeSheets.console.userLoadError'), error);
         setUser(null);
       }
     };
@@ -442,7 +438,7 @@ const FreeSheetsPage = () => {
 
   const handleToggleFavorite = async (sheetId: string) => {
     if (!user) {
-      alert('로그인이 필요합니다.');
+      alert(t('freeSheets.errors.loginRequired'));
       return;
     }
 
@@ -465,8 +461,8 @@ const FreeSheetsPage = () => {
         return next;
       });
     } catch (error) {
-      console.error('찜하기 처리 오류:', error);
-      alert('찜하기 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+      console.error(t('freeSheets.console.favoriteToggleError'), error);
+      alert(t('freeSheets.errors.favoriteError'));
     } finally {
       setFavoriteLoadingIds((prev) => {
         const next = new Set(prev);
@@ -498,19 +494,19 @@ const FreeSheetsPage = () => {
 
   const handleOpenPdf = useCallback((sheet: FreeSheet) => {
     if (!sheet.pdfUrl) {
-      alert('PDF 링크가 준비되지 않았습니다.');
+      alert(t('freeSheets.errors.pdfNotReady'));
       return;
     }
     window.open(sheet.pdfUrl, '_blank', 'noopener,noreferrer');
-  }, []);
+  }, [t]);
 
   const handleOpenYoutube = useCallback((sheet: FreeSheet) => {
     if (!sheet.youtubeUrl) {
-      alert('등록된 유튜브 영상이 없습니다.');
+      alert(t('freeSheets.errors.youtubeNotAvailable'));
       return;
     }
     window.open(sheet.youtubeUrl, '_blank', 'noopener,noreferrer');
-  }, []);
+  }, [t]);
 
   const handleNavigateToDetail = useCallback(
     (sheet: FreeSheet) => {
@@ -566,20 +562,18 @@ const FreeSheetsPage = () => {
       <section className="bg-gradient-to-tr from-blue-600 via-indigo-600 to-sky-500 text-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
           <span className="inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-1 text-sm font-semibold tracking-wide text-white">
-            FREE DRUM LESSONS
+            {t('freeSheets.badge')}
           </span>
           <h1 className="text-3xl font-bold leading-tight sm:text-4xl lg:text-5xl">
-            무료 드럼레슨 악보
+            {t('freeSheets.title')}
           </h1>
           <p className="max-w-3xl text-sm text-blue-100 sm:text-base md:text-lg">
-            드럼 레슨 카테고리의 모든 악보를 무료로 만나보세요!
-            유튜브 레슨과 함께 연습하면 더욱 빠르게 실력이 향상됩니다.
-            드럼 테크닉, 루디먼트, 드럼 솔로 등 다양한 학습 주제를 자유롭게 선택해보세요.
+            {t('freeSheets.description')}
           </p>
           <div className="flex flex-wrap items-center gap-3 text-sm text-blue-100">
-            <span className="rounded-full border border-white/40 px-3 py-1">전곡 무료 다운로드</span>
-            <span className="rounded-full border border-white/40 px-3 py-1">카테고리별 학습</span>
-            <span className="rounded-full border border-white/40 px-3 py-1">유튜브 레슨 참고 링크</span>
+            <span className="rounded-full border border-white/40 px-3 py-1">{t('freeSheets.features.freeDownload')}</span>
+            <span className="rounded-full border border-white/40 px-3 py-1">{t('freeSheets.features.categoryLearning')}</span>
+            <span className="rounded-full border border-white/40 px-3 py-1">{t('freeSheets.features.youtubeLesson')}</span>
           </div>
         </div>
       </section>
@@ -588,7 +582,7 @@ const FreeSheetsPage = () => {
         <div className="flex flex-col gap-6">
           <div className="-mx-4 overflow-x-auto px-4">
             <div className="flex w-max gap-3">
-              {getSubCategoryOptions(isEnglishSite).map((option) => {
+              {getSubCategoryOptions(t).map((option) => {
                 const isActive = selectedCategory === option.key;
                 return (
                   <button
@@ -614,14 +608,14 @@ const FreeSheetsPage = () => {
               <input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="제목, 아티스트 또는 태그 검색"
+                placeholder={t('freeSheets.search.placeholder')}
                 className="w-full rounded-full border border-gray-200 bg-white py-3 pl-11 pr-4 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
               />
             </div>
 
             <div className="flex items-center gap-3">
               <label className="text-sm font-medium text-gray-600" htmlFor="free-sheet-sort">
-                정렬
+                {t('freeSheets.sort.label')}
               </label>
               <select
                 id="free-sheet-sort"
@@ -629,9 +623,9 @@ const FreeSheetsPage = () => {
                 onChange={(event) => setSortOption(event.target.value as typeof sortOption)}
                 className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
               >
-                <option value="latest">최신순</option>
-                <option value="title">제목순</option>
-                <option value="difficulty">난이도순</option>
+                <option value="latest">{t('freeSheets.sort.latest')}</option>
+                <option value="title">{t('freeSheets.sort.title')}</option>
+                <option value="difficulty">{t('freeSheets.sort.difficulty')}</option>
               </select>
             </div>
           </div>
@@ -646,14 +640,14 @@ const FreeSheetsPage = () => {
             <div className="flex h-64 items-center justify-center">
               <div className="flex items-center gap-3 text-blue-600">
                 <Loader2 className="h-5 w-5 animate-spin" />
-                <span className="text-sm font-medium">무료 드럼레슨 악보를 불러오는 중입니다...</span>
+                <span className="text-sm font-medium">{t('freeSheets.loading')}</span>
               </div>
             </div>
           ) : filteredSheets.length === 0 ? (
             <div className="flex h-64 flex-col items-center justify-center gap-3 text-center text-gray-500">
-              <span className="text-lg font-semibold text-gray-600">조건에 맞는 무료 악보가 없습니다.</span>
+              <span className="text-lg font-semibold text-gray-600">{t('freeSheets.empty.title')}</span>
               <p className="text-sm text-gray-500">
-                다른 카테고리를 선택하거나 검색어를 변경해 보세요.
+                {t('freeSheets.empty.description')}
               </p>
             </div>
           ) : (
@@ -729,7 +723,7 @@ const FreeSheetsPage = () => {
 
                       <div className="mt-auto flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600">
-                          {getDifficultyLabel(sheet.difficulty, isEnglishSite)}
+                          {getDifficultyLabel(sheet.difficulty, t)}
                         </span>
 
                         {displayCategories.length > 0 ? (
@@ -753,7 +747,7 @@ const FreeSheetsPage = () => {
                         className="mt-4 inline-flex items-center justify-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
                         onClick={(event) => handleSheetLinkClick(event, sheet)}
                       >
-                        무료 악보 보기
+                        {t('freeSheets.actions.viewFreeSheet')}
                       </Link>
                     </div>
                   </div>
@@ -769,14 +763,14 @@ const FreeSheetsPage = () => {
           <div className="w-full max-h-[90vh] overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold text-blue-600">무료 악보</p>
+                <p className="text-xs font-semibold text-blue-600">{t('freeSheets.mobile.freeSheet')}</p>
                 <h2 className="text-lg font-bold text-gray-900">{selectedSheet.title}</h2>
                 <p className="text-sm text-gray-500">{selectedSheet.artist}</p>
               </div>
               <button
                 type="button"
                 onClick={closeMobileDetail}
-                aria-label="무료 악보 상세 닫기"
+                aria-label={t('freeSheets.actions.closeDetail')}
                 className="flex h-10 w-10 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600"
               >
                 <i className="ri-close-line text-2xl" />
@@ -799,7 +793,7 @@ const FreeSheetsPage = () => {
               <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-                    {getDifficultyLabel(selectedSheet.difficulty, isEnglishSite)}
+                    {getDifficultyLabel(selectedSheet.difficulty, t)}
                   </span>
                   {selectedSheet.categories.map((category) => (
                     <span
@@ -811,16 +805,16 @@ const FreeSheetsPage = () => {
                   ))}
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
-                  <span>업로드 {formatRelativeDate(selectedSheet.createdAt)}</span>
-                  {selectedSheet.pageCount ? <span>{selectedSheet.pageCount} 페이지</span> : null}
-                  {selectedSheet.youtubeUrl ? <span>유튜브 레슨 포함</span> : null}
+                  <span>{t('freeSheets.mobile.upload')} {formatRelativeDate(selectedSheet.createdAt)}</span>
+                  {selectedSheet.pageCount ? <span>{selectedSheet.pageCount} {t('freeSheets.mobile.pages')}</span> : null}
+                  {selectedSheet.youtubeUrl ? <span>{t('freeSheets.mobile.youtubeLessonIncluded')}</span> : null}
                 </div>
               </div>
 
               <div className="flex items-center justify-between rounded-2xl border border-gray-100 px-4 py-3">
                 <div className="text-sm text-gray-500">
-                  <p className="font-semibold text-gray-900">무료 다운로드</p>
-                  <p>PDF 악보와 함께 연습해보세요.</p>
+                  <p className="font-semibold text-gray-900">{t('freeSheets.mobile.freeDownload')}</p>
+                  <p>{t('freeSheets.mobile.practiceWithPdf')}</p>
                 </div>
                 <button
                   type="button"
@@ -831,7 +825,7 @@ const FreeSheetsPage = () => {
                       ? 'border-red-200 bg-red-50 text-red-500'
                       : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
                   } ${favoriteLoadingIds.has(selectedSheet.id) ? 'opacity-60 cursor-not-allowed' : ''}`}
-                  aria-label={favoriteIds.has(selectedSheet.id) ? '찜 해제' : '찜하기'}
+                  aria-label={favoriteIds.has(selectedSheet.id) ? t('freeSheets.mobile.unfavorite') : t('freeSheets.mobile.favorite')}
                 >
                   <i className={`ri-heart-${favoriteIds.has(selectedSheet.id) ? 'fill' : 'line'} text-xl`} />
                 </button>
@@ -843,7 +837,7 @@ const FreeSheetsPage = () => {
                   onClick={() => handleOpenPdf(selectedSheet)}
                   className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow transition hover:bg-blue-700"
                 >
-                  무료 악보 보기
+                  {t('freeSheets.actions.viewFreeSheet')}
                 </button>
                 {selectedSheet.youtubeUrl ? (
                   <button
@@ -851,7 +845,7 @@ const FreeSheetsPage = () => {
                     onClick={() => handleOpenYoutube(selectedSheet)}
                     className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-500 transition hover:bg-red-100"
                   >
-                    유튜브 레슨 보기
+                    {t('freeSheets.actions.viewYoutubeLesson')}
                   </button>
                 ) : null}
                 <button
@@ -859,7 +853,7 @@ const FreeSheetsPage = () => {
                   onClick={() => handleNavigateToDetail(selectedSheet)}
                   className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
                 >
-                  상세 페이지로 이동
+                  {t('freeSheets.actions.goToDetail')}
                 </button>
               </div>
             </div>

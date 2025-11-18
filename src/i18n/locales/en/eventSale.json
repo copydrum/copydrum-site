@@ -1,0 +1,61 @@
+{
+  "header": {
+    "badge": "Get Popular Drum Sheets for Just 100 Won!",
+    "title": "100 Won Special Sale EVENT",
+    "description": "Don't miss out on these limited-time super sale drum sheets. Get popular songs for just 100 won and start playing today!"
+  },
+  "countdownNotice": "Check the real-time countdown timer!",
+  "loading": "Loading event information...",
+  "countdown": {
+    "startingSoon": "Starting soon",
+    "startsIn": "Starts in",
+    "timeLeft": "⏰ Time left",
+    "dayUnit": "d",
+    "starts": "Starts"
+  },
+  "buttons": {
+    "only100Won": "Only 100 Won!",
+    "addToFavorites": "Add to favorites",
+    "removeFromFavorites": "Remove from favorites",
+    "viewDetails": "View Details",
+    "buyNow": "Buy Now",
+    "processing": "Processing...",
+    "saleEnded": "Sale Ended"
+  },
+  "labels": {
+    "eventSheet": "Event Sheet",
+    "saleEnded": "Sale Ended",
+    "only100WonBadge": "Only 100 Won!",
+    "100Won": "100 Won",
+    "discount": "Off",
+    "startingSoon": "Starting Soon"
+  },
+  "sections": {
+    "ongoing": {
+      "title": "Ongoing 100 Won Special Sale",
+      "description": "Event sheets available for purchase now.",
+      "activeCount": "{{count}} Active",
+      "noEvents": "There are no ongoing events. Check the scheduled events below!"
+    },
+    "scheduled": {
+      "title": "Scheduled Events",
+      "description": "Check upcoming events and prepare for notifications.",
+      "scheduledCount": "{{count}} Scheduled"
+    },
+    "ended": {
+      "title": "Ended Events"
+    }
+  },
+  "messages": {
+    "loginRequired": "Login required.",
+    "loginRequiredConfirm": "Login required. Go to login page?",
+    "checkDownloadPage": "Check your sheet in the download page.",
+    "paymentError": "An error occurred during payment.",
+    "favoriteError": "An error occurred while processing your favorite. Please try again later."
+  },
+  "console": {
+    "loadEventsError": "Event discount sheet list load error:",
+    "loadFavoritesError": "Favorites list load error:",
+    "toggleFavoriteError": "Favorite toggle processing error:"
+  }
+}

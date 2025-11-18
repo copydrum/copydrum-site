@@ -16,15 +16,16 @@ import { fetchUserFavorites, toggleFavorite } from '../../lib/favorites';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
 
-const getStartCountdownLabel = (event: EventDiscountSheet, now: Date) => {
+const getStartCountdownLabel = (event: EventDiscountSheet, now: Date, t: (key: string) => string) => {
   const start = new Date(event.event_start).getTime();
   const diff = start - now.getTime();
-  if (diff <= 0) return '곧 시작됩니다';
+  if (diff <= 0) return t('eventSale.countdown.startingSoon');
   const seconds = Math.floor(diff / 1000);
   const days = Math.floor(seconds / (24 * 3600));
   const hours = Math.floor((seconds % (24 * 3600)) / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  return `시작까지 ${days > 0 ? `${days}일 ` : ''}${hours.toString().padStart(2, '0')}:${minutes
+  const dayLabel = days > 0 ? `${days}${t('eventSale.countdown.dayUnit')} ` : '';
+  return `${t('eventSale.countdown.startsIn')} ${dayLabel}${hours.toString().padStart(2, '0')}:${minutes
     .toString()
     .padStart(2, '0')}`;
 };
@@ -38,7 +39,7 @@ const EventSalePage = () => {
   const navigate = useNavigate();
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoriteLoadingIds, setFavoriteLoadingIds] = useState<Set<string>>(new Set());
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const formatCurrency = useCallback(
     (value: number) => formatPrice({ 
       amountKRW: value, 
@@ -60,7 +61,7 @@ const EventSalePage = () => {
         const data = await fetchEventDiscountList();
         setEvents(data);
       } catch (error) {
-        console.error('이벤트 할인 악보 목록 로드 오류:', error);
+        console.error(t('eventSale.console.loadEventsError'), error);
       } finally {
         setLoading(false);
       }
@@ -81,7 +82,7 @@ const EventSalePage = () => {
       setFavoriteIds(new Set(favorites.map((favorite) => favorite.sheet_id)));
       setFavoriteLoadingIds(new Set());
     } catch (error) {
-      console.error('찜 목록 로드 오류:', error);
+      console.error(t('eventSale.console.loadFavoritesError'), error);
     }
   }, [user]);
 
@@ -115,7 +116,7 @@ const EventSalePage = () => {
 
   const handlePurchase = async (event: EventDiscountSheet) => {
     if (!user) {
-      if (window.confirm('로그인이 필요합니다. 로그인 페이지로 이동할까요?')) {
+      if (window.confirm(t('eventSale.messages.loginRequiredConfirm'))) {
         navigate('/login');
       }
       return;
@@ -124,9 +125,9 @@ const EventSalePage = () => {
     setProcessingId(event.id);
     try {
       const result = await purchaseEventDiscount(event);
-      alert(`${result.message}\n다운로드 페이지에서 악보를 확인하세요.`);
+      alert(`${result.message}\n${t('eventSale.messages.checkDownloadPage')}`);
     } catch (error: any) {
-      alert(error?.message || '결제 중 오류가 발생했습니다.');
+      alert(error?.message || t('eventSale.messages.paymentError'));
     } finally {
       setProcessingId(null);
     }
@@ -136,17 +137,19 @@ const EventSalePage = () => {
     if (isEventActive(event, now)) {
       const remaining = getRemainingTime(event, now);
       if (remaining.totalMilliseconds <= 0) {
-        return '판매 종료';
+        return t('eventSale.labels.saleEnded');
       }
-      const dayLabel = remaining.days > 0 ? `${remaining.days}일 ` : '';
-      return `⏰ 남은 시간 ${dayLabel}${formatRemainingTime(remaining)}`;
+      const dayLabel = remaining.days > 0 
+        ? `${remaining.days}${t('eventSale.countdown.dayUnit')} `
+        : '';
+      return `${t('eventSale.countdown.timeLeft')} ${dayLabel}${formatRemainingTime(remaining)}`;
     }
 
     if (event.status === 'scheduled') {
-      return getStartCountdownLabel(event, now);
+      return getStartCountdownLabel(event, now, t);
     }
 
-    return '판매 종료';
+    return t('eventSale.labels.saleEnded');
   };
 
   const handleToggleFavorite = async (sheetId?: string) => {
@@ -155,7 +158,7 @@ const EventSalePage = () => {
     }
 
     if (!user) {
-      alert('로그인이 필요합니다.');
+      alert(t('eventSale.messages.loginRequired'));
       return;
     }
 
@@ -189,8 +192,8 @@ const EventSalePage = () => {
         return next;
       });
     } catch (error) {
-      console.error('찜하기 처리 오류:', error);
-      alert('찜하기 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+      console.error(t('eventSale.console.toggleFavoriteError'), error);
+      alert(t('eventSale.messages.favoriteError'));
       setFavoriteIds((prev) => {
         const next = new Set(prev);
         if (wasFavorite) {
@@ -225,12 +228,12 @@ const EventSalePage = () => {
         <div className="relative overflow-hidden">
           <img
             src={event.thumbnail_url || generateDefaultThumbnail(480, 480)}
-            alt={event.title || '이벤트 악보'}
+            alt={event.title || t('eventSale.labels.eventSheet')}
             className="h-64 w-full object-cover transition duration-500 group-hover:scale-105"
           />
           <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-red-500 px-3 py-1 text-sm font-semibold text-white shadow-lg">
             <span>🔥</span>
-            100원 한정!
+            {t('eventSale.buttons.only100Won')}
           </div>
           <button
             type="button"
@@ -244,14 +247,14 @@ const EventSalePage = () => {
                 ? 'border-red-200 bg-red-50/90 text-red-500'
                 : 'border-white/60 bg-black/30 text-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/80'
             } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-            aria-label={isFavorite ? '찜 해제' : '찜하기'}
+            aria-label={isFavorite ? t('eventSale.buttons.removeFromFavorites') : t('eventSale.buttons.addToFavorites')}
           >
             <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-xl`} />
           </button>
           {!isActive && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/60">
               <span className="rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-gray-800">
-                판매 종료
+                {t('eventSale.labels.saleEnded')}
               </span>
             </div>
           )}
@@ -266,11 +269,11 @@ const EventSalePage = () => {
           <div className="space-y-2">
             <div className="flex items-center gap-3">
               <span className="text-sm text-gray-400 line-through">{formatCurrency(event.original_price)}</span>
-              <span className="text-3xl font-black text-red-500">100원</span>
+              <span className="text-3xl font-black text-red-500">{t('eventSale.labels.100Won')}</span>
             </div>
             {event.discount_percent !== null && (
               <span className="inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-500">
-                {event.discount_percent}% 할인
+                {event.discount_percent}% {t('eventSale.labels.discount')}
               </span>
             )}
             <p
@@ -290,7 +293,7 @@ const EventSalePage = () => {
               }}
               className="flex-1 rounded-xl border border-orange-200 px-4 py-3 text-sm font-semibold text-orange-600 transition hover:bg-orange-50"
             >
-              상세 보기
+              {t('eventSale.buttons.viewDetails')}
             </button>
             <button
               disabled={!isActive || processingId === event.id}
@@ -304,7 +307,11 @@ const EventSalePage = () => {
                   : 'bg-red-500 text-white shadow-lg hover:bg-red-600'
               }`}
             >
-              {processingId === event.id ? '결제 중...' : isActive ? '즉시 구매하기' : '판매 종료'}
+              {processingId === event.id 
+                ? t('eventSale.buttons.processing')
+                : isActive 
+                  ? t('eventSale.buttons.buyNow')
+                  : t('eventSale.buttons.saleEnded')}
             </button>
           </div>
         </div>
@@ -324,13 +331,13 @@ const EventSalePage = () => {
             <div className="relative mx-auto flex max-w-6xl flex-col items-center gap-6 px-6 text-center">
               <span className="inline-flex items-center gap-3 rounded-full bg-white/20 px-5 py-2 text-sm font-semibold backdrop-blur">
                 <span className="text-xl">🔥</span>
-                단 100원으로 인기 드럼 악보 소장!
+                {t('eventSale.header.badge')}
               </span>
               <h1 className="text-3xl font-black leading-tight sm:text-4xl md:text-5xl">
-                100원 특가 악보 EVENT
+                {t('eventSale.header.title')}
               </h1>
               <p className="max-w-3xl text-base font-medium text-white/90 sm:text-lg md:text-xl">
-                한정 기간 동안만 제공되는 초특가 드럼 악보를 놓치지 마세요. 인기 곡을 100원에 소장하고, 오늘 바로 연주에 도전해보세요.
+                {t('eventSale.header.description')}
               </p>
             </div>
           </header>
@@ -338,31 +345,31 @@ const EventSalePage = () => {
           <main className="mx-auto max-w-6xl px-6 py-12 md:py-16">
         <section className="mb-12 text-center md:mb-16">
           <div className="inline-flex items-center gap-3 rounded-full bg-white px-5 py-2.5 text-base font-semibold text-orange-600 shadow-lg sm:px-6 sm:py-3 sm:text-lg">
-            <span className="text-xl sm:text-2xl">⏰</span> 실시간으로 갱신되는 타이머를 확인하세요!
+            <span className="text-xl sm:text-2xl">⏰</span> {t('eventSale.countdownNotice')}
           </div>
         </section>
 
         {loading ? (
           <div className="py-20 text-center text-gray-500 md:py-32">
             <i className="ri-loader-4-line w-10 h-10 animate-spin text-red-500" />
-            <p className="mt-3 font-medium">이벤트 정보를 불러오는 중입니다...</p>
+            <p className="mt-3 font-medium">{t('eventSale.loading')}</p>
           </div>
         ) : (
           <>
             <section className="space-y-8">
               <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">진행 중인 100원 특가</h2>
-                  <p className="text-sm text-gray-500">현재 바로 구매 가능한 이벤트 악보입니다.</p>
+                  <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">{t('eventSale.sections.ongoing.title')}</h2>
+                  <p className="text-sm text-gray-500">{t('eventSale.sections.ongoing.description')}</p>
                 </div>
                 <span className="rounded-full bg-red-50 px-4 py-2 text-sm font-semibold text-red-500">
-                  총 {activeEvents.length}건 진행 중
+                  {t('eventSale.sections.ongoing.activeCount', { count: activeEvents.length })}
                 </span>
               </div>
 
               {activeEvents.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-orange-300 bg-white/60 px-6 py-12 text-center text-gray-500 md:px-8 md:py-16">
-                  현재 진행 중인 이벤트가 없습니다. 아래 예정된 이벤트를 확인해보세요!
+                  {t('eventSale.sections.ongoing.noEvents')}
                 </div>
               ) : (
                 <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
@@ -375,11 +382,11 @@ const EventSalePage = () => {
               <section className="mt-16 space-y-8 md:mt-20">
                 <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">예정된 이벤트</h2>
-                    <p className="text-sm text-gray-500">곧 시작될 이벤트를 미리 확인하고 알림을 준비하세요.</p>
+                    <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">{t('eventSale.sections.scheduled.title')}</h2>
+                    <p className="text-sm text-gray-500">{t('eventSale.sections.scheduled.description')}</p>
                   </div>
                   <span className="rounded-full bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-500">
-                    예정 {scheduledEvents.length}건
+                    {t('eventSale.sections.scheduled.scheduledCount', { count: scheduledEvents.length })}
                   </span>
                 </div>
 
@@ -393,12 +400,12 @@ const EventSalePage = () => {
                       <div className="relative overflow-hidden">
                         <img
                           src={event.thumbnail_url || generateDefaultThumbnail(480, 480)}
-                          alt={event.title || '이벤트 악보'}
+                          alt={event.title || t('eventSale.labels.eventSheet')}
                           className="h-56 w-full object-cover transition duration-500 group-hover:scale-105"
                         />
                         <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-orange-500 px-3 py-1 text-sm font-semibold text-white shadow-lg">
                           <span>⏳</span>
-                          곧 시작
+                          {t('eventSale.labels.startingSoon')}
                         </div>
                       </div>
                       <div className="flex flex-1 flex-col gap-4 px-6 py-6">
@@ -408,10 +415,10 @@ const EventSalePage = () => {
                         </div>
                         <div className="space-y-2">
                           <p className="inline-flex items-center rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-600">
-                            {getStartCountdownLabel(event, now)}
+                            {getStartCountdownLabel(event, now, t)}
                           </p>
                           <p className="text-xs text-gray-500">
-                            시작 {new Date(event.event_start).toLocaleString('ko-KR')}
+                            {t('eventSale.countdown.starts')} {new Date(event.event_start).toLocaleString(i18n.language === 'en' ? 'en-US' : 'ko-KR')}
                           </p>
                         </div>
                         <div className="mt-auto flex gap-3">
@@ -422,7 +429,7 @@ const EventSalePage = () => {
                             }}
                             className="flex-1 rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-orange-600"
                           >
-                            상세 보기
+                            {t('eventSale.buttons.viewDetails')}
                           </button>
                         </div>
                       </div>
@@ -434,7 +441,7 @@ const EventSalePage = () => {
 
             {endedEvents.length > 0 && (
               <section className="mt-16 space-y-6 md:mt-20">
-                <h2 className="text-lg font-semibold text-gray-800 md:text-xl">종료된 이벤트</h2>
+                <h2 className="text-lg font-semibold text-gray-800 md:text-xl">{t('eventSale.sections.ended.title')}</h2>
                 <div className="grid gap-5 md:grid-cols-2 md:gap-6">
                   {endedEvents.slice(0, 4).map((event) => (
                     <div
@@ -443,7 +450,7 @@ const EventSalePage = () => {
                     >
                       <img
                         src={event.thumbnail_url || generateDefaultThumbnail(120, 120)}
-                        alt={event.title || '이벤트 악보'}
+                        alt={event.title || t('eventSale.labels.eventSheet')}
                         className="h-16 w-16 rounded-xl object-cover"
                       />
                       <div>

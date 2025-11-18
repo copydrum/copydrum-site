@@ -44,8 +44,8 @@ export default function CartPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('cart.loginRequired')}</h2>
-          <p className="text-gray-600">{t('cart.loginRequiredDescription')}</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('cartPage.loginRequired')}</h2>
+          <p className="text-gray-600">{t('cartPage.loginRequiredDescription')}</p>
         </div>
       </div>
     );
@@ -77,11 +77,11 @@ export default function CartPage() {
 
   const handleRemoveSelected = async () => {
     if (selectedItems.length === 0) {
-      alert(t('cart.selectItemsToDelete'));
+      alert(t('cartPage.selectItemsToDelete'));
       return;
     }
 
-    if (confirm(t('cart.confirmDelete', { count: selectedItems.length }))) {
+    if (confirm(t('cartPage.confirmDelete', { count: selectedItems.length }))) {
       const success = await removeSelectedItems(selectedItems);
       if (success) {
         setSelectedItems([]);
@@ -92,7 +92,7 @@ export default function CartPage() {
   const handleClearCart = async () => {
     if (cartItems.length === 0) return;
 
-    if (confirm(t('cart.confirmClear'))) {
+    if (confirm(t('cartPage.confirmClear'))) {
       const success = await clearCart();
       if (success) {
         setSelectedItems([]);
@@ -108,14 +108,14 @@ export default function CartPage() {
     }
 
     if (itemIds.length === 0) {
-      alert(t('cart.selectItemsToPurchase'));
+      alert(t('cartPage.selectItemsToPurchase'));
       return;
     }
 
     let targetItemIds = [...itemIds];
     const itemsToPurchase = cartItems.filter(item => targetItemIds.includes(item.id));
     if (itemsToPurchase.length === 0) {
-      alert(t('cart.itemsNotFound'));
+      alert(t('cartPage.itemsNotFound'));
       return;
     }
 
@@ -134,7 +134,7 @@ export default function CartPage() {
               ? duplicateItems.map(item => `- ${item.title}`).join('\n')
               : purchasedSheetIds.map(id => `- ${id}`).join('\n');
           alert(
-            [t('cart.onlyPurchasedItems'), '', t('cart.duplicateSheets'), duplicateList].join('\n'),
+            [t('cartPage.onlyPurchasedItems'), '', t('cartPage.duplicateSheets'), duplicateList].join('\n'),
           );
           return;
         }
@@ -149,29 +149,29 @@ export default function CartPage() {
 
         alert(
           [
-            t('cart.excludePurchased'),
+            t('cartPage.excludePurchased'),
             '',
-            t('cart.excludedSheets'),
+            t('cartPage.excludedSheets'),
             duplicateList,
           ].join('\n'),
         );
       }
     } catch (error) {
-      console.error('장바구니 구매 전 구매 이력 확인 오류:', error);
-      alert(t('cart.purchaseCheckError'));
+      console.error(t('cartPage.console.purchaseCheckError'), error);
+      alert(t('cartPage.purchaseCheckError'));
       return;
     }
 
     if (filteredItems.length === 0) {
-      alert(t('cart.noNewItems'));
+      alert(t('cartPage.noNewItems'));
       return;
     }
 
     const totalPrice = filteredItems.reduce((total, item) => total + item.price, 0);
     const description =
       filteredItems.length === 1
-        ? t('cart.purchaseDescription', { title: filteredItems[0].title })
-        : t('cart.cartPurchaseDescription', { count: filteredItems.length });
+        ? t('cartPage.purchaseDescription', { title: filteredItems[0].title })
+        : t('cartPage.cartPurchaseDescription', { count: filteredItems.length });
 
     const purchaseItems = filteredItems.map(item => ({
       sheetId: item.sheet_id,
@@ -219,7 +219,7 @@ export default function CartPage() {
 
     const removed = await removeSelectedItems(pendingPurchase.targetItemIds);
     if (!removed) {
-      console.warn('결제 후 장바구니 업데이트에 실패했습니다.');
+      console.warn(t('cartPage.console.cartUpdateAfterPaymentError'));
     }
 
     setSelectedItems(prev =>
@@ -228,13 +228,13 @@ export default function CartPage() {
 
     if (method === 'bank_transfer') {
       setBankTransferInfo(purchaseResult.virtualAccountInfo ?? null);
-      alert(t('cart.bankTransferCreated'));
+      alert(t('cartPage.bankTransferCreated'));
     } else if (method === 'paypal') {
       setBankTransferInfo(null);
       // PayPal은 리다이렉트되므로 알림 불필요
     } else {
       setBankTransferInfo(null);
-      alert(t('cart.paymentWindowOpen'));
+      alert(t('cartPage.paymentWindowOpen'));
     }
   };
 
@@ -265,7 +265,7 @@ export default function CartPage() {
         if (!cashResult.success) {
           if (cashResult.reason === 'INSUFFICIENT_CREDIT') {
             alert(
-              t('cart.insufficientCash', { 
+              t('cartPage.insufficientCash', { 
                 amount: cashResult.currentCredits.toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')
               }),
             );
@@ -276,14 +276,14 @@ export default function CartPage() {
 
         const removed = await removeSelectedItems(pendingPurchase.targetItemIds);
         if (!removed) {
-          console.warn('구매 후 장바구니 업데이트에 실패했습니다.');
+          console.warn(t('cartPage.console.cartUpdateAfterPurchaseError'));
         }
 
         setSelectedItems(prev =>
           prev.filter(id => !pendingPurchase.targetItemIds.includes(id)),
         );
 
-        alert(t('cart.purchaseComplete'));
+        alert(t('cartPage.purchaseComplete'));
         navigate('/my-orders');
         return;
       }
@@ -295,8 +295,8 @@ export default function CartPage() {
 
       await completeOnlinePurchase('card');
     } catch (error) {
-      console.error('장바구니 결제 처리 오류:', error);
-      alert(error instanceof Error ? error.message : t('cart.paymentError'));
+      console.error(t('cartPage.console.paymentProcessingError'), error);
+      alert(error instanceof Error ? error.message : t('cartPage.paymentError'));
     } finally {
       setProcessing(false);
       setPaymentProcessing(false);
@@ -314,8 +314,8 @@ export default function CartPage() {
     try {
       await completeOnlinePurchase('bank_transfer', { depositorName });
     } catch (error) {
-      console.error('무통장입금 결제 처리 오류:', error);
-      alert(error instanceof Error ? error.message : t('cart.paymentError'));
+      console.error(t('cartPage.console.bankTransferProcessingError'), error);
+      alert(error instanceof Error ? error.message : t('cartPage.paymentError'));
     } finally {
       setProcessing(false);
       setPaymentProcessing(false);
@@ -329,32 +329,32 @@ export default function CartPage() {
         {bankTransferInfo ? (
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-blue-900">{t('cart.bankTransferInfo')}</h3>
+              <h3 className="font-semibold text-blue-900">{t('cartPage.bankTransferInfo')}</h3>
               <button
                 type="button"
                 onClick={() => setBankTransferInfo(null)}
                 className="text-blue-600 hover:text-blue-800 text-xs"
               >
-                {t('cart.close')}
+                {t('cartPage.close')}
               </button>
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <div>
-                <span className="font-medium text-gray-900">은행</span> {bankTransferInfo.bankName}
+                <span className="font-medium text-gray-900">{t('cartPage.bank')}</span> {bankTransferInfo.bankName}
               </div>
               <div>
-                <span className="font-medium text-gray-900">계좌번호</span> {bankTransferInfo.accountNumber}
+                <span className="font-medium text-gray-900">{t('cartPage.accountNumber')}</span> {bankTransferInfo.accountNumber}
               </div>
               <div>
-                <span className="font-medium text-gray-900">예금주</span> {bankTransferInfo.depositor}
+                <span className="font-medium text-gray-900">{t('cartPage.accountHolder')}</span> {bankTransferInfo.depositor}
               </div>
               <div>
-                <span className="font-medium text-gray-900">입금금액</span>{' '}
+                <span className="font-medium text-gray-900">{t('cartPage.depositAmount')}</span>{' '}
                 {formatPriceValue(bankTransferInfo.amount ?? 0)}
               </div>
               {bankTransferInfo.expectedDepositor ? (
                 <div className="sm:col-span-2">
-                  <span className="font-medium text-gray-900">입금자명</span>{' '}
+                  <span className="font-medium text-gray-900">{t('cartPage.depositorName')}</span>{' '}
                   <span className="text-blue-600 font-semibold">
                     {bankTransferInfo.expectedDepositor}
                   </span>
@@ -369,8 +369,8 @@ export default function CartPage() {
 
         <div className="bg-white rounded-lg shadow-sm">
           <div className="p-6 border-b border-gray-200">
-            <h1 className="text-2xl font-bold text-gray-900">장바구니</h1>
-            <p className="text-gray-600 mt-1">총 {cartItems.length}개 상품</p>
+            <h1 className="text-2xl font-bold text-gray-900">{t('cartPage.title')}</h1>
+            <p className="text-gray-600 mt-1">{t('cartPage.totalItems', { count: cartItems.length })}</p>
           </div>
 
           {cartItems.length === 0 ? (
@@ -378,13 +378,13 @@ export default function CartPage() {
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
                 <i className="ri-shopping-cart-line text-2xl text-gray-400"></i>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">장바구니가 비어있습니다</h3>
-              <p className="text-gray-600">원하는 악보를 장바구니에 담아보세요.</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">{t('cartPage.empty')}</h3>
+              <p className="text-gray-600">{t('cartPage.emptyDescription')}</p>
               <button
                 onClick={() => navigate('/categories')}
                 className="mt-6 inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
               >
-                악보 보러가기
+                {t('cartPage.browseSheets')}
               </button>
             </div>
           ) : (
@@ -400,7 +400,7 @@ export default function CartPage() {
                       className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
                     <span className="ml-2 text-sm text-gray-700">
-                      전체선택 ({selectedItems.length}/{cartItems.length})
+                      {t('cartPage.selectAll', { selected: selectedItems.length, total: cartItems.length })}
                     </span>
                   </label>
                 </div>
@@ -410,13 +410,13 @@ export default function CartPage() {
                     disabled={selectedItems.length === 0}
                     className="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    선택삭제
+                    {t('cartPage.deleteSelected')}
                   </button>
                   <button
                     onClick={handleClearCart}
                     className="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
                   >
-                    전체삭제
+                    {t('cartPage.deleteAll')}
                   </button>
                 </div>
               </div>
@@ -464,7 +464,7 @@ export default function CartPage() {
               <div className="p-6 bg-gray-50 border-t border-gray-200">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-lg font-medium text-gray-900">
-                    선택상품 ({selectedItems.length}개)
+                    {t('cartPage.selectedItems', { count: selectedItems.length })}
                   </span>
                   <span className="text-2xl font-bold text-blue-600">
                     {formatPriceValue(getTotalPrice(selectedItems))}
@@ -477,14 +477,14 @@ export default function CartPage() {
                     disabled={selectedItems.length === 0 || processing || paymentProcessing}
                     className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    {processing || paymentProcessing ? '구매 처리 중...' : '선택상품 주문하기'}
+                    {processing || paymentProcessing ? t('cartPage.processing') : t('cartPage.orderSelected')}
                   </button>
                   <button
                     onClick={handlePurchaseAll}
                     disabled={cartItems.length === 0 || processing || paymentProcessing}
                     className="flex-1 bg-gray-800 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    {processing || paymentProcessing ? '구매 처리 중...' : '전체상품 주문하기'}
+                    {processing || paymentProcessing ? t('cartPage.processing') : t('cartPage.orderAll')}
                   </button>
                 </div>
                 <div className="mt-4">
@@ -492,7 +492,7 @@ export default function CartPage() {
                     onClick={() => navigate('/categories')}
                     className="w-full py-3 px-6 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-100 transition-colors"
                   >
-                    쇼핑 계속하기
+                    {t('cartPage.continueShopping')}
                   </button>
                 </div>
               </div>

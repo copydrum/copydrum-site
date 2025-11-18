@@ -1,11 +1,13 @@
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import Footer from '../../components/common/Footer';
 import MainHeader from '../../components/common/MainHeader';
 
 export default function Register() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
@@ -33,12 +35,12 @@ export default function Register() {
       });
       
       if (error) {
-        console.error('카카오 로그인 오류:', error);
-        alert('카카오 로그인에 실패했습니다. 다시 시도해주세요.');
+        console.error(t('authRegister.console.kakaoLoginError'), error);
+        alert(t('authRegister.errors.kakaoLoginFailed'));
       }
     } catch (err) {
-      console.error('카카오 로그인 오류:', err);
-      alert('카카오 로그인에 실패했습니다. 다시 시도해주세요.');
+      console.error(t('authRegister.console.kakaoLoginError'), err);
+      alert(t('authRegister.errors.kakaoLoginFailed'));
     }
   };
 
@@ -66,12 +68,12 @@ export default function Register() {
       });
       
       if (error) {
-        console.error('구글 로그인 오류:', error);
-        alert('구글 로그인에 실패했습니다. 다시 시도해주세요.');
+        console.error(t('authRegister.console.googleLoginError'), error);
+        alert(t('authRegister.errors.googleLoginFailed'));
       }
     } catch (err) {
-      console.error('구글 로그인 오류:', err);
-      alert('구글 로그인에 실패했습니다. 다시 시도해주세요.');
+      console.error(t('authRegister.console.googleLoginError'), err);
+      alert(t('authRegister.errors.googleLoginFailed'));
     }
   };
 
@@ -92,19 +94,19 @@ export default function Register() {
 
     // 유효성 검사
     if (formData.password !== formData.confirmPassword) {
-      setError('비밀번호가 일치하지 않습니다.');
+      setError(t('authRegister.errors.passwordMismatch'));
       setLoading(false);
       return;
     }
 
     if (formData.password.length < 8) {
-      setError('비밀번호는 8자 이상이어야 합니다.');
+      setError(t('authRegister.errors.passwordTooShort'));
       setLoading(false);
       return;
     }
 
     if (!formData.agreeTerms || !formData.agreePrivacy) {
-      setError('필수 약관에 동의해주세요.');
+      setError(t('authRegister.errors.termsRequired'));
       setLoading(false);
       return;
     }
@@ -148,7 +150,7 @@ export default function Register() {
           );
 
         if (profileError) {
-          console.error('프로필 생성/업데이트 오류:', profileError);
+          console.error(t('authRegister.console.profileError'), profileError);
           // 프로필 생성 실패 시 Auth 사용자도 삭제 (롤백)
           try {
             const { error: functionError } = await supabase.functions.invoke('rollback-signup', {
@@ -156,20 +158,20 @@ export default function Register() {
             });
             
             if (functionError) {
-              console.error('롤백 함수 호출 오류:', functionError);
+              console.error(t('authRegister.console.rollbackFunctionError'), functionError);
             } else {
-              console.log('회원가입 롤백 완료');
+              console.log(t('authRegister.console.rollbackComplete'));
             }
           } catch (rollbackError) {
-            console.error('롤백 중 오류:', rollbackError);
+            console.error(t('authRegister.console.rollbackError'), rollbackError);
           }
           
-          throw new Error('프로필 생성에 실패했습니다. 다시 시도해주세요.');
+          throw new Error(t('authRegister.errors.profileCreationFailed'));
         } else {
-          console.log('프로필 생성/업데이트 성공');
+          console.log(t('authRegister.console.profileSuccess'));
         }
 
-        setSuccess('회원가입이 완료되었습니다! 이메일을 확인 후 로그인해주세요.');
+        setSuccess(t('authRegister.messages.signUpSuccess'));
         
         // 3초 후 로그인 페이지로 이동
         setTimeout(() => {
@@ -177,13 +179,13 @@ export default function Register() {
         }, 3000);
       }
     } catch (err: any) {
-      console.error('회원가입 오류:', err);
+      console.error(t('authRegister.console.signUpError'), err);
       if (err.message.includes('already registered')) {
-        setError('이미 등록된 이메일입니다.');
+        setError(t('authRegister.errors.emailAlreadyRegistered'));
       } else if (err.message.includes('Invalid email')) {
-        setError('올바른 이메일 형식을 입력해주세요.');
+        setError(t('authRegister.errors.invalidEmail'));
       } else {
-        setError('회원가입에 실패했습니다. 다시 시도해 주세요.');
+        setError(t('authRegister.errors.signUpFailed'));
       }
     } finally {
       setLoading(false);
@@ -197,11 +199,11 @@ export default function Register() {
       <main className="flex-1 py-12 sm:px-6 lg:px-8">
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
           <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900">회원가입</h2>
+            <h2 className="text-3xl font-bold text-gray-900">{t('authRegister.title')}</h2>
             <p className="mt-2 text-sm text-gray-600">
-              이미 계정이 있으신가요?{' '}
+              {t('authRegister.hasAccount')}{' '}
               <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer">
-                로그인하기
+                {t('authRegister.signIn')}
               </Link>
             </p>
           </div>
@@ -223,7 +225,7 @@ export default function Register() {
 
                 <div>
                   <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                    이름 *
+                    {t('authRegister.form.name')} *
                   </label>
                   <div className="mt-1">
                     <input
@@ -234,14 +236,14 @@ export default function Register() {
                       value={formData.name}
                       onChange={handleChange}
                       className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      placeholder="이름을 입력하세요"
+                      placeholder={t('authRegister.form.namePlaceholder')}
                     />
                   </div>
                 </div>
 
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                    이메일 주소 *
+                    {t('authRegister.form.email')} *
                   </label>
                   <div className="mt-1">
                     <input
@@ -253,14 +255,14 @@ export default function Register() {
                       value={formData.email}
                       onChange={handleChange}
                       className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      placeholder="이메일을 입력하세요"
+                      placeholder={t('authRegister.form.emailPlaceholder')}
                     />
                   </div>
                 </div>
 
                 <div>
                   <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                    비밀번호 *
+                    {t('authRegister.form.password')} *
                   </label>
                   <div className="mt-1">
                     <input
@@ -271,17 +273,17 @@ export default function Register() {
                       value={formData.password}
                       onChange={handleChange}
                       className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      placeholder="비밀번호를 입력하세요 (8자 이상)"
+                      placeholder={t('authRegister.form.passwordPlaceholder')}
                     />
                   </div>
                   <p className="mt-1 text-xs text-gray-500">
-                    8자 이상, 영문, 숫자, 특수문자 조합
+                    {t('authRegister.form.passwordHint')}
                   </p>
                 </div>
 
                 <div>
                   <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-707">
-                    비밀번호 확인 *
+                    {t('authRegister.form.confirmPassword')} *
                   </label>
                   <div className="mt-1">
                     <input
@@ -292,7 +294,7 @@ export default function Register() {
                       value={formData.confirmPassword}
                       onChange={handleChange}
                       className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      placeholder="비밀번호를 다시 입력하세요"
+                      placeholder={t('authRegister.form.confirmPasswordPlaceholder')}
                     />
                   </div>
                 </div>
@@ -308,9 +310,9 @@ export default function Register() {
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer mt-0.5"
                     />
                     <label htmlFor="agreeTerms" className="ml-2 block text-sm text-gray-900 cursor-pointer">
-                      <span className="text-red-500">*</span> 이용약관에 동의합니다{' '}
+                      <span className="text-red-500">*</span> {t('authRegister.form.agreeTerms')}{' '}
                       <a href="/guide#terms" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-500 underline">
-                        (보기)
+                        {t('authRegister.form.viewTerms')}
                       </a>
                     </label>
                   </div>
@@ -325,9 +327,9 @@ export default function Register() {
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer mt-0.5"
                     />
                     <label htmlFor="agreePrivacy" className="ml-2 block text-sm text-gray-900 cursor-pointer">
-                      <span className="text-red-500">*</span> 개인정보 수집 및 이용에 동의합니다{' '}
+                      <span className="text-red-500">*</span> {t('authRegister.form.agreePrivacy')}{' '}
                       <a href="/guide#privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-500 underline">
-                        (보기)
+                        {t('authRegister.form.viewPrivacy')}
                       </a>
                     </label>
                   </div>
@@ -342,7 +344,7 @@ export default function Register() {
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer mt-0.5"
                     />
                     <label htmlFor="agreeMarketing" className="ml-2 block text-sm text-gray-900 cursor-pointer">
-                      마케팅 정보 수신에 동의합니다 (선택)
+                      {t('authRegister.form.agreeMarketing')}
                     </label>
                   </div>
                 </div>
@@ -356,10 +358,10 @@ export default function Register() {
                     {loading ? (
                       <div className="flex items-center">
                         <i className="ri-loader-4-line animate-spin mr-2"></i>
-                        가입 중...
+                        {t('authRegister.form.submitting')}
                       </div>
                     ) : (
-                      '회원가입'
+                      t('authRegister.form.submit')
                     )}
                   </button>
                 </div>
@@ -371,7 +373,7 @@ export default function Register() {
                     <div className="w-full border-t border-gray-300" />
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-white text-gray-500">또는</span>
+                    <span className="px-2 bg-white text-gray-500">{t('authRegister.divider')}</span>
                   </div>
                 </div>
 
@@ -382,7 +384,7 @@ export default function Register() {
                     className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 cursor-pointer"
                   >
                     <i className="ri-google-fill text-red-500 text-lg"></i>
-                    <span className="ml-2">Google</span>
+                    <span className="ml-2">{t('authRegister.social.google')}</span>
                   </button>
 
                   <button 
@@ -391,7 +393,7 @@ export default function Register() {
                     className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 cursor-pointer"
                   >
                     <i className="ri-kakao-talk-fill text-yellow-500 text-lg"></i>
-                    <span className="ml-2">카카오</span>
+                    <span className="ml-2">{t('authRegister.social.kakao')}</span>
                   </button>
                 </div>
               </div>

@@ -9,20 +9,30 @@ interface FooterLink {
   external?: boolean;
 }
 
-const categoryLinks: FooterLink[] = [
-  { label: '가요', href: '/categories?search=가요' },
-  { label: '팝', href: '/categories?search=팝' },
-  { label: '락', href: '/categories?search=락' },
-  { label: '재즈', href: '/categories?search=재즈' },
-  { label: 'J-POP', href: '/categories?search=J-POP' },
-  { label: 'OST', href: '/categories?search=OST' },
-];
-
 export default function Footer() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const currentYear = new Date().getFullYear();
   const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
+
+  // 카테고리 링크 (영어 사이트일 때 영어로 표시)
+  const categoryLinks: FooterLink[] = isEnglishSite
+    ? [
+        { label: t('category.kpop'), href: '/categories?search=가요' },
+        { label: t('category.pop'), href: '/categories?search=팝' },
+        { label: t('category.rock'), href: '/categories?search=락' },
+        { label: t('category.jazz'), href: '/categories?search=재즈' },
+        { label: t('category.jpop'), href: '/categories?search=J-POP' },
+        { label: t('category.ost'), href: '/categories?search=OST' },
+      ]
+    : [
+        { label: '가요', href: '/categories?search=가요' },
+        { label: '팝', href: '/categories?search=팝' },
+        { label: '락', href: '/categories?search=락' },
+        { label: '재즈', href: '/categories?search=재즈' },
+        { label: 'J-POP', href: '/categories?search=J-POP' },
+        { label: 'OST', href: '/categories?search=OST' },
+      ];
 
   const supportLinks: FooterLink[] = [
     { label: t('footer.guide'), href: '/guide' },

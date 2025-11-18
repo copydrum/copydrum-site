@@ -20,7 +20,6 @@ import type { VirtualAccountInfo } from '../../lib/payments';
 import { openCashChargeModal } from '../../lib/cashChargeModal';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
-import { isEnglishHost } from '../../i18n/languages';
 
 interface Category {
   id: string;
@@ -87,14 +86,6 @@ const CategoriesPage: React.FC = () => {
   const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
   const [selectedTopSheetId, setSelectedTopSheetId] = useState<string | null>(null);
   const { i18n, t } = useTranslation();
-  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
-  
-  // 영어 사이트일 때 강제로 영어 언어 설정
-  useEffect(() => {
-    if (isEnglishSite && i18n.language !== 'en') {
-      i18n.changeLanguage('en');
-    }
-  }, [isEnglishSite, i18n]);
 
   // 장르 목록 (순서대로) - 한글 원본 (한글 사이트용)
   const genreListKo = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
@@ -102,24 +93,24 @@ const CategoriesPage: React.FC = () => {
   // 영문 사이트용 장르 순서 (한글 이름으로 저장되어 있지만 영문 순서로 매핑)
   const genreListEn = ['팝', '락', '가요', '재즈', 'J-POP', 'OST', 'CCM', '트로트/성인가요', '드럼솔로', '드럼커버'];
   
-  // 현재 사이트에 맞는 장르 목록 가져오기
-  const genreList = isEnglishSite ? genreListEn : genreListKo;
+  // 현재 언어에 맞는 장르 목록 가져오기
+  const genreList = i18n.language === 'en' ? genreListEn : genreListKo;
   
   // 장르 이름을 번역하는 함수
   const getGenreName = (genreKo: string): string => {
-    if (!isEnglishSite) return genreKo;
+    if (i18n.language !== 'en') return genreKo;
     
     const genreMap: Record<string, string> = {
-      '가요': t('category.kpop'),
-      '팝': t('category.pop'),
-      '락': t('category.rock'),
-      'CCM': t('category.ccm'),
-      '트로트/성인가요': t('category.trot'),
-      '재즈': t('category.jazz'),
-      'J-POP': t('category.jpop'),
-      'OST': t('category.ost'),
-      '드럼솔로': t('category.drumSolo'),
-      '드럼커버': t('category.drumCover'),
+      '가요': t('categoriesPage.categories.kpop'),
+      '팝': t('categoriesPage.categories.pop'),
+      '락': t('categoriesPage.categories.rock'),
+      'CCM': t('categoriesPage.categories.ccm'),
+      '트로트/성인가요': t('categoriesPage.categories.trot'),
+      '재즈': t('categoriesPage.categories.jazz'),
+      'J-POP': t('categoriesPage.categories.jpop'),
+      'OST': t('categoriesPage.categories.ost'),
+      '드럼솔로': t('categoriesPage.categories.drumSolo'),
+      '드럼커버': t('categoriesPage.categories.drumCover'),
     };
     
     return genreMap[genreKo] || genreKo;
@@ -127,24 +118,33 @@ const CategoriesPage: React.FC = () => {
 
   // 카테고리 이름을 번역하는 함수
   const getCategoryName = (categoryName: string | null | undefined): string => {
-    if (!categoryName) return t('category.other');
-    if (!isEnglishSite) return categoryName;
+    if (!categoryName) return t('categoriesPage.categories.other');
+    if (i18n.language !== 'en') return categoryName;
     
     const categoryMap: Record<string, string> = {
-      '가요': t('category.kpop'),
-      '팝': t('category.pop'),
-      '락': t('category.rock'),
-      'CCM': t('category.ccm'),
-      '트로트/성인가요': t('category.trot'),
-      '재즈': t('category.jazz'),
-      'J-POP': t('category.jpop'),
-      'OST': t('category.ost'),
-      '드럼솔로': t('category.drumSolo'),
-      '드럼커버': t('category.drumCover'),
-      '기타': t('category.other'),
+      '가요': t('categoriesPage.categories.kpop'),
+      '팝': t('categoriesPage.categories.pop'),
+      '락': t('categoriesPage.categories.rock'),
+      'CCM': t('categoriesPage.categories.ccm'),
+      '트로트/성인가요': t('categoriesPage.categories.trot'),
+      '재즈': t('categoriesPage.categories.jazz'),
+      'J-POP': t('categoriesPage.categories.jpop'),
+      'OST': t('categoriesPage.categories.ost'),
+      '드럼솔로': t('categoriesPage.categories.drumSolo'),
+      '드럼커버': t('categoriesPage.categories.drumCover'),
+      '기타': t('categoriesPage.categories.other'),
     };
     
     return categoryMap[categoryName] || categoryName;
+  };
+
+  // 난이도 이름을 번역하는 함수
+  const getDifficultyName = (difficulty: string | null | undefined): string => {
+    if (!difficulty) return t('categoriesPage.difficultyNotSet');
+    if (difficulty === 'beginner') return t('categoriesPage.beginner');
+    if (difficulty === 'intermediate') return t('categoriesPage.intermediate');
+    if (difficulty === 'advanced') return t('categoriesPage.advanced');
+    return difficulty;
   };
 
   const { addToCart, isInCart } = useCart();
@@ -188,9 +188,8 @@ const CategoriesPage: React.FC = () => {
     const normalizedPage = Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
 
     // 카테고리 파라미터가 없고 검색어가 없으면 첫 번째 장르로 자동 이동
-    // 영어 사이트: '팝', 한글 사이트: '가요'
     if (!categoryParam && !searchParam.trim() && categories.length > 0) {
-      const firstGenre = genreList[0]; // 현재 사이트에 맞는 첫 번째 장르
+      const firstGenre = genreList[0];
       const firstCategory = categories.find(cat => cat.name === firstGenre);
       if (firstCategory) {
         setSelectedCategory(firstCategory.id);
@@ -199,26 +198,6 @@ const CategoriesPage: React.FC = () => {
         newParams.delete('page');
         setSearchParams(newParams, { replace: true });
         return;
-      }
-    }
-
-    // 영어 사이트에서 카테고리가 없거나 '가요'(K-POP)가 선택되어 있으면 '팝'으로 강제 변경
-    if (isEnglishSite && categories.length > 0) {
-      const popCategory = categories.find(cat => cat.name === '팝');
-      const kpopCategory = categories.find(cat => cat.name === '가요');
-      
-      if (popCategory && kpopCategory) {
-        // 카테고리 파라미터가 없거나 '가요'가 선택되어 있으면 '팝'으로 변경
-        if (!categoryParam || categoryParam === kpopCategory.id) {
-          if (selectedCategory !== popCategory.id) {
-            setSelectedCategory(popCategory.id);
-            const newParams = new URLSearchParams(searchParams);
-            newParams.set('category', popCategory.id);
-            newParams.delete('page');
-            setSearchParams(newParams, { replace: true });
-            return;
-          }
-        }
       }
     }
 
@@ -290,7 +269,7 @@ const CategoriesPage: React.FC = () => {
       items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
       amount: price,
       paymentMethod: method,
-      description: t('categories.purchaseDescription', { title: sheet.title }),
+      description: t('categoriesPage.purchaseDescription', { title: sheet.title }),
       buyerName: user.email ?? null,
       buyerEmail: user.email ?? null,
       // returnUrl은 productPurchase에서 자동으로 Edge Function URL 사용
@@ -299,13 +278,13 @@ const CategoriesPage: React.FC = () => {
 
     if (method === 'bank_transfer') {
       setBankTransferInfo(result.virtualAccountInfo ?? null);
-      alert(t('categories.bankTransferCreated'));
+      alert(t('categoriesPage.bankTransferCreated'));
     } else if (method === 'paypal') {
       setBankTransferInfo(null);
       // PayPal은 리다이렉트되므로 알림 불필요
     } else {
       setBankTransferInfo(null);
-      alert(t('categories.paymentWindowOpen'));
+      alert(t('categoriesPage.paymentWindowOpen'));
     }
   };
 
@@ -331,7 +310,7 @@ const CategoriesPage: React.FC = () => {
         const result = await processCashPurchase({
           userId: user.id,
           totalPrice: price,
-          description: t('categories.purchaseDescription', { title: sheet.title }),
+          description: t('categoriesPage.purchaseDescription', { title: sheet.title }),
           items: [{ sheetId, sheetTitle: sheet.title, price }],
           sheetIdForTransaction: sheetId,
         });
@@ -339,7 +318,7 @@ const CategoriesPage: React.FC = () => {
         if (!result.success) {
           if (result.reason === 'INSUFFICIENT_CREDIT') {
             alert(
-              t('categories.insufficientCash', { 
+              t('categoriesPage.insufficientCash', { 
                 amount: result.currentCredits.toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')
               }),
             );
@@ -356,7 +335,7 @@ const CategoriesPage: React.FC = () => {
           }
         }
 
-        alert(t('categories.purchaseComplete'));
+        alert(t('categoriesPage.purchaseComplete'));
         navigate('/my-orders');
         return;
       }
@@ -369,7 +348,7 @@ const CategoriesPage: React.FC = () => {
       await completeOnlinePurchase('card');
     } catch (error) {
       console.error('주문 처리 오류:', error);
-      alert(error instanceof Error ? error.message : t('categories.purchaseError'));
+      alert(error instanceof Error ? error.message : t('categoriesPage.purchaseError'));
     } finally {
       setPaymentProcessing(false);
       setBuyingSheetId(null);
@@ -387,7 +366,7 @@ const CategoriesPage: React.FC = () => {
       await completeOnlinePurchase('bank_transfer', { depositorName });
     } catch (error) {
       console.error('무통장입금 주문 처리 오류:', error);
-      alert(error instanceof Error ? error.message : t('categories.purchaseError'));
+      alert(error instanceof Error ? error.message : t('categoriesPage.purchaseError'));
     } finally {
       setPaymentProcessing(false);
       setBuyingSheetId(null);
@@ -587,19 +566,19 @@ const CategoriesPage: React.FC = () => {
             selectedSheet;
 
           const title = targetSheet?.title || '';
-          alert(t('categories.alreadyPurchased', { title }));
+          alert(t('categoriesPage.alreadyPurchased', { title }));
           return;
         }
       } catch (error) {
         console.error('장바구니 담기 전 구매 이력 확인 오류:', error);
-        alert(t('categories.purchaseCheckError'));
+        alert(t('categoriesPage.purchaseCheckError'));
         return;
       }
     }
 
     const success = await addToCart(sheetId);
     if (success) {
-      alert(t('categories.addedToCart'));
+      alert(t('categoriesPage.addedToCart'));
     }
   };
 
@@ -611,7 +590,7 @@ const CategoriesPage: React.FC = () => {
 
     const sheet = drumSheets.find((item) => item.id === sheetId);
     if (!sheet) {
-      alert(t('categories.sheetNotFound'));
+      alert(t('categoriesPage.sheetNotFound'));
       return;
     }
 
@@ -620,7 +599,7 @@ const CategoriesPage: React.FC = () => {
     try {
       const alreadyPurchased = await hasPurchasedSheet(user.id, sheetId);
       if (alreadyPurchased) {
-        alert(t('categories.alreadyPurchasedGeneric'));
+        alert(t('categoriesPage.alreadyPurchasedGeneric'));
         setBuyingSheetId(null);
         return;
       }
@@ -629,7 +608,7 @@ const CategoriesPage: React.FC = () => {
       setShowPaymentSelector(true);
     } catch (error) {
       console.error('바로구매 사전 확인 오류:', error);
-      alert(t('categories.purchaseCheckError'));
+      alert(t('categoriesPage.purchaseCheckError'));
       setBuyingSheetId(null);
     } finally {
       // keep buyingSheetId while modal is open
@@ -638,7 +617,7 @@ const CategoriesPage: React.FC = () => {
 
   const handleToggleFavorite = async (sheetId: string) => {
     if (!user) {
-      alert(t('categories.loginRequired'));
+      alert(t('categoriesPage.loginRequired'));
       return;
     }
 
@@ -673,7 +652,7 @@ const CategoriesPage: React.FC = () => {
       });
     } catch (error) {
       console.error('찜하기 처리 오류:', error);
-      alert(t('categories.favoriteError'));
+      alert(t('categoriesPage.favoriteError'));
       setFavoriteIds((prev) => {
         const next = new Set(prev);
         if (wasFavorite) {
@@ -810,6 +789,15 @@ const CategoriesPage: React.FC = () => {
   const selectedSheetIsFavorite = selectedSheet ? favoriteIds.has(selectedSheet.id) : false;
   const selectedSheetFavoriteLoading = selectedSheet ? favoriteLoadingIds.has(selectedSheet.id) : false;
 
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    updateQueryParams(
+      {
+        page: page > 1 ? String(page) : null,
+      }
+    );
+  };
+
   const handleMobileSheetSelect = (sheet: DrumSheet) => {
     setSelectedSheet(sheet);
     setIsMobileDetailOpen(true);
@@ -823,7 +811,7 @@ const CategoriesPage: React.FC = () => {
   const handlePreviewOpen = (sheet: DrumSheet) => {
     const previewUrl = sheet.preview_image_url || sheet.pdf_url;
     if (!previewUrl) {
-      alert('미리보기를 제공하지 않는 악보입니다.');
+      alert(t('categoriesPage.noPreview'));
       return;
     }
     window.open(previewUrl, '_blank', 'noopener,noreferrer');
@@ -831,7 +819,7 @@ const CategoriesPage: React.FC = () => {
 
   const handleYoutubeOpen = (sheet: DrumSheet) => {
     if (!sheet.youtube_url) {
-      alert('등록된 유튜브 영상이 없습니다.');
+      alert(t('categoriesPage.noYoutubeVideo'));
       return;
     }
     const href = sheet.youtube_url.startsWith('http')
@@ -857,32 +845,32 @@ const CategoriesPage: React.FC = () => {
           {bankTransferInfo ? (
             <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-blue-900">무통장입금 안내</h3>
+                <h3 className="font-semibold text-blue-900">{t('categoriesPage.bankTransferInfo')}</h3>
                 <button
                   type="button"
                   onClick={() => setBankTransferInfo(null)}
                   className="text-blue-600 hover:text-blue-800 text-xs"
                 >
-                  닫기
+                  {t('categoriesPage.close')}
                 </button>
               </div>
               <div className="mt-3 space-y-2">
                 <div>
-                  <span className="font-medium text-gray-900">은행</span> {bankTransferInfo.bankName}
+                  <span className="font-medium text-gray-900">{t('categoriesPage.bank')}</span> {bankTransferInfo.bankName}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-900">계좌번호</span> {bankTransferInfo.accountNumber}
+                  <span className="font-medium text-gray-900">{t('categoriesPage.accountNumber')}</span> {bankTransferInfo.accountNumber}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-900">예금주</span> {bankTransferInfo.depositor}
+                  <span className="font-medium text-gray-900">{t('categoriesPage.accountHolder')}</span> {bankTransferInfo.depositor}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-900">입금금액</span>{' '}
+                  <span className="font-medium text-gray-900">{t('categoriesPage.depositAmount')}</span>{' '}
                                     {formatCurrency(bankTransferInfo.amount ?? 0)}
                 </div>
                 {bankTransferInfo.expectedDepositor ? (
                   <div>
-                    <span className="font-medium text-gray-900">입금자명</span>{' '}
+                    <span className="font-medium text-gray-900">{t('categoriesPage.depositorName')}</span>{' '}
                     <span className="text-blue-600 font-semibold">{bankTransferInfo.expectedDepositor}</span>
                   </div>
                 ) : null}
@@ -918,7 +906,7 @@ const CategoriesPage: React.FC = () => {
           {/* Mobile Top 5 */}
           {!loading && topSheets.length > 0 && (
             <div className="px-4 space-y-3">
-              <h2 className="text-lg font-bold text-gray-900">TOP 5</h2>
+              <h2 className="text-lg font-bold text-gray-900">{t('categoriesPage.top5')}</h2>
               <div className="space-y-2">
                 {topSheets.map((sheet, index) => {
                   const isActive = sheet.id === selectedTopSheetId;
@@ -961,11 +949,11 @@ const CategoriesPage: React.FC = () => {
                             <div className="min-w-0 flex-1 text-left">
                               <p className="truncate text-sm font-bold text-gray-900">{sheet.title}</p>
                               <p className="truncate text-xs text-gray-500">{sheet.artist}</p>
-                              <p className="truncate text-xs text-gray-400">{sheet.album_name || t('categories.albumInfoNotAvailable')}</p>
+                              <p className="truncate text-xs text-gray-400">{sheet.album_name || t('categoriesPage.albumInfoNotAvailable')}</p>
                             </div>
                           </div>
                           <div className="text-xs text-gray-500">
-                            {getCategoryName(sheet.categories?.name)} · {sheet.difficulty || t('categories.difficultyNotSet')}
+                            {getCategoryName(sheet.categories?.name)} · {getDifficultyName(sheet.difficulty)}
                           </div>
                           <div className="flex items-center justify-between">
                             <div className="space-y-1 text-right">
@@ -991,14 +979,14 @@ const CategoriesPage: React.FC = () => {
                               onClick={() => handleAddToCart(sheet.id)}
                               className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
                             >
-                              {t('categories.addToCart')}
+                              {t('categoriesPage.addToCart')}
                             </button>
                             <button
                               type="button"
                               onClick={() => handleBuyNow(sheet.id)}
                               className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700"
                             >
-                              {t('categories.buyNow')}
+                              {t('categoriesPage.buyNow')}
                             </button>
                           </div>
                         </div>
@@ -1015,14 +1003,14 @@ const CategoriesPage: React.FC = () => {
             {loading && (
               <div className="py-16 text-center text-gray-500">
                 <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-b-2 border-blue-500" />
-                악보를 불러오는 중입니다...
+                {t('categoriesPage.loadingSheets')}
               </div>
             )}
 
             {!loading && paginatedSheets.length === 0 && (
               <div className="py-16 text-center text-gray-500">
                 <i className="ri-file-music-line mb-4 text-4xl text-gray-300" />
-                <p className="font-semibold text-gray-600">검색 결과가 없습니다.</p>
+                <p className="font-semibold text-gray-600">{t('categoriesPage.noSearchResults')}</p>
               </div>
             )}
 
@@ -1051,7 +1039,7 @@ const CategoriesPage: React.FC = () => {
                     <div className="min-w-0 flex-1 space-y-1">
                       <p className="truncate text-sm font-bold text-gray-900">{sheet.title}</p>
                       <p className="truncate text-xs text-gray-500">{sheet.artist}</p>
-                      <p className="truncate text-xs text-gray-400">{sheet.album_name || '앨범 정보 없음'}</p>
+                      <p className="truncate text-xs text-gray-400">{sheet.album_name || t('categoriesPage.albumInfoNotFound')}</p>
                       <div className="pt-1 text-sm font-semibold text-blue-600">
                         {eventInfo ? (
                           <>
@@ -1125,9 +1113,9 @@ const CategoriesPage: React.FC = () => {
               </div>
               <div className="space-y-2 text-sm text-gray-600">
                 <p className="font-semibold text-gray-900">{selectedSheet.artist}</p>
-                {selectedSheet.album_name && <p>앨범: {selectedSheet.album_name}</p>}
-                {selectedSheet.difficulty && <p>난이도: {selectedSheet.difficulty}</p>}
-                {selectedSheet.page_count ? <p>페이지: {selectedSheet.page_count}p</p> : null}
+                {selectedSheet.album_name && <p>{t('categoriesPage.albumLabel')}: {selectedSheet.album_name}</p>}
+                {selectedSheet.difficulty && <p>{t('categoriesPage.difficultyLabel')}: {getDifficultyName(selectedSheet.difficulty)}</p>}
+                {selectedSheet.page_count ? <p>{t('categoriesPage.pageLabel')}: {selectedSheet.page_count}{t('categoriesPage.pageUnit')}</p> : null}
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-1 text-right">
@@ -1166,7 +1154,7 @@ const CategoriesPage: React.FC = () => {
                     onClick={() => handlePreviewOpen(selectedSheet)}
                     className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
                   >
-                    {t('categories.previewSheet')}
+                    {t('categoriesPage.previewSheet')}
                   </button>
                 )}
                 {selectedSheet.youtube_url && (
@@ -1175,18 +1163,18 @@ const CategoriesPage: React.FC = () => {
                     onClick={() => handleYoutubeOpen(selectedSheet)}
                     className="flex-1 rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white shadow transition hover:bg-red-600"
                   >
-                    {t('categories.playYoutube')}
+                    {t('categoriesPage.playYoutube')}
                   </button>
                 )}
               </div>
               {bankTransferInfo ? (
                 <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700">
-                  <h4 className="font-semibold text-blue-900 mb-2">무통장입금 안내</h4>
+                  <h4 className="font-semibold text-blue-900 mb-2">{t('categoriesPage.bankTransferInfo')}</h4>
                   <div className="space-y-1">
-                    <p>은행: {bankTransferInfo.bankName}</p>
-                    <p>계좌번호: {bankTransferInfo.accountNumber}</p>
-                    <p>예금주: {bankTransferInfo.depositor}</p>
-                    <p>입금금액: {formatCurrency(bankTransferInfo.amount ?? 0)}</p>
+                    <p>{t('categoriesPage.bank')}: {bankTransferInfo.bankName}</p>
+                    <p>{t('categoriesPage.accountNumber')}: {bankTransferInfo.accountNumber}</p>
+                    <p>{t('categoriesPage.accountHolder')}: {bankTransferInfo.depositor}</p>
+                    <p>{t('categoriesPage.depositAmount')}: {formatCurrency(bankTransferInfo.amount ?? 0)}</p>
                   </div>
                 </div>
               ) : null}
@@ -1199,14 +1187,14 @@ const CategoriesPage: React.FC = () => {
                   }}
                   className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
                 >
-                  {t('categories.addToCart')}
+                  {t('categoriesPage.addToCart')}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleBuyNow(selectedSheet.id)}
                   className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow hover:bg-blue-700"
                 >
-                  {t('categories.buyNow')}
+                  {t('categoriesPage.buyNow')}
                 </button>
               </div>
               <button
@@ -1214,7 +1202,7 @@ const CategoriesPage: React.FC = () => {
                 onClick={() => navigate(`/sheet-detail/${selectedSheet.id}`)}
                 className="w-full rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
               >
-                {t('categories.goToDetail')}
+                {t('categoriesPage.goToDetail')}
               </button>
             </div>
           </div>
@@ -1227,32 +1215,32 @@ const CategoriesPage: React.FC = () => {
         {bankTransferInfo ? (
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-blue-900">무통장입금 안내</h3>
+              <h3 className="font-semibold text-blue-900">{t('categoriesPage.bankTransferInfo')}</h3>
               <button
                 type="button"
                 onClick={() => setBankTransferInfo(null)}
                 className="text-blue-600 hover:text-blue-800 text-xs"
               >
-                닫기
+                {t('categoriesPage.close')}
               </button>
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <div>
-                <span className="font-medium text-gray-900">은행</span> {bankTransferInfo.bankName}
+                <span className="font-medium text-gray-900">{t('categoriesPage.bank')}</span> {bankTransferInfo.bankName}
               </div>
               <div>
-                <span className="font-medium text-gray-900">계좌번호</span> {bankTransferInfo.accountNumber}
+                <span className="font-medium text-gray-900">{t('categoriesPage.accountNumber')}</span> {bankTransferInfo.accountNumber}
               </div>
               <div>
-                <span className="font-medium text-gray-900">예금주</span> {bankTransferInfo.depositor}
+                <span className="font-medium text-gray-900">{t('categoriesPage.accountHolder')}</span> {bankTransferInfo.depositor}
               </div>
               <div>
-                <span className="font-medium text-gray-900">입금금액</span>{' '}
+                <span className="font-medium text-gray-900">{t('categoriesPage.depositAmount')}</span>{' '}
                 {formatCurrency(bankTransferInfo.amount ?? 0)}
               </div>
               {bankTransferInfo.expectedDepositor ? (
                 <div className="sm:col-span-2">
-                  <span className="font-medium text-gray-900">입금자명</span>{' '}
+                  <span className="font-medium text-gray-900">{t('categoriesPage.depositorName')}</span>{' '}
                   <span className="text-blue-600 font-semibold">{bankTransferInfo.expectedDepositor}</span>
                 </div>
               ) : null}
@@ -1266,7 +1254,7 @@ const CategoriesPage: React.FC = () => {
         {/* 페이지 제목 */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {selectedArtist ? `${selectedArtist}${t('categories.artistSongs')}` : selectedAlbum ? `${selectedAlbum} ${t('categories.album')}` : t('categories.pageTitle')}
+            {selectedArtist ? `${selectedArtist}${t('categoriesPage.artistSongs')}` : selectedAlbum ? `${selectedAlbum} ${t('categoriesPage.album')}` : t('categoriesPage.pageTitle')}
           </h1>
           {selectedArtist && (
             <button
@@ -1282,7 +1270,7 @@ const CategoriesPage: React.FC = () => {
               }}
               className="text-sm text-blue-600 hover:text-blue-800 mt-2"
             >
-              ← 전체 악보로 돌아가기
+              {t('categoriesPage.backToAllSheets')}
             </button>
           )}
           {selectedAlbum && (
@@ -1299,11 +1287,11 @@ const CategoriesPage: React.FC = () => {
               }}
               className="text-sm text-blue-600 hover:text-blue-800 mt-2"
             >
-              ← 전체 악보로 돌아가기
+              {t('categoriesPage.backToAllSheets')}
             </button>
           )}
           {!selectedArtist && !selectedAlbum && (
-            <p className="text-gray-600">{t('categories.pageDescription')}</p>
+            <p className="text-gray-600">{t('categoriesPage.pageDescription')}</p>
           )}
         </div>
 
@@ -1336,7 +1324,7 @@ const CategoriesPage: React.FC = () => {
         {/* TOP 5 섹션 */}
         {!loading && topSheets.length > 0 && (
           <div className="mb-8 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">TOP 5</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">{t('categoriesPage.top5')}</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* 왼쪽: TOP 5 리스트 */}
               <div className="space-y-2">
@@ -1384,7 +1372,7 @@ const CategoriesPage: React.FC = () => {
                               ? 'border-red-200 bg-red-50 text-red-500'
                               : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
                           } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          aria-label={isFavorite ? '찜 해제' : '찜하기'}
+                          aria-label={isFavorite ? t('categoriesPage.favoriteRemove') : t('categoriesPage.favoriteAdd')}
                         >
                           <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
                         </button>
@@ -1408,7 +1396,7 @@ const CategoriesPage: React.FC = () => {
                       <p className="text-gray-600 mb-2">{selectedSheet.artist}</p>
                       {selectedEventInfo && (
                         <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 mb-3">
-                          <span>🔥</span> 이벤트 할인악보 (100원)
+                          <span>🔥</span> {t('categoriesPage.eventDiscountSheetWithPrice')}
                         </span>
                       )}
                       {selectedSheet.categories?.name && (
@@ -1418,21 +1406,21 @@ const CategoriesPage: React.FC = () => {
                         <div className="text-sm text-gray-500 space-y-1">
                           <p>
                             {selectedSheet.difficulty === 'beginner'
-                              ? '초급'
+                              ? t('categoriesPage.beginner')
                               : selectedSheet.difficulty === 'intermediate'
-                              ? '중급'
-                              : '고급'}
-                            {selectedSheet.page_count && ` / ${selectedSheet.page_count}P`}
+                              ? t('categoriesPage.intermediate')
+                              : t('categoriesPage.advanced')}
+                            {selectedSheet.page_count && ` / ${selectedSheet.page_count}${t('categoriesPage.pageUnit')}`}
                           </p>
                           <p>
-                            난이도 :{' '}
+                            {t('categoriesPage.difficultyLabel')} :{' '}
                             {selectedSheet.difficulty === 'beginner'
-                              ? '초급'
+                              ? t('categoriesPage.beginner')
                               : selectedSheet.difficulty === 'intermediate'
-                              ? '중급'
-                              : '고급'}
+                              ? t('categoriesPage.intermediate')
+                              : t('categoriesPage.advanced')}
                           </p>
-                          {selectedSheet.page_count && <p>페이지수 : {selectedSheet.page_count}페이지</p>}
+                          {selectedSheet.page_count && <p>{t('categoriesPage.pageLabel')} : {selectedSheet.page_count} {t('categoriesPage.pageUnit')}</p>}
                         </div>
                       )}
                     </div>
@@ -1446,7 +1434,7 @@ const CategoriesPage: React.FC = () => {
                             ? 'border-red-200 bg-red-50 text-red-500'
                             : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
                         } ${selectedSheetFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                        aria-label={selectedSheetIsFavorite ? '찜 해제' : '찜하기'}
+                        aria-label={selectedSheetIsFavorite ? t('categoriesPage.favoriteRemove') : t('categoriesPage.favoriteAdd')}
                       >
                         <i className={`ri-heart-${selectedSheetIsFavorite ? 'fill' : 'line'} text-xl`} />
                       </button>
@@ -1487,7 +1475,7 @@ const CategoriesPage: React.FC = () => {
                     <div className="space-y-2">
                       <div className="flex items-center justify-end">
                         <span className="font-bold text-gray-900">
-                          TOTAL {formatCurrency(selectedDisplayPrice)}
+                          {t('categoriesPage.total')} {formatCurrency(selectedDisplayPrice)}
                         </span>
                       </div>
                       <div className="flex space-x-2">
@@ -1495,14 +1483,14 @@ const CategoriesPage: React.FC = () => {
                           onClick={() => handleAddToCart(selectedSheet.id)}
                           className="flex-1 bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors"
                         >
-                          {t('categories.addToCartFull')}
+                          {t('categoriesPage.addToCartFull')}
                         </button>
                         <button
                           onClick={() => handleBuyNow(selectedSheet.id)}
                           disabled={buyingSheetId === selectedSheet.id}
                           className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {buyingSheetId === selectedSheet.id ? t('categories.processing') : t('categories.buyNow')}
+                          {buyingSheetId === selectedSheet.id ? t('categoriesPage.processing') : t('categoriesPage.buyNow')}
                         </button>
                       </div>
                     </div>
@@ -1523,7 +1511,7 @@ const CategoriesPage: React.FC = () => {
                 className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <i className="ri-filter-line w-4 h-4"></i>
-                <span>필터</span>
+                <span>{t('categoriesPage.filter')}</span>
                 <i className={`ri-arrow-${showFilters ? 'up' : 'down'}-s-line w-4 h-4`}></i>
               </button>
               
@@ -1532,7 +1520,7 @@ const CategoriesPage: React.FC = () => {
                 className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <i className="ri-sort-desc w-4 h-4"></i>
-                <span>정렬</span>
+                <span>{t('categoriesPage.sort')}</span>
                 <i className={`ri-arrow-${showSortFilter ? 'up' : 'down'}-s-line w-4 h-4`}></i>
               </button>
             </div>
@@ -1542,7 +1530,7 @@ const CategoriesPage: React.FC = () => {
           {showSortFilter && (
             <div className="mt-4 pt-4 border-t border-gray-200">
               <div className="flex items-center space-x-4">
-                <label className="text-sm font-medium text-gray-700">정렬:</label>
+                <label className="text-sm font-medium text-gray-700">{t('categoriesPage.sortLabel')}</label>
                 <select
                   value={sortBy}
                   onChange={(e) => {
@@ -1558,10 +1546,10 @@ const CategoriesPage: React.FC = () => {
                   }}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm pr-8"
                 >
-                  <option value="newest">최신순</option>
-                  <option value="popular">인기순</option>
-                  <option value="price-low">가격 낮은순</option>
-                  <option value="price-high">가격 높은순</option>
+                  <option value="newest">{t('categoriesPage.sortNewest')}</option>
+                  <option value="popular">{t('categoriesPage.sortPopular')}</option>
+                  <option value="price-low">{t('categoriesPage.sortPriceLow')}</option>
+                  <option value="price-high">{t('categoriesPage.sortPriceHigh')}</option>
                 </select>
               </div>
             </div>
@@ -1572,13 +1560,13 @@ const CategoriesPage: React.FC = () => {
             <div className="mt-6 pt-6 border-t border-gray-200">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">카테고리</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">{t('categoriesPage.categoryLabel')}</label>
                   <select
                     value={selectedCategory}
                     onChange={(e) => handleCategorySelect(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm pr-8"
                   >
-                    <option value="">전체 카테고리</option>
+                    <option value="">{t('categoriesPage.allCategories')}</option>
                     {categories.map((category) => (
                       <option key={category.id} value={category.id}>
                         {category.name}
@@ -1588,7 +1576,7 @@ const CategoriesPage: React.FC = () => {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">난이도</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">{t('categoriesPage.difficultyLabelFilter')}</label>
                   <select
                     value={selectedDifficulty}
                     onChange={(e) => {
@@ -1604,19 +1592,19 @@ const CategoriesPage: React.FC = () => {
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm pr-8"
                   >
-                    <option value="">전체 난이도</option>
-                    <option value="beginner">초급</option>
-                    <option value="intermediate">중급</option>
-                    <option value="advanced">고급</option>
+                    <option value="">{t('categoriesPage.allDifficulties')}</option>
+                    <option value="beginner">{t('categoriesPage.beginner')}</option>
+                    <option value="intermediate">{t('categoriesPage.intermediate')}</option>
+                    <option value="advanced">{t('categoriesPage.advanced')}</option>
                   </select>
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">가격 범위</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">{t('categoriesPage.priceRange')}</label>
                   <div className="flex items-center space-x-2">
                     <input
                       type="number"
-                      placeholder="최소"
+                      placeholder={t('categoriesPage.min')}
                       value={priceRange.min}
                       onChange={(e) => {
                         const value = e.target.value;
@@ -1634,7 +1622,7 @@ const CategoriesPage: React.FC = () => {
                     <span className="text-gray-500">~</span>
                     <input
                       type="number"
-                      placeholder="최대"
+                      placeholder={t('categoriesPage.max')}
                       value={priceRange.max}
                       onChange={(e) => {
                         const value = e.target.value;
@@ -1670,7 +1658,7 @@ const CategoriesPage: React.FC = () => {
                   }}
                   className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
                 >
-                  필터 초기화
+                  {t('categoriesPage.resetFilters')}
                 </button>
               </div>
             </div>
@@ -1684,17 +1672,17 @@ const CategoriesPage: React.FC = () => {
             <table className="w-full table-fixed">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="w-[34%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">곡명</th>
-                  <th className="w-[18%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">아티스트</th>
-                  <th className="w-[24%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">앨범</th>
-                  <th className="w-[24%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">구매</th>
+                  <th className="w-[34%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('categoriesPage.tableTitle')}</th>
+                  <th className="w-[18%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('categoriesPage.tableArtist')}</th>
+                  <th className="w-[24%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('categoriesPage.tableAlbum')}</th>
+                  <th className="w-[24%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('categoriesPage.tablePurchase')}</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {paginatedSheets.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                      악보가 없습니다.
+                      {t('categoriesPage.noSheets')}
                     </td>
                   </tr>
                 ) : (
@@ -1725,7 +1713,7 @@ const CategoriesPage: React.FC = () => {
                             </span>
                             {eventInfo && (
                               <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600 flex-shrink-0 whitespace-nowrap">
-                                이벤트 할인악보
+                                {t('categoriesPage.eventDiscountSheet')}
                               </span>
                             )}
                           </div>
@@ -1799,7 +1787,7 @@ const CategoriesPage: React.FC = () => {
                               ? 'border-red-200 bg-red-50 text-red-500'
                               : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
                           } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          aria-label={isFavorite ? '찜 해제' : '찜하기'}
+                          aria-label={isFavorite ? t('categoriesPage.favoriteRemove') : t('categoriesPage.favoriteAdd')}
                         >
                           <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
                         </button>
@@ -1810,7 +1798,7 @@ const CategoriesPage: React.FC = () => {
                           }}
                           className="px-4 py-2.5 text-sm bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors"
                         >
-                          {t('categories.addToCart')}
+                          {t('categoriesPage.addToCart')}
                         </button>
                         <button
                           onClick={async (e) => {
@@ -1822,9 +1810,9 @@ const CategoriesPage: React.FC = () => {
                         >
                           {buyingSheetId === sheet.id
                             ? paymentProcessing
-                              ? t('categories.paymentPreparing')
-                              : t('categories.processing')
-                            : t('categories.buyNow')}
+                              ? t('categoriesPage.paymentPreparing')
+                              : t('categoriesPage.processing')
+                            : t('categoriesPage.buyNow')}
                         </button>
                       </div>
                     </td>
@@ -1926,7 +1914,7 @@ const CategoriesPage: React.FC = () => {
         {loading && (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">🎧 악보를 불러오는 중입니다. 잠시만 기다려주세요!</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">{t('categoriesPage.loadingSheetsMessage')}</h3>
           </div>
         )}
 
@@ -1934,8 +1922,8 @@ const CategoriesPage: React.FC = () => {
         {!loading && paginatedSheets.length === 0 && (
           <div className="text-center py-12">
             <i className="ri-file-music-line text-gray-300 w-16 h-16 mx-auto mb-4"></i>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">검색 결과가 없습니다</h3>
-            <p className="text-gray-600">다른 검색어나 필터를 시도해보세요.</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">{t('categoriesPage.noSearchResults')}</h3>
+            <p className="text-gray-600">{t('categoriesPage.tryDifferentSearch')}</p>
           </div>
         )}
         </div>
