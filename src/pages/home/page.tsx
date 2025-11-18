@@ -19,6 +19,7 @@ import MainHeader from '../../components/common/MainHeader';
 import Footer from '../../components/common/Footer';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
+import { isEnglishHost } from '../../i18n/languages';
 
 interface DrumSheet {
   id: string;
@@ -67,6 +68,7 @@ export default function Home() {
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoriteLoadingIds, setFavoriteLoadingIds] = useState<Set<string>>(new Set());
   const { i18n, t } = useTranslation();
+  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
 
   const loadLatestSheets = useCallback(async () => {
     try {
@@ -93,7 +95,13 @@ export default function Home() {
       if (error) throw error;
       
       // 카테고리 페이지와 동일한 장르 순서
-      const genreOrder = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
+      // 한글 사이트용 순서
+      const genreOrderKo = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
+      // 영문 사이트용 순서
+      const genreOrderEn = ['팝', '락', '가요', '재즈', 'J-POP', 'OST', 'CCM', '트로트/성인가요', '드럼솔로', '드럼커버'];
+      
+      // 현재 사이트에 맞는 장르 순서 선택
+      const genreOrder = isEnglishSite ? genreOrderEn : genreOrderKo;
       
       // 드럼레슨 제외하고 필터링
       const filteredCategories = (data || []).filter(cat => cat.name !== '드럼레슨');
@@ -115,7 +123,7 @@ export default function Home() {
     } catch (error) {
       console.error('카테고리 로드 오류:', error);
     }
-  }, []);
+  }, [isEnglishSite]);
 
   const loadEventDiscounts = useCallback(async () => {
     try {
@@ -1042,19 +1050,41 @@ export default function Home() {
                 >
                   {t('home.all')}
                 </button>
-                {categories.map((category) => (
-                  <button
-                    key={category.id}
-                    onClick={() => setSelectedGenre(category.id)}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                      selectedGenre === category.id
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    {category.name}
-                  </button>
-                ))}
+                {categories.map((category) => {
+                  // 장르 이름을 번역하는 함수 (영어 사이트일 때만)
+                  const getGenreName = (genreKo: string): string => {
+                    if (!isEnglishSite) return genreKo;
+                    
+                    const genreMap: Record<string, string> = {
+                      '가요': t('category.kpop'),
+                      '팝': t('category.pop'),
+                      '락': t('category.rock'),
+                      'CCM': t('category.ccm'),
+                      '트로트/성인가요': t('category.trot'),
+                      '재즈': t('category.jazz'),
+                      'J-POP': t('category.jpop'),
+                      'OST': t('category.ost'),
+                      '드럼솔로': t('category.drumSolo'),
+                      '드럼커버': t('category.drumCover'),
+                    };
+                    
+                    return genreMap[genreKo] || genreKo;
+                  };
+                  
+                  return (
+                    <button
+                      key={category.id}
+                      onClick={() => setSelectedGenre(category.id)}
+                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                        selectedGenre === category.id
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {getGenreName(category.name)}
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
