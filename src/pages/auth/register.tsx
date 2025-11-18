@@ -134,19 +134,48 @@ export default function Register() {
         // 프로필 생성 (이름이 있으면 사용, 없으면 이메일 앞부분 사용)
         const userName = formData.name.trim() || formData.email.split('@')[0];
         
-        const { error: profileError } = await supabase
+        // 먼저 프로필이 이미 존재하는지 확인
+        const { data: existingProfile, error: checkError } = await supabase
           .from('profiles')
-          .insert({
-            id: data.user.id,
-            email: formData.email,
-            name: userName,
-            role: 'user'
-          });
+          .select('id')
+          .eq('id', data.user.id)
+          .maybeSingle();
 
-        if (profileError) {
-          console.error('프로필 생성 오류:', profileError);
-          // 프로필 생성 실패 시 회원가입도 실패로 처리
-          throw new Error('프로필 생성에 실패했습니다. 다시 시도해주세요.');
+        if (checkError && checkError.code !== 'PGRST116') {
+          console.error('프로필 확인 오류:', checkError);
+          throw new Error('프로필 확인 중 오류가 발생했습니다. 다시 시도해주세요.');
+        }
+
+        // 프로필이 없을 때만 생성
+        if (!existingProfile) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: data.user.id,
+              email: formData.email,
+              name: userName,
+              role: 'user'
+            });
+
+          if (profileError) {
+            console.error('프로필 생성 오류:', profileError);
+            // 409 에러 또는 중복 키 에러는 이미 프로필이 존재하는 경우이므로 성공으로 처리
+            const isDuplicateError = 
+              profileError.code === '23505' || 
+              profileError.code === 'PGRST301' ||
+              profileError.statusCode === 409 ||
+              profileError.message?.includes('duplicate') ||
+              profileError.message?.includes('already exists');
+            
+            if (isDuplicateError) {
+              console.log('프로필이 이미 존재합니다. 계속 진행합니다.');
+            } else {
+              // 다른 에러는 실패로 처리
+              throw new Error('프로필 생성에 실패했습니다. 다시 시도해주세요.');
+            }
+          }
+        } else {
+          console.log('프로필이 이미 존재합니다. 계속 진행합니다.');
         }
 
         setSuccess('회원가입이 완료되었습니다! 이메일을 확인 후 로그인해주세요.');
