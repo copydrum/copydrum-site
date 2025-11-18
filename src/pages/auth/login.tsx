@@ -1,12 +1,14 @@
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import { getSiteUrl } from '../../lib/siteUrl';
 import Footer from '../../components/common/Footer';
 import MainHeader from '../../components/common/MainHeader';
 
 export default function Login() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,12 +29,12 @@ export default function Login() {
       });
       
       if (error) {
-        console.error('카카오 로그인 오류:', error);
-        alert('카카오 로그인에 실패했습니다. 다시 시도해주세요.');
+        console.error(t('authLogin.console.kakaoLoginError'), error);
+        alert(t('authLogin.errors.kakaoLoginFailed'));
       }
     } catch (err) {
-      console.error('카카오 로그인 오류:', err);
-      alert('카카오 로그인에 실패했습니다. 다시 시도해주세요.');
+      console.error(t('authLogin.console.kakaoLoginError'), err);
+      alert(t('authLogin.errors.kakaoLoginFailed'));
     }
   };
 
@@ -60,12 +62,12 @@ export default function Login() {
       });
       
       if (error) {
-        console.error('구글 로그인 오류:', error);
-        alert('구글 로그인에 실패했습니다. 다시 시도해주세요.');
+        console.error(t('authLogin.console.googleLoginError'), error);
+        alert(t('authLogin.errors.googleLoginFailed'));
       }
     } catch (err) {
-      console.error('구글 로그인 오류:', err);
-      alert('구글 로그인에 실패했습니다. 다시 시도해주세요.');
+      console.error(t('authLogin.console.googleLoginError'), err);
+      alert(t('authLogin.errors.googleLoginFailed'));
     }
   };
 
@@ -96,13 +98,13 @@ export default function Login() {
           .single();
 
         if (profileError) {
-          console.error('프로필 조회 오류:', profileError);
+          console.error(t('authLogin.console.profileLookupError'), profileError);
           
           // 프로필이 없으면 기본 프로필 생성
           if (profileError.code === 'PGRST116') {
             // 이름 우선순위: user_metadata.name > 이메일 앞부분
             const userName = data.user.user_metadata?.name || 
-                            (data.user.email ? data.user.email.split('@')[0] : '사용자');
+                            (data.user.email ? data.user.email.split('@')[0] : t('authLogin.defaultUserName'));
             
             const { error: insertError } = await supabase
               .from('profiles')
@@ -115,7 +117,7 @@ export default function Login() {
               });
             
             if (insertError) {
-              console.error('프로필 생성 오류:', insertError);
+              console.error(t('authLogin.console.profileCreationError'), insertError);
             }
           }
         }
@@ -129,7 +131,7 @@ export default function Login() {
         }
       }
     } catch (err: any) {
-      console.error('로그인 오류:', err);
+      console.error(t('authLogin.console.loginError'), err);
       if (err.message?.includes('Invalid login credentials')) {
         try {
           const { data: profile, error: profileError } = await supabase
@@ -145,26 +147,26 @@ export default function Login() {
             });
 
             if (resetError) {
-              console.error('비밀번호 재설정 메일 발송 오류:', resetError);
-              setError('비밀번호 재설정 메일 발송 중 오류가 발생했습니다. 다시 시도해주세요.');
+              console.error(t('authLogin.console.resetPasswordEmailError'), resetError);
+              setError(t('authLogin.errors.resetPasswordEmailError'));
             } else {
-              setInfo('기존 회원님이시군요! 비밀번호 재설정 이메일을 발송했습니다. 메일함을 확인해주세요.');
+              setInfo(t('authLogin.messages.passwordResetEmailSent'));
             }
             return;
           }
 
           if (profileError && profileError.code !== 'PGRST116') {
-            console.error('프로필 조회 오류:', profileError);
+            console.error(t('authLogin.console.profileLookupError'), profileError);
           }
         } catch (migrationError) {
-          console.error('마이그레이션 사용자 확인 오류:', migrationError);
+          console.error(t('authLogin.console.migrationCheckError'), migrationError);
         }
 
-        setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+        setError(t('authLogin.errors.invalidCredentials'));
       } else if (err.message.includes('Email not confirmed')) {
-        setError('이메일 인증이 필요합니다. 이메일을 확인해주세요.');
+        setError(t('authLogin.errors.emailNotConfirmed'));
       } else {
-        setError('로그인에 실패했습니다. 다시 시도해주세요.');
+        setError(t('authLogin.errors.loginFailed'));
       }
     } finally {
       setLoading(false);
@@ -179,16 +181,16 @@ export default function Login() {
         <div className="w-full sm:max-w-md">
           <div className="mb-6">
             <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-              🔔 기존 회원님들께: 사이트 리뉴얼로 첫 로그인 시 비밀번호 재설정이 필요합니다.
+              {t('authLogin.notice')}
             </div>
           </div>
 
           <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900">로그인</h2>
+            <h2 className="text-3xl font-bold text-gray-900">{t('authLogin.title')}</h2>
             <p className="mt-2 text-sm text-gray-600">
-              계정이 없으신가요?{' '}
+              {t('authLogin.noAccount')}{' '}
               <Link to="/register" className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer">
-                회원가입하기
+                {t('authLogin.signUp')}
               </Link>
             </p>
           </div>
@@ -210,7 +212,7 @@ export default function Login() {
 
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                    이메일 주소
+                    {t('authLogin.form.email')}
                   </label>
                   <div className="mt-1">
                     <input
@@ -222,14 +224,14 @@ export default function Login() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      placeholder="이메일을 입력하세요"
+                      placeholder={t('authLogin.form.emailPlaceholder')}
                     />
                   </div>
                 </div>
 
                 <div>
                   <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                    비밀번호
+                    {t('authLogin.form.password')}
                   </label>
                   <div className="mt-1">
                     <input
@@ -241,7 +243,7 @@ export default function Login() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      placeholder="비밀번호를 입력하세요"
+                      placeholder={t('authLogin.form.passwordPlaceholder')}
                     />
                   </div>
                 </div>
@@ -255,7 +257,7 @@ export default function Login() {
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
                     />
                     <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 cursor-pointer">
-                      로그인 상태 유지
+                      {t('authLogin.form.rememberMe')}
                     </label>
                   </div>
 
@@ -264,7 +266,7 @@ export default function Login() {
                       to="/auth/forgot-password" 
                       className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer underline"
                     >
-                      비밀번호를 잊으셨나요?
+                      {t('authLogin.form.forgotPassword')}
                     </Link>
                   </div>
                 </div>
@@ -278,10 +280,10 @@ export default function Login() {
                     {loading ? (
                       <div className="flex items-center">
                         <i className="ri-loader-4-line animate-spin mr-2"></i>
-                        로그인 중...
+                        {t('authLogin.form.submitting')}
                       </div>
                     ) : (
-                      '로그인'
+                      t('authLogin.form.submit')
                     )}
                   </button>
                 </div>
@@ -293,7 +295,7 @@ export default function Login() {
                     <div className="w-full border-t border-gray-300" />
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-white text-gray-500">또는</span>
+                    <span className="px-2 bg-white text-gray-500">{t('authLogin.divider')}</span>
                   </div>
                 </div>
 
@@ -304,7 +306,7 @@ export default function Login() {
                     className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 cursor-pointer"
                   >
                     <i className="ri-google-fill text-red-500 text-lg"></i>
-                    <span className="ml-2">Google</span>
+                    <span className="ml-2">{t('authLogin.social.google')}</span>
                   </button>
 
                   <button 
@@ -313,7 +315,7 @@ export default function Login() {
                     className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 cursor-pointer"
                   >
                     <i className="ri-kakao-talk-fill text-yellow-500 text-lg"></i>
-                    <span className="ml-2">카카오</span>
+                    <span className="ml-2">{t('authLogin.social.kakao')}</span>
                   </button>
                 </div>
               </div>
