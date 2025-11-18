@@ -143,6 +143,14 @@ export default function Register() {
 
         if (checkError && checkError.code !== 'PGRST116') {
           console.error('프로필 확인 오류:', checkError);
+          // 프로필 확인 실패 시 Auth 사용자 삭제 (롤백)
+          try {
+            await supabase.functions.invoke('rollback-signup', {
+              body: { userId: data.user.id }
+            });
+          } catch (rollbackError) {
+            console.error('롤백 중 오류:', rollbackError);
+          }
           throw new Error('프로필 확인 중 오류가 발생했습니다. 다시 시도해주세요.');
         }
 
@@ -170,6 +178,21 @@ export default function Register() {
             if (isDuplicateError) {
               console.log('프로필이 이미 존재합니다. 계속 진행합니다.');
             } else {
+              // 프로필 생성 실패 시 Auth 사용자도 삭제 (롤백)
+              try {
+                const { error: functionError } = await supabase.functions.invoke('rollback-signup', {
+                  body: { userId: data.user.id }
+                });
+                
+                if (functionError) {
+                  console.error('롤백 함수 호출 오류:', functionError);
+                } else {
+                  console.log('회원가입 롤백 완료');
+                }
+              } catch (rollbackError) {
+                console.error('롤백 중 오류:', rollbackError);
+              }
+              
               // 다른 에러는 실패로 처리
               throw new Error('프로필 생성에 실패했습니다. 다시 시도해주세요.');
             }
