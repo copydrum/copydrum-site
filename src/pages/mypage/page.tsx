@@ -15,6 +15,7 @@ import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
 import { buildDownloadKey, downloadFile, getDownloadFileName, requestSignedDownloadUrl } from '../../utils/downloadHelpers';
 import { convertUSDToKRW } from '../../lib/priceFormatter';
 import { isEnglishHost } from '../../i18n/languages';
+import { useTranslation } from 'react-i18next';
 
 type TabKey = 'profile' | 'purchases' | 'downloads' | 'favorites' | 'cash' | 'inquiries' | 'custom-orders';
 
@@ -177,6 +178,7 @@ export default function MyPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { cartItems, addToCart, isInCart } = useCart();
+  const { t } = useTranslation();
 
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1502,7 +1504,7 @@ export default function MyPage() {
                             <div key={order.id} className="border border-gray-100 rounded-xl p-4 space-y-4">
                               <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div>
-                                  <p className="text-sm text-gray-500">주문 번호</p>
+                                  <p className="text-sm text-gray-500">{isEnglishSite ? t('mypage.orderNumber') : '주문 번호'}</p>
                                   <h4 className="text-lg font-semibold text-gray-900">
                                     #{order.id.slice(0, 8).toUpperCase()}
                                   </h4>
@@ -1511,7 +1513,7 @@ export default function MyPage() {
                                 <div className="flex flex-wrap items-center gap-3">
                                   {renderOrderStatusBadge(order.status)}
                                   <p className="text-base font-semibold text-gray-900">
-                                    총 {formatCurrency(order.total_amount)}
+                                    {isEnglishSite ? `${t('mypage.total')} ${formatCurrency(order.total_amount)}` : `총 ${formatCurrency(order.total_amount)}`}
                                   </p>
                                   {hasSelectableItems ? (
                                     <button
@@ -1664,13 +1666,13 @@ export default function MyPage() {
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900">다운로드 관리</h3>
-                        <p className="text-sm text-gray-500">구매한 악보를 언제든지 다시 다운로드할 수 있습니다.</p>
+                        <h3 className="text-xl font-bold text-gray-900">{isEnglishSite ? t('mypage.downloadManagement') : '다운로드 관리'}</h3>
+                        <p className="text-sm text-gray-500">{isEnglishSite ? t('mypage.downloadDescription') : '구매한 악보를 언제든지 다시 다운로드할 수 있습니다.'}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm text-gray-500">총 {downloads.length}개</p>
+                        <p className="text-sm text-gray-500">{isEnglishSite ? t('mypage.totalItems', { count: downloads.length }) : `총 ${downloads.length}개`}</p>
                         {selectedDownloadIds.length > 0 ? (
-                          <p className="mt-1 text-xs text-blue-600">선택 {selectedDownloadIds.length}개</p>
+                          <p className="mt-1 text-xs text-blue-600">{isEnglishSite ? t('mypage.selectedItems', { count: selectedDownloadIds.length }) : `선택 ${selectedDownloadIds.length}개`}</p>
                         ) : null}
                       </div>
                     </div>
@@ -1825,17 +1827,17 @@ export default function MyPage() {
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900">찜한 악보</h3>
-                        <p className="text-sm text-gray-500">관심 있는 악보를 빠르게 찾아보세요.</p>
+                        <h3 className="text-xl font-bold text-gray-900">{isEnglishSite ? t('mypage.favoriteSheets') : '찜한 악보'}</h3>
+                        <p className="text-sm text-gray-500">{isEnglishSite ? t('mypage.favoriteDescription') : '관심 있는 악보를 빠르게 찾아보세요.'}</p>
                       </div>
-                      <p className="text-sm text-gray-500">총 {favorites.length}개</p>
+                      <p className="text-sm text-gray-500">{isEnglishSite ? t('mypage.totalCount', { count: favorites.length }) : `총 ${favorites.length}개`}</p>
                     </div>
 
                     {favorites.length === 0 ? (
                       <div className="py-16 text-center text-gray-500">
                         <i className="ri-heart-line text-4xl text-gray-300 mb-4" />
-                        <p className="font-medium">찜한 악보가 없습니다.</p>
-                        <p className="text-sm">마음에 드는 악보를 찜해보세요!</p>
+                        <p className="font-medium">{isEnglishSite ? t('mypage.noFavorites') : '찜한 악보가 없습니다.'}</p>
+                        <p className="text-sm">{isEnglishSite ? t('mypage.addFavorites') : '마음에 드는 악보를 찜해보세요!'}</p>
                       </div>
                     ) : (
                       <div className="grid gap-4 sm:grid-cols-2">
@@ -1879,7 +1881,7 @@ export default function MyPage() {
                                 }`}
                                 disabled={isInCart(favorite.sheet_id)}
                               >
-                                {isInCart(favorite.sheet_id) ? '장바구니에 있음' : '장바구니'}
+                                {isInCart(favorite.sheet_id) ? (isEnglishSite ? t('mypage.inCart') : '장바구니에 있음') : (isEnglishSite ? t('mypage.cart') : '장바구니')}
                               </button>
                               <button
                                 onClick={() => handleFavoriteRemove(favorite.sheet_id)}
@@ -1899,9 +1901,9 @@ export default function MyPage() {
                   <div className="space-y-6">
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900">1:1 문의하기</h3>
+                        <h3 className="text-xl font-bold text-gray-900">{isEnglishSite ? t('mypage.inquiry') : '1:1 문의하기'}</h3>
                         <p className="text-sm text-gray-500">
-                          문의를 등록하면 관리자 답변을 마이페이지에서 바로 확인할 수 있습니다.
+                          {isEnglishSite ? t('mypage.inquiryDescription') : '문의를 등록하면 관리자 답변을 마이페이지에서 바로 확인할 수 있습니다.'}
                         </p>
                       </div>
 
@@ -2084,19 +2086,19 @@ export default function MyPage() {
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900">캐시 내역</h3>
-                        <p className="text-sm text-gray-500">보유 캐시와 사용 내역을 확인하세요.</p>
+                        <h3 className="text-xl font-bold text-gray-900">{isEnglishSite ? t('mypage.cashHistory') : '캐시 내역'}</h3>
+                        <p className="text-sm text-gray-500">{isEnglishSite ? t('mypage.cashDescription') : '보유 캐시와 사용 내역을 확인하세요.'}</p>
                       </div>
                       <button
                         onClick={handleCashCharge}
                         className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
                       >
-                        캐시 충전
+                        {isEnglishSite ? t('mypage.chargeCash') : '캐시 충전'}
                       </button>
                     </div>
 
                     <div className="rounded-xl border border-blue-100 bg-blue-50 p-6">
-                      <p className="text-sm text-blue-600">보유 캐시</p>
+                      <p className="text-sm text-blue-600">{isEnglishSite ? t('mypage.availableCash') : '보유 캐시'}</p>
                       <p className="mt-2 text-3xl font-bold text-blue-900">
                         {formatCurrency(profile?.credits ?? 0)}
                       </p>
@@ -2105,12 +2107,12 @@ export default function MyPage() {
                     <div className="space-y-3">
                       {cashHistoryLoading ? (
                         <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
-                          <p className="font-medium">캐쉬 내역을 불러오는 중입니다...</p>
+                          <p className="font-medium">{isEnglishSite ? t('mypage.loadingCashHistory') : '캐쉬 내역을 불러오는 중입니다...'}</p>
                         </div>
                       ) : cashHistory.length === 0 ? (
                         <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
-                          <p className="font-medium">표시할 캐시 내역이 없습니다.</p>
-                          <p className="text-sm">캐시를 충전하거나 사용하면 이곳에 기록됩니다.</p>
+                          <p className="font-medium">{isEnglishSite ? t('mypage.noCashHistory') : '표시할 캐시 내역이 없습니다.'}</p>
+                          <p className="text-sm">{isEnglishSite ? 'Cash transactions will be recorded here when you charge or use cash.' : '캐시를 충전하거나 사용하면 이곳에 기록됩니다.'}</p>
                         </div>
                       ) : (
                         cashHistory.map((entry) => {
@@ -2168,22 +2170,22 @@ export default function MyPage() {
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900">주문제작 신청 내역</h3>
-                        <p className="text-sm text-gray-500">맞춤 제작 진행 상황을 확인하세요.</p>
+                        <h3 className="text-xl font-bold text-gray-900">{isEnglishSite ? t('mypage.customOrders') : '주문제작 신청 내역'}</h3>
+                        <p className="text-sm text-gray-500">{isEnglishSite ? t('mypage.customOrdersDescription') : '맞춤 제작 진행 상황을 확인하세요.'}</p>
                       </div>
                       <button
                         onClick={() => navigate('/custom-order')}
                         className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
                       >
-                        새 주문 신청
+                        {isEnglishSite ? t('mypage.newOrderRequest') : '새 주문 신청'}
                       </button>
                     </div>
 
                     {customOrders.length === 0 ? (
                       <div className="py-16 text-center text-gray-500">
                         <i className="ri-file-text-line text-4xl text-gray-300 mb-4" />
-                        <p className="font-medium">주문제작 신청 내역이 없습니다.</p>
-                        <p className="text-sm">맞춤 제작 서비스를 이용해 특별한 악보를 만들어보세요.</p>
+                        <p className="font-medium">{isEnglishSite ? t('mypage.noCustomOrders') : '주문제작 신청 내역이 없습니다.'}</p>
+                        <p className="text-sm">{isEnglishSite ? t('mypage.customOrderService') : '맞춤 제작 서비스를 이용해 특별한 악보를 만들어보세요.'}</p>
                       </div>
                     ) : (
                       <div className="space-y-4">
@@ -2500,7 +2502,7 @@ export default function MyPage() {
         className="hidden md:fixed md:bottom-6 md:right-6 md:z-40 md:flex items-center gap-2 rounded-full bg-blue-600 text-white px-5 py-3 shadow-lg hover:bg-blue-700"
       >
         <i className="ri-shopping-cart-line text-lg" />
-        장바구니
+        {isEnglishSite ? t('mypage.cart') : '장바구니'}
         {cartItems.length > 0 ? (
           <span className="ml-2 rounded-full bg-white text-blue-600 text-xs font-bold px-2 py-0.5">
             {cartItems.length}
