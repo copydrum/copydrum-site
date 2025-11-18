@@ -453,7 +453,7 @@ export default {
   'category.drumCover': 'Drum Cover',
   'category.other': 'Other',
   'categories.difficultyNotSet': 'Difficulty not set',
-  'categories.addToCart': 'Cart',
+  'categories.addToCart': 'cart',
   'categories.alreadyInCart': 'Already in Cart',
   'categories.buyNow': 'Buy Now',
   'categories.buyNowInstant': 'Buy Now',
@@ -466,7 +466,7 @@ export default {
   'categories.pageDescription': 'Find drum sheet music in your desired genre and style',
   'categories.processing': 'Processing...',
   'categories.paymentPreparing': 'Preparing payment...',
-  'categories.addToCartFull': 'Cart',
+  'categories.addToCartFull': 'cart',
   'categories.artistSongs': '\'s Songs',
   'categories.album': 'Album',
 };

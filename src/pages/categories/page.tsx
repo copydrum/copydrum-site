@@ -88,6 +88,13 @@ const CategoriesPage: React.FC = () => {
   const [selectedTopSheetId, setSelectedTopSheetId] = useState<string | null>(null);
   const { i18n, t } = useTranslation();
   const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
+  
+  // 영어 사이트일 때 강제로 영어 언어 설정
+  useEffect(() => {
+    if (isEnglishSite && i18n.language !== 'en') {
+      i18n.changeLanguage('en');
+    }
+  }, [isEnglishSite, i18n]);
 
   // 장르 목록 (순서대로) - 한글 원본 (한글 사이트용)
   const genreListKo = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
@@ -180,9 +187,10 @@ const CategoriesPage: React.FC = () => {
     const pageParam = parseInt(searchParams.get('page') || '1', 10);
     const normalizedPage = Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
 
-    // 카테고리 파라미터가 없고 검색어가 없으면 첫 번째 장르(가요)로 자동 이동
+    // 카테고리 파라미터가 없고 검색어가 없으면 첫 번째 장르로 자동 이동
+    // 영어 사이트: '팝', 한글 사이트: '가요'
     if (!categoryParam && !searchParam.trim() && categories.length > 0) {
-      const firstGenre = genreListKo[0]; // '가요'
+      const firstGenre = genreList[0]; // 현재 사이트에 맞는 첫 번째 장르
       const firstCategory = categories.find(cat => cat.name === firstGenre);
       if (firstCategory) {
         setSelectedCategory(firstCategory.id);
@@ -191,6 +199,26 @@ const CategoriesPage: React.FC = () => {
         newParams.delete('page');
         setSearchParams(newParams, { replace: true });
         return;
+      }
+    }
+
+    // 영어 사이트에서 카테고리가 없거나 '가요'(K-POP)가 선택되어 있으면 '팝'으로 강제 변경
+    if (isEnglishSite && categories.length > 0) {
+      const popCategory = categories.find(cat => cat.name === '팝');
+      const kpopCategory = categories.find(cat => cat.name === '가요');
+      
+      if (popCategory && kpopCategory) {
+        // 카테고리 파라미터가 없거나 '가요'가 선택되어 있으면 '팝'으로 변경
+        if (!categoryParam || categoryParam === kpopCategory.id) {
+          if (selectedCategory !== popCategory.id) {
+            setSelectedCategory(popCategory.id);
+            const newParams = new URLSearchParams(searchParams);
+            newParams.set('category', popCategory.id);
+            newParams.delete('page');
+            setSearchParams(newParams, { replace: true });
+            return;
+          }
+        }
       }
     }
 
@@ -1782,7 +1810,7 @@ const CategoriesPage: React.FC = () => {
                           }}
                           className="px-4 py-2.5 text-sm bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors"
                         >
-                          장바구니
+                          {t('categories.addToCart')}
                         </button>
                         <button
                           onClick={async (e) => {
