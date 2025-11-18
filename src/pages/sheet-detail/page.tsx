@@ -66,6 +66,28 @@ export default function SheetDetailPage() {
     host: typeof window !== 'undefined' ? window.location.host : undefined
   }).formatted;
 
+  // 카테고리 이름을 번역하는 함수 (영문 사이트용)
+  const getCategoryName = (categoryName: string | null | undefined): string => {
+    if (!categoryName) return '';
+    if (i18n.language !== 'en') return categoryName;
+    
+    const categoryMap: Record<string, string> = {
+      '가요': t('categoriesPage.categories.kpop'),
+      '팝': t('categoriesPage.categories.pop'),
+      '락': t('categoriesPage.categories.rock'),
+      'CCM': t('categoriesPage.categories.ccm'),
+      '트로트/성인가요': t('categoriesPage.categories.trot'),
+      '재즈': t('categoriesPage.categories.jazz'),
+      'J-POP': t('categoriesPage.categories.jpop'),
+      'OST': t('categoriesPage.categories.ost'),
+      '드럼솔로': t('categoriesPage.categories.drumSolo'),
+      '드럼커버': t('categoriesPage.categories.drumCover'),
+      '기타': t('categoriesPage.categories.other'),
+    };
+    
+    return categoryMap[categoryName] || categoryName;
+  };
+
   useEffect(() => {
     checkAuth();
     if (id) {
@@ -634,7 +656,7 @@ export default function SheetDetailPage() {
               <div className="flex items-center space-x-4 text-sm text-gray-500">
                 <span className="flex items-center space-x-1">
                   <Music className="w-4 h-4" />
-                  <span>{sheet.categories?.name}</span>
+                  <span>{getCategoryName(sheet.categories?.name)}</span>
                 </span>
                 <span className="flex items-center space-x-1">
                   <span>{t('sheetDetail.instrumentPart')}</span>
