@@ -29,7 +29,7 @@ export default {
   'search.noResults': '검색 결과가 없습니다.',
 
   // Buttons
-  'button.addToCart': '장바구니 담기',
+  'button.addToCart': '장바구니',
   'button.purchase': '구매하기',
   'button.download': '다운로드',
   'button.viewDetails': '상세보기',
@@ -426,7 +426,10 @@ export default {
   'category.other': '기타',
   'categories.difficultyNotSet': '난이도 정보 없음',
   'categories.addToCart': '장바구니',
+  'categories.alreadyInCart': '장바구니에 담김',
   'categories.buyNow': '바로구매',
+  'categories.buyNowInstant': '바로구매',
+  'categories.eventBuyNow': '100원 즉시 구매',
   'categories.previewSheet': '악보 미리보기',
   'categories.playYoutube': '유튜브 재생',
   'categories.goToDetail': '상세 페이지로 이동',
@@ -435,7 +438,7 @@ export default {
   'categories.pageDescription': '원하는 장르와 스타일의 드럼 악보를 찾아보세요',
   'categories.processing': '구매 중...',
   'categories.paymentPreparing': '결제 준비 중...',
-  'categories.addToCartFull': '장바구니 담기',
+  'categories.addToCartFull': '장바구니',
   'categories.artistSongs': '의 곡',
   'categories.album': '앨범',
 };

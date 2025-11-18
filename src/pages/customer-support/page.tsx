@@ -6,8 +6,10 @@ import Footer from '../../components/common/Footer';
 import UserSidebar from '../../components/feature/UserSidebar';
 import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
+import { isEnglishHost } from '../../i18n/languages';
 
 export default function CustomerSupport() {
+  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'faq' | 'contact'>(() =>
     searchParams.get('tab') === 'contact' ? 'contact' : 'faq',
@@ -85,7 +87,59 @@ export default function CustomerSupport() {
     }
   }, [user]);
 
-  const faqs = [
+  const faqs = isEnglishSite ? [
+    {
+      category: 'Order/Payment',
+      items: [
+        {
+          question: 'When can I download the sheet music after purchase?',
+          answer: 'You can download immediately after payment is completed from My Page. Purchased sheet music can be re-downloaded anytime.'
+        },
+        {
+          question: 'What payment methods are available?',
+          answer: 'We support credit cards, debit cards, bank transfers, and convenient payment methods (Kakao Pay).'
+        },
+        {
+          question: 'How can I get a refund?',
+          answer: 'Due to the nature of digital products, refunds are only available before download. Refunds are difficult after download, so please purchase carefully.'
+        }
+      ]
+    },
+    {
+      category: 'Sheet Music/Download',
+      items: [
+        {
+          question: 'What file format are the sheet music files?',
+          answer: 'All sheet music is provided in high-quality PDF format. Optimized for both printing and digital devices.'
+        },
+        {
+          question: 'Can I print the downloaded sheet music?',
+          answer: 'Yes, you can print for personal practice use. However, commercial use or redistribution is prohibited.'
+        },
+        {
+          question: 'How are difficulty levels classified?',
+          answer: 'They are classified as Beginner (basic patterns), Intermediate (including variation patterns), and Advanced (including complex techniques).'
+        }
+      ]
+    },
+    {
+      category: 'Custom Order',
+      items: [
+        {
+          question: 'What is the custom order service?',
+          answer: 'It is a customized service where professionals create drum sheet music for your desired song.'
+        },
+        {
+          question: 'How long does production take?',
+          answer: 'It usually takes 1-7 days depending on the complexity of the song. Exact schedule will be provided individually after application.'
+        },
+        {
+          question: 'How is the production cost determined?',
+          answer: 'We provide quotes by comprehensively considering the song\'s length, complexity, and difficulty level.'
+        }
+      ]
+    }
+  ] : [
     {
       category: '주문/결제',
       items: [
@@ -151,7 +205,7 @@ export default function CustomerSupport() {
     e.preventDefault();
     
     if (!formData.name || !formData.email || !formData.category || !formData.subject || !formData.message) {
-      alert('모든 필드를 입력해주세요.');
+      alert(isEnglishSite ? 'Please fill in all fields.' : '모든 필드를 입력해주세요.');
       return;
     }
 
@@ -176,7 +230,9 @@ export default function CustomerSupport() {
         throw insertError;
       }
 
-      alert('문의가 성공적으로 접수되었습니다. 빠른 시일 내에 답변드리겠습니다.');
+      alert(isEnglishSite 
+        ? 'Your inquiry has been successfully submitted. We will respond as soon as possible.' 
+        : '문의가 성공적으로 접수되었습니다. 빠른 시일 내에 답변드리겠습니다.');
       setFormData({
         name: user
           ? ((user.user_metadata?.name as string) ?? trimmedName)
@@ -188,7 +244,9 @@ export default function CustomerSupport() {
       });
     } catch (error) {
       console.error('고객 문의 저장 실패:', error);
-      alert('문의 전송 중 오류가 발생했습니다. 다시 시도해주세요.');
+      alert(isEnglishSite 
+        ? 'An error occurred while sending your inquiry. Please try again.' 
+        : '문의 전송 중 오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
       setSubmitting(false);
     }
@@ -210,9 +268,11 @@ export default function CustomerSupport() {
         {/* Hero Section */}
         <section className="bg-gradient-to-r from-blue-600 to-blue-800 text-white pt-24 pb-12 md:py-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-3 md:space-y-4">
-          <h1 className="text-3xl font-bold md:text-4xl">고객센터</h1>
+          <h1 className="text-3xl font-bold md:text-4xl">{isEnglishSite ? 'Customer Support' : '고객센터'}</h1>
           <p className="text-sm text-blue-100 md:text-xl">
-            궁금한 점이 있으시면 언제든지 문의해주세요. 빠르고 정확한 답변을 드리겠습니다.
+            {isEnglishSite 
+              ? 'If you have any questions, please contact us anytime. We will provide quick and accurate answers.'
+              : '궁금한 점이 있으시면 언제든지 문의해주세요. 빠르고 정확한 답변을 드리겠습니다.'}
           </p>
         </div>
         </section>
@@ -229,7 +289,7 @@ export default function CustomerSupport() {
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              자주 묻는 질문
+              {isEnglishSite ? 'FAQ' : '자주 묻는 질문'}
             </button>
             <button
               onClick={() => handleTabChange('contact')}
@@ -239,7 +299,7 @@ export default function CustomerSupport() {
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              문의하기
+              {isEnglishSite ? 'Contact Us' : '문의하기'}
             </button>
           </div>
         </div>
@@ -279,9 +339,11 @@ export default function CustomerSupport() {
           <div className="max-w-2xl mx-auto">
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8">
               <div className="text-center mb-6 md:mb-8">
-                <h2 className="text-xl font-bold text-gray-900 md:text-2xl md:mb-2">문의하기</h2>
+                <h2 className="text-xl font-bold text-gray-900 md:text-2xl md:mb-2">{isEnglishSite ? 'Contact Us' : '문의하기'}</h2>
                 <p className="text-gray-600">
-                  궁금한 점이나 문제가 있으시면 아래 양식을 작성해 주세요. 빠른 시일 내에 답변드리겠습니다.
+                  {isEnglishSite 
+                    ? 'If you have any questions or issues, please fill out the form below. We will respond as soon as possible.'
+                    : '궁금한 점이나 문제가 있으시면 아래 양식을 작성해 주세요. 빠른 시일 내에 답변드리겠습니다.'}
                 </p>
               </div>
 
@@ -289,7 +351,7 @@ export default function CustomerSupport() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
                   <div>
                     <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                      이름 *
+                      {isEnglishSite ? 'Name' : '이름'} *
                     </label>
                     <input
                       type="text"
@@ -299,12 +361,12 @@ export default function CustomerSupport() {
                       onChange={handleInputChange}
                       required
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="이름을 입력하세요"
+                      placeholder={isEnglishSite ? 'Enter your name' : '이름을 입력하세요'}
                     />
                   </div>
                   <div>
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                      이메일 *
+                      {isEnglishSite ? 'Email' : '이메일'} *
                     </label>
                     <input
                       type="email"
@@ -314,14 +376,14 @@ export default function CustomerSupport() {
                       onChange={handleInputChange}
                       required
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="이메일을 입력하세요"
+                      placeholder={isEnglishSite ? 'Enter your email' : '이메일을 입력하세요'}
                     />
                   </div>
                 </div>
 
                 <div>
                   <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
-                    문의 유형 *
+                    {isEnglishSite ? 'Inquiry Type' : '문의 유형'} *
                   </label>
                   <select
                     id="category"
@@ -331,18 +393,18 @@ export default function CustomerSupport() {
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-8"
                   >
-                    <option value="">문의 유형을 선택하세요</option>
-                    <option value="주문/결제">주문/결제 문의</option>
-                    <option value="악보/다운로드">악보/다운로드 문의</option>
-                    <option value="주문제작">주문제작 문의</option>
-                    <option value="기술지원">기술지원</option>
-                    <option value="기타">기타 문의</option>
+                    <option value="">{isEnglishSite ? 'Select inquiry type' : '문의 유형을 선택하세요'}</option>
+                    <option value="주문/결제">{isEnglishSite ? 'Order/Payment Inquiry' : '주문/결제 문의'}</option>
+                    <option value="악보/다운로드">{isEnglishSite ? 'Sheet Music/Download Inquiry' : '악보/다운로드 문의'}</option>
+                    <option value="주문제작">{isEnglishSite ? 'Custom Order Inquiry' : '주문제작 문의'}</option>
+                    <option value="기술지원">{isEnglishSite ? 'Technical Support' : '기술지원'}</option>
+                    <option value="기타">{isEnglishSite ? 'Other Inquiry' : '기타 문의'}</option>
                   </select>
                 </div>
 
                 <div>
                   <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-2">
-                    제목 *
+                    {isEnglishSite ? 'Subject' : '제목'} *
                   </label>
                   <input
                     type="text"
@@ -352,13 +414,13 @@ export default function CustomerSupport() {
                     onChange={handleInputChange}
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="문의 제목을 입력하세요"
+                    placeholder={isEnglishSite ? 'Enter inquiry subject' : '문의 제목을 입력하세요'}
                   />
                 </div>
 
                 <div className="space-y-1">
                   <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">
-                    문의 내용 *
+                    {isEnglishSite ? 'Message' : '문의 내용'} *
                   </label>
                   <textarea
                     id="message"
@@ -369,10 +431,10 @@ export default function CustomerSupport() {
                     rows={6}
                     maxLength={500}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                    placeholder="문의 내용을 자세히 작성해 주세요 (최대 500자)"
+                    placeholder={isEnglishSite ? 'Please write your inquiry in detail (max 500 characters)' : '문의 내용을 자세히 작성해 주세요 (최대 500자)'}
                   />
                   <div className="text-right text-sm text-gray-500 mt-1">
-                    {formData.message.length}/500자
+                    {formData.message.length}/500{isEnglishSite ? ' characters' : '자'}
                   </div>
                 </div>
 
@@ -382,10 +444,14 @@ export default function CustomerSupport() {
                     disabled={submitting}
                     className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 font-medium transition-colors whitespace-nowrap cursor-pointer disabled:bg-blue-300 disabled:cursor-not-allowed"
                   >
-                    {submitting ? '전송 중...' : '문의 보내기'}
+                    {submitting 
+                      ? (isEnglishSite ? 'Sending...' : '전송 중...')
+                      : (isEnglishSite ? 'Send Inquiry' : '문의 보내기')}
                   </button>
                   <p className="text-xs text-gray-400 text-center">
-                    접수하신 문의는 영업일 기준 24시간 이내에 답변드리겠습니다.
+                    {isEnglishSite 
+                      ? 'We will respond to your inquiry within 24 hours on business days.'
+                      : '접수하신 문의는 영업일 기준 24시간 이내에 답변드리겠습니다.'}
                   </p>
                 </div>
               </form>
@@ -398,8 +464,10 @@ export default function CustomerSupport() {
       <section className="bg-gray-50 py-12 md:py-16">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 md:space-y-12">
           <div className="text-center md:text-left">
-            <h2 className="text-2xl font-bold text-gray-900 md:text-3xl">연락처 정보</h2>
-            <p className="mt-2 text-sm text-gray-600 md:text-lg">다양한 방법으로 문의하실 수 있습니다</p>
+            <h2 className="text-2xl font-bold text-gray-900 md:text-3xl">{isEnglishSite ? 'Contact Information' : '연락처 정보'}</h2>
+            <p className="mt-2 text-sm text-gray-600 md:text-lg">
+              {isEnglishSite ? 'You can contact us through various methods' : '다양한 방법으로 문의하실 수 있습니다'}
+            </p>
           </div>
           
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3 md:gap-8">
@@ -408,9 +476,9 @@ export default function CustomerSupport() {
                 <i className="ri-mail-line" />
               </div>
               <div className="md:space-y-2">
-                <h3 className="text-base font-semibold text-gray-900 md:text-lg">이메일 문의</h3>
+                <h3 className="text-base font-semibold text-gray-900 md:text-lg">{isEnglishSite ? 'Email Inquiry' : '이메일 문의'}</h3>
                 <p className="text-sm text-gray-600">copydrum@hanmail.net</p>
-                <p className="text-xs text-gray-500 md:text-sm">24시간 접수, 1일 내 답변</p>
+                <p className="text-xs text-gray-500 md:text-sm">{isEnglishSite ? '24/7 reception, response within 1 day' : '24시간 접수, 1일 내 답변'}</p>
               </div>
             </div>
             
@@ -419,13 +487,13 @@ export default function CustomerSupport() {
                 <i className="ri-kakao-talk-fill" />
               </div>
               <div className="md:space-y-2">
-                <h3 className="text-base font-semibold text-gray-900 md:text-lg">카카오톡 상담</h3>
-                <p className="text-sm text-gray-600">실시간 채팅 상담을 이용할 수 있습니다.</p>
+                <h3 className="text-base font-semibold text-gray-900 md:text-lg">{isEnglishSite ? 'KakaoTalk Consultation' : '카카오톡 상담'}</h3>
+                <p className="text-sm text-gray-600">{isEnglishSite ? 'You can use real-time chat consultation.' : '실시간 채팅 상담을 이용할 수 있습니다.'}</p>
                 <button
                   onClick={handleOpenKakaoChannel}
                   className="mt-3 inline-flex items-center px-4 py-2 border border-transparent text-xs font-semibold rounded-lg text-gray-900 bg-yellow-400 hover:bg-yellow-500 shadow-sm transition-colors md:text-sm"
                 >
-                  카카오톡 상담 바로가기
+                  {isEnglishSite ? 'Open KakaoTalk Chat' : '카카오톡 상담 바로가기'}
                 </button>
               </div>
             </div>
@@ -435,9 +503,9 @@ export default function CustomerSupport() {
                 <i className="ri-time-line" />
               </div>
               <div className="md:space-y-2">
-                <h3 className="text-base font-semibold text-gray-900 md:text-lg">운영 시간</h3>
-                <p className="text-sm text-gray-600">평일 09:00 - 17:00</p>
-                <p className="text-xs text-gray-500 md:text-sm">주말 및 공휴일 휴무</p>
+                <h3 className="text-base font-semibold text-gray-900 md:text-lg">{isEnglishSite ? 'Business Hours' : '운영 시간'}</h3>
+                <p className="text-sm text-gray-600">{isEnglishSite ? 'Weekdays 09:00 - 17:00' : '평일 09:00 - 17:00'}</p>
+                <p className="text-xs text-gray-500 md:text-sm">{isEnglishSite ? 'Closed on weekends and holidays' : '주말 및 공휴일 휴무'}</p>
               </div>
             </div>
           </div>

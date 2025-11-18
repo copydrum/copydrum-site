@@ -7,6 +7,8 @@ import MainHeader from '../../components/common/MainHeader';
 import { supabase } from '../../lib/supabase';
 import { fetchUserFavorites, toggleFavorite } from '../../lib/favorites';
 import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
+import { useTranslation } from 'react-i18next';
+import { isEnglishHost } from '../../i18n/languages';
 
 interface SupabaseDrumSheetRow {
   id: string;
@@ -47,14 +49,14 @@ interface FreeSheet {
   categories: string[];
 }
 
-const SUB_CATEGORY_OPTIONS = [
-  { key: 'all', label: '전체' },
-  { key: '드럼테크닉', label: '드럼테크닉' },
-  { key: '루디먼트', label: '루디먼트' },
-  { key: '드럼솔로', label: '드럼솔로' },
-  { key: '기초/입문', label: '기초/입문' },
-  { key: '리듬패턴', label: '리듬패턴' },
-  { key: '필인', label: '필인' },
+const getSubCategoryOptions = (isEnglishSite: boolean) => [
+  { key: 'all', label: isEnglishSite ? 'All' : '전체' },
+  { key: '드럼테크닉', label: isEnglishSite ? 'Drum Technique' : '드럼테크닉' },
+  { key: '루디먼트', label: isEnglishSite ? 'Rudiment' : '루디먼트' },
+  { key: '드럼솔로', label: isEnglishSite ? 'Drum Solo' : '드럼솔로' },
+  { key: '기초/입문', label: isEnglishSite ? 'Beginner/Basics' : '기초/입문' },
+  { key: '리듬패턴', label: isEnglishSite ? 'Rhythm Pattern' : '리듬패턴' },
+  { key: '필인', label: isEnglishSite ? 'Fill-in' : '필인' },
 ] as const;
 
 const SHEET_SELECT_FIELDS = `
@@ -102,9 +104,9 @@ const normalizeDifficultyKey = (value: string | null | undefined): string => {
   return value;
 };
 
-const getDifficultyLabel = (value: string | null | undefined): string => {
+const getDifficultyLabel = (value: string | null | undefined, isEnglishSite: boolean = false): string => {
   if (!value) {
-    return '난이도 정보 없음';
+    return isEnglishSite ? 'Difficulty not available' : '난이도 정보 없음';
   }
 
   const key = normalizeDifficultyKey(value);
@@ -112,13 +114,13 @@ const getDifficultyLabel = (value: string | null | undefined): string => {
   switch (key) {
     case 'beginner':
     case '초급':
-      return '초급';
+      return isEnglishSite ? 'Beginner' : '초급';
     case 'intermediate':
     case '중급':
-      return '중급';
+      return isEnglishSite ? 'Intermediate' : '중급';
     case 'advanced':
     case '고급':
-      return '고급';
+      return isEnglishSite ? 'Advanced' : '고급';
     default:
       return value;
   }
@@ -180,7 +182,7 @@ const formatRelativeDate = (isoString: string): string => {
 const FreeSheetsPage = () => {
   const [user, setUser] = useState<User | null>(null);
   const [sheets, setSheets] = useState<FreeSheet[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<(typeof SUB_CATEGORY_OPTIONS)[number]['key']>('all');
+  const [selectedCategory, setSelectedCategory] = useState<'all' | '드럼테크닉' | '루디먼트' | '드럼솔로' | '기초/입문' | '리듬패턴' | '필인'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOption, setSortOption] = useState<'latest' | 'title' | 'difficulty'>('latest');
   const [loading, setLoading] = useState(true);
@@ -190,6 +192,26 @@ const FreeSheetsPage = () => {
   const [selectedSheet, setSelectedSheet] = useState<FreeSheet | null>(null);
   const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
+
+  // 카테고리 이름을 번역하는 함수
+  const getCategoryName = (categoryKo: string): string => {
+    if (!isEnglishSite) return categoryKo;
+    
+    const categoryMap: Record<string, string> = {
+      '드럼테크닉': 'Drum Technique',
+      '루디먼트': 'Rudiment',
+      '드럼솔로': 'Drum Solo',
+      '기초/입문': 'Beginner/Basics',
+      '리듬패턴': 'Rhythm Pattern',
+      '필인': 'Fill-in',
+      '드럼레슨': 'Drum Lesson',
+      '카테고리 준비 중': 'Category pending',
+    };
+    
+    return categoryMap[categoryKo] || categoryKo;
+  };
 
   const loadSheets = useCallback(async () => {
     setLoading(true);
@@ -566,7 +588,7 @@ const FreeSheetsPage = () => {
         <div className="flex flex-col gap-6">
           <div className="-mx-4 overflow-x-auto px-4">
             <div className="flex w-max gap-3">
-              {SUB_CATEGORY_OPTIONS.map((option) => {
+              {getSubCategoryOptions(isEnglishSite).map((option) => {
                 const isActive = selectedCategory === option.key;
                 return (
                   <button
@@ -707,7 +729,7 @@ const FreeSheetsPage = () => {
 
                       <div className="mt-auto flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600">
-                          {getDifficultyLabel(sheet.difficulty)}
+                          {getDifficultyLabel(sheet.difficulty, isEnglishSite)}
                         </span>
 
                         {displayCategories.length > 0 ? (
@@ -716,12 +738,12 @@ const FreeSheetsPage = () => {
                               key={category}
                               className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600"
                             >
-                              {category}
+                              {getCategoryName(category)}
                             </span>
                           ))
                         ) : (
                           <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500">
-                            카테고리 준비 중
+                            {getCategoryName('카테고리 준비 중')}
                           </span>
                         )}
                       </div>
@@ -777,7 +799,7 @@ const FreeSheetsPage = () => {
               <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-                    {getDifficultyLabel(selectedSheet.difficulty)}
+                    {getDifficultyLabel(selectedSheet.difficulty, isEnglishSite)}
                   </span>
                   {selectedSheet.categories.map((category) => (
                     <span

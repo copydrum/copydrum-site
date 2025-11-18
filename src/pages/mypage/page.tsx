@@ -163,14 +163,14 @@ const inquiryStatusMap: Record<string, { label: string; className: string }> = {
 const getInquiryStatusMeta = (status: string) =>
   inquiryStatusMap[status] ?? { label: '처리 중', className: 'bg-gray-100 text-gray-600' };
 
-const tabs: { id: TabKey; label: string; icon: string; description?: string }[] = [
-  { id: 'profile', label: '프로필 관리', icon: 'ri-user-line', description: '개인 정보 및 연락처를 관리하세요.' },
-  { id: 'purchases', label: '구매 내역', icon: 'ri-shopping-bag-line', description: '구매한 악보 주문 정보를 확인하세요.' },
-  { id: 'downloads', label: '다운로드 관리', icon: 'ri-download-2-line', description: '구매한 악보를 다운로드하고 미리보기 하세요.' },
-  { id: 'favorites', label: '찜한 악보', icon: 'ri-heart-line', description: '관심 있는 악보를 모아보세요.' },
-  { id: 'cash', label: '캐시 내역', icon: 'ri-coin-line', description: '보유 캐시와 사용 내역을 확인하세요.' },
-  { id: 'inquiries', label: '1:1 문의', icon: 'ri-question-answer-line', description: '문의와 답변을 확인하세요.' },
-  { id: 'custom-orders', label: '주문제작 신청', icon: 'ri-file-text-line', description: '맞춤 제작 신청 현황을 확인하세요.' },
+const getTabs = (isEnglishSite: boolean): { id: TabKey; label: string; icon: string; description?: string }[] => [
+  { id: 'profile', label: isEnglishSite ? 'Profile Management' : '프로필 관리', icon: 'ri-user-line', description: isEnglishSite ? 'Manage your personal information and contact details.' : '개인 정보 및 연락처를 관리하세요.' },
+  { id: 'purchases', label: isEnglishSite ? 'Purchase History' : '구매 내역', icon: 'ri-shopping-bag-line', description: isEnglishSite ? 'Check your purchased sheet music order information.' : '구매한 악보 주문 정보를 확인하세요.' },
+  { id: 'downloads', label: isEnglishSite ? 'Download Management' : '다운로드 관리', icon: 'ri-download-2-line', description: isEnglishSite ? 'Download and preview your purchased sheet music.' : '구매한 악보를 다운로드하고 미리보기 하세요.' },
+  { id: 'favorites', label: isEnglishSite ? 'Favorite Sheets' : '찜한 악보', icon: 'ri-heart-line', description: isEnglishSite ? 'View your favorite sheet music.' : '관심 있는 악보를 모아보세요.' },
+  { id: 'cash', label: isEnglishSite ? 'Cash History' : '캐시 내역', icon: 'ri-coin-line', description: isEnglishSite ? 'Check your cash balance and usage history.' : '보유 캐시와 사용 내역을 확인하세요.' },
+  { id: 'inquiries', label: isEnglishSite ? '1:1 Inquiry' : '1:1 문의', icon: 'ri-question-answer-line', description: isEnglishSite ? 'Check your inquiries and responses.' : '문의와 답변을 확인하세요.' },
+  { id: 'custom-orders', label: isEnglishSite ? 'Custom Orders' : '주문제작 신청', icon: 'ri-file-text-line', description: isEnglishSite ? 'Check the status of your custom order requests.' : '맞춤 제작 신청 현황을 확인하세요.' },
 ];
 
 export default function MyPage() {
@@ -735,13 +735,13 @@ export default function MyPage() {
 
   const stats = useMemo(
     () => [
-      { label: '구매한 악보', value: totalPurchasedSheets },
-      { label: '다운로드 가능', value: downloads.length },
-      { label: '찜한 악보', value: favorites.length },
-      { label: '1:1 문의', value: userInquiries.length },
-      { label: '주문제작 신청', value: customOrders.length },
+      { label: isEnglishSite ? 'Purchased Sheets' : '구매한 악보', value: totalPurchasedSheets },
+      { label: isEnglishSite ? 'Available Downloads' : '다운로드 가능', value: downloads.length },
+      { label: isEnglishSite ? 'Favorite Sheets' : '찜한 악보', value: favorites.length },
+      { label: isEnglishSite ? '1:1 Inquiries' : '1:1 문의', value: userInquiries.length },
+      { label: isEnglishSite ? 'Custom Orders' : '주문제작 신청', value: customOrders.length },
     ],
-    [totalPurchasedSheets, downloads.length, favorites.length, userInquiries.length, customOrders.length]
+    [totalPurchasedSheets, downloads.length, favorites.length, userInquiries.length, customOrders.length, isEnglishSite]
   );
 
   const handleCashCharge = () => {
@@ -1338,8 +1338,12 @@ export default function MyPage() {
           ) : (
             <div className="space-y-10">
             <header>
-              <h2 className="text-3xl font-extrabold text-gray-900">마이페이지</h2>
-              <p className="mt-2 text-gray-600">악보 구매부터 주문제작까지, 나의 활동을 한눈에 살펴보세요.</p>
+              <h2 className="text-3xl font-extrabold text-gray-900">{isEnglishSite ? 'My Page' : '마이페이지'}</h2>
+              <p className="mt-2 text-gray-600">
+                {isEnglishSite 
+                  ? 'View all your activities from sheet music purchases to custom orders at a glance.'
+                  : '악보 구매부터 주문제작까지, 나의 활동을 한눈에 살펴보세요.'}
+              </p>
             </header>
 
             <section className="space-y-6">
@@ -1349,26 +1353,26 @@ export default function MyPage() {
                     {(profile?.name ?? profile?.email ?? 'U').slice(0, 1).toUpperCase()}
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">회원 정보</p>
-                    <h3 className="text-xl font-bold text-gray-900">{profile?.name || '이름 미설정'}</h3>
+                    <p className="text-sm text-gray-500">{isEnglishSite ? 'Member Information' : '회원 정보'}</p>
+                    <h3 className="text-xl font-bold text-gray-900">{profile?.name || (isEnglishSite ? 'Name not set' : '이름 미설정')}</h3>
                     <p className="text-sm text-gray-600">{profile?.email}</p>
-                    <p className="mt-2 text-xs text-gray-400">가입일 {formatDate(profile?.created_at)}</p>
+                    <p className="mt-2 text-xs text-gray-400">{isEnglishSite ? 'Joined on' : '가입일'} {formatDate(profile?.created_at)}</p>
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-red-100 bg-gradient-to-r from-red-50 via-rose-50 to-orange-50 shadow-sm p-6 flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-red-500">보유 캐시</p>
+                    <p className="text-sm font-semibold text-red-500">{isEnglishSite ? 'Cash Balance' : '보유 캐시'}</p>
                     <p className="mt-2 text-3xl font-black text-gray-900">
                       {formatCurrency(profile?.credits ?? 0)}
                     </p>
-                    <p className="mt-1 text-xs text-gray-500">다음 악보 구매 시 사용 가능합니다.</p>
+                    <p className="mt-1 text-xs text-gray-500">{isEnglishSite ? 'Available for your next sheet music purchase.' : '다음 악보 구매 시 사용 가능합니다.'}</p>
                   </div>
                   <button
                     onClick={handleCashCharge}
                     className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-semibold shadow-lg hover:bg-red-600 transition"
                   >
-                    캐시 충전
+                    {isEnglishSite ? 'Charge Cash' : '캐시 충전'}
                   </button>
                 </div>
               </div>
@@ -1385,7 +1389,7 @@ export default function MyPage() {
 
             <section className="grid grid-cols-1 lg:grid-cols-4 gap-8">
               <aside className="lg:col-span-1 space-y-4">
-                {tabs.map((tab) => (
+                {getTabs(isEnglishSite).map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
@@ -1407,11 +1411,11 @@ export default function MyPage() {
               <section className="lg:col-span-3">
                 {activeTab === 'profile' && (
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                    <h3 className="text-xl font-bold text-gray-900 mb-6">프로필 관리</h3>
+                    <h3 className="text-xl font-bold text-gray-900 mb-6">{isEnglishSite ? 'Profile Management' : '프로필 관리'}</h3>
                     <form onSubmit={handleProfileSubmit} className="space-y-6">
                       <div className="grid gap-6 md:grid-cols-2">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">이메일</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">{isEnglishSite ? 'Email' : '이메일'}</label>
                           <input
                             type="email"
                             value={profile?.email ?? ''}
@@ -1420,27 +1424,27 @@ export default function MyPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">이름</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">{isEnglishSite ? 'Name' : '이름'}</label>
                           <input
                             type="text"
                             value={profileForm.name}
                             onChange={(event) => setProfileForm((prev) => ({ ...prev, name: event.target.value }))}
-                            placeholder="이름을 입력하세요"
+                            placeholder={isEnglishSite ? 'Enter your name' : '이름을 입력하세요'}
                             className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">전화번호</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">{isEnglishSite ? 'Phone Number' : '전화번호'}</label>
                           <input
                             type="tel"
                             value={profileForm.phone}
                             onChange={(event) => setProfileForm((prev) => ({ ...prev, phone: event.target.value }))}
-                            placeholder="전화번호를 입력하세요"
+                            placeholder={isEnglishSite ? 'Enter your phone number' : '전화번호를 입력하세요'}
                             className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">가입 날짜</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">{isEnglishSite ? 'Join Date' : '가입 날짜'}</label>
                           <input
                             type="text"
                             value={formatDate(profile?.created_at)}
@@ -1457,7 +1461,7 @@ export default function MyPage() {
                             profileSaving ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
                           }`}
                         >
-                          {profileSaving ? '저장 중...' : '프로필 업데이트'}
+                          {profileSaving ? (isEnglishSite ? 'Saving...' : '저장 중...') : (isEnglishSite ? 'Update Profile' : '프로필 업데이트')}
                         </button>
                       </div>
                     </form>
@@ -1468,21 +1472,21 @@ export default function MyPage() {
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900">구매 내역</h3>
-                        <p className="text-sm text-gray-500">최근 주문 순으로 정렬되었습니다.</p>
+                        <h3 className="text-xl font-bold text-gray-900">{isEnglishSite ? 'Purchase History' : '구매 내역'}</h3>
+                        <p className="text-sm text-gray-500">{isEnglishSite ? 'Sorted by most recent orders.' : '최근 주문 순으로 정렬되었습니다.'}</p>
                       </div>
                       <Link
                         to="/categories"
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-blue-200 text-blue-600 text-sm font-semibold hover:bg-blue-50"
                       >
-                        <i className="ri-add-line text-lg" /> 악보 더 둘러보기
+                        <i className="ri-add-line text-lg" /> {isEnglishSite ? 'Browse More Sheets' : '악보 더 둘러보기'}
                       </Link>
                     </div>
 
                     {orders.length === 0 ? (
                       <div className="py-16 text-center text-gray-500">
                         <i className="ri-shopping-bag-line text-4xl text-gray-300 mb-4" />
-                        <p className="font-medium">아직 구매한 악보가 없습니다.</p>
+                        <p className="font-medium">{isEnglishSite ? 'No purchased sheet music yet.' : '아직 구매한 악보가 없습니다.'}</p>
                       </div>
                     ) : (
                       <div className="space-y-4">
@@ -2394,7 +2398,7 @@ export default function MyPage() {
                             <div className="mt-1">
                               <span className="text-xs text-gray-500">
                                 {isEnglishSite && 'amountUSD' in option
-                                  ? `+$${option.bonusUSD} bonus`
+                                  ? `+$${option.bonusUSD} 적립`
                                   : `+${option.bonus.toLocaleString()} 적립`}
                               </span>
                               {!isEnglishSite && option.bonusPercent && (

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
+import { isEnglishHost } from '../i18n/languages';
 
 export interface CartItem {
   id: string;
@@ -66,8 +67,10 @@ export const useCart = () => {
 
   // 장바구니에 아이템 추가
   const addToCart = async (sheetId: string) => {
+    const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
+    
     if (!user) {
-      alert('로그인이 필요합니다.');
+      alert(isEnglishSite ? 'Login is required.' : '로그인이 필요합니다.');
       return false;
     }
 
@@ -81,7 +84,7 @@ export const useCart = () => {
 
       if (error) {
         if (error.code === '23505') {
-          alert('이미 장바구니에 있는 상품입니다.');
+          alert(isEnglishSite ? 'This item is already in your cart.' : '이미 장바구니에 있는 상품입니다.');
           return false;
         }
         throw error;
@@ -91,7 +94,7 @@ export const useCart = () => {
       return true;
     } catch (error) {
       console.error('장바구니 추가 실패:', error);
-      alert('장바구니 추가에 실패했습니다.');
+      alert(isEnglishSite ? 'Failed to add item to cart.' : '장바구니 추가에 실패했습니다.');
       return false;
     }
   };
