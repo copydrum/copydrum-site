@@ -46,7 +46,22 @@ export const PaymentMethodSelector = ({
   }, []);
 
   const paymentMethodOptions: PaymentMethodOption[] = useMemo(() => {
-    const options: PaymentMethodOption[] = [
+    // 영문 사이트: PayPal만 표시
+    if (isEnglishSite) {
+      return [
+        {
+          id: 'paypal',
+          name: t('payment.paypal'),
+          description: t('payment.paypalDescription'),
+          icon: 'ri-paypal-line',
+          color: 'text-blue-700',
+          disabled: false,
+        },
+      ];
+    }
+
+    // 한국 사이트: 기존 결제수단 (cash, card, bank)
+    return [
       {
         id: 'cash',
         name: t('payment.cash'),
@@ -70,20 +85,6 @@ export const PaymentMethodSelector = ({
         color: 'text-green-600',
       },
     ];
-
-    // PayPal은 영문 사이트에서만 표시
-    if (isEnglishSite) {
-      options.push({
-        id: 'paypal',
-        name: t('payment.paypal'),
-        description: t('payment.paypalDescription'),
-        icon: 'ri-paypal-line',
-        color: 'text-blue-700',
-        disabled: false,
-      });
-    }
-
-    return options;
   }, [t, isEnglishSite]);
 
   if (!open) return null;

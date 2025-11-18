@@ -13,7 +13,7 @@ interface MobileCashChargeModalProps {
   user: User | null;
 }
 
-type PaymentSelection = 'card' | 'bank';
+type PaymentSelection = 'card' | 'bank' | 'paypal';
 
 interface ChargeOption {
   amount: number;
@@ -30,22 +30,6 @@ interface PaymentMethodConfig {
 }
 
 // chargeOptions는 컴포넌트 내부에서 동적으로 생성
-
-const paymentMethodConfigs: PaymentMethodConfig[] = [
-  {
-    id: 'card',
-    nameKey: 'payment.card',
-    icon: 'ri-bank-card-line',
-    color: 'text-blue-600',
-    disabled: false,
-  },
-  {
-    id: 'bank',
-    nameKey: 'payment.bank',
-    icon: 'ri-bank-line',
-    color: 'text-green-600',
-  },
-];
 
 export default function MobileCashChargeModal({
   isOpen,
@@ -66,6 +50,38 @@ export default function MobileCashChargeModal({
     if (typeof window === 'undefined') return false;
     return isEnglishHost(window.location.host);
   }, []);
+
+  const paymentMethodConfigs = useMemo<PaymentMethodConfig[]>(() => {
+    // 영문 사이트: PayPal만 표시
+    if (isEnglishSite) {
+      return [
+        {
+          id: 'paypal',
+          nameKey: 'payment.paypal',
+          icon: 'ri-paypal-line',
+          color: 'text-blue-700',
+          disabled: false,
+        },
+      ];
+    }
+
+    // 한국 사이트: 기존 결제수단 (card, bank)
+    return [
+      {
+        id: 'card',
+        nameKey: 'payment.card',
+        icon: 'ri-bank-card-line',
+        color: 'text-blue-600',
+        disabled: false,
+      },
+      {
+        id: 'bank',
+        nameKey: 'payment.bank',
+        icon: 'ri-bank-line',
+        color: 'text-green-600',
+      },
+    ];
+  }, [isEnglishSite]);
 
   const chargeOptions = useMemo<ChargeOption[]>(() => {
     if (isEnglishSite) {
@@ -91,7 +107,7 @@ export default function MobileCashChargeModal({
   }, [isEnglishSite]);
 
   const [selectedAmount, setSelectedAmount] = useState<number>(chargeOptions[2].amount);
-  const [selectedPayment, setSelectedPayment] = useState<PaymentSelection>('bank');
+  const [selectedPayment, setSelectedPayment] = useState<PaymentSelection>(isEnglishSite ? 'paypal' : 'bank');
   const [agreementChecked, setAgreementChecked] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [userCash, setUserCash] = useState(0);
@@ -106,13 +122,13 @@ export default function MobileCashChargeModal({
 
   const resetState = useCallback(() => {
     setSelectedAmount(chargeOptions[2].amount);
-    setSelectedPayment('bank');
+    setSelectedPayment(isEnglishSite ? 'paypal' : 'bank');
     setAgreementChecked(false);
     setIsProcessing(false);
     setBankTransferInfo(null);
     setShowDepositorInput(false);
     setDepositorName('');
-  }, [chargeOptions]);
+  }, [chargeOptions, isEnglishSite]);
 
   const loadUserCash = useCallback(async () => {
     if (!user) {
@@ -168,6 +184,31 @@ export default function MobileCashChargeModal({
 
     if (!agreementChecked) {
       alert(t('mobile.cash.agreementRequired'));
+      return;
+    }
+
+    if (selectedPayment === 'paypal') {
+      // PayPal 결제 처리 (PortOne)
+      setIsProcessing(true);
+      try {
+        await startCashCharge({
+          userId: user.id,
+          amount: selectedOption.amount,
+          bonusAmount: selectedOption.bonus ?? 0,
+          paymentMethod: 'paypal',
+          description: `${t('mobile.cash.title')} ${formatCurrency(selectedOption.amount)}`,
+          buyerName: user.email ?? null,
+          buyerEmail: user.email ?? null,
+          // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
+        });
+
+        // PayPal은 리다이렉트되므로 알림 불필요
+        // 포트원이 자동으로 결제 창을 열고 처리
+      } catch (error) {
+        console.error('모바일 캐쉬 충전 오류:', error);
+        alert(error instanceof Error ? error.message : t('mobile.cash.error'));
+        setIsProcessing(false);
+      }
       return;
     }
 

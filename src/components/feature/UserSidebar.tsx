@@ -26,7 +26,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   const [chargeAmount, setChargeAmount] = useState(
     isEnglishSiteForState ? convertUSDToKRW(10) : 10000
   );
-  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank'>('bank');
+  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank' | 'paypal'>(isEnglishSiteForState ? 'paypal' : 'bank');
   const [chargeAgreementChecked, setChargeAgreementChecked] = useState(false);
   const [chargeProcessing, setChargeProcessing] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
@@ -252,6 +252,32 @@ export default function UserSidebar({ user }: UserSidebarProps) {
       return;
     }
 
+    if (selectedPayment === 'paypal') {
+      // PayPal 결제 처리 (PortOne)
+      setChargeProcessing(true);
+      try {
+        const description = `${selectedOption.label} (${formatCurrency(selectedOption.amount)})`;
+        await startCashCharge({
+          userId: user.id,
+          amount: selectedOption.amount,
+          bonusAmount: selectedOption.bonus ?? 0,
+          paymentMethod: 'paypal',
+          description,
+          buyerName: user.user_metadata?.name ?? user.email ?? null,
+          buyerEmail: user.email ?? null,
+          // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
+        });
+
+        // PayPal은 리다이렉트되므로 알림 불필요
+        // 포트원이 자동으로 결제 창을 열고 처리
+      } catch (error) {
+        console.error('캐쉬 충전 오류:', error);
+        alert(error instanceof Error ? error.message : '캐쉬 충전 중 오류가 발생했습니다.');
+        setChargeProcessing(false);
+      }
+      return;
+    }
+
     if (selectedPayment === 'card') {
       // 카드 결제 처리
       setChargeProcessing(true);
@@ -428,24 +454,49 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     ];
   }, [isEnglishSite]);
 
-  const paymentMethods = [
-    {
-      id: 'card',
-      name: '신용카드',
-      icon: 'ri-bank-card-line',
-      color: 'text-blue-600',
-      disabled: false,
-    },
-    {
-      id: 'kakaopay',
-      name: '카카오페이',
-      icon: 'ri-kakao-talk-fill',
-      color: 'text-yellow-600',
-      disabled: true,
-      badge: '준비 중',
-    },
-    { id: 'bank', name: '무통장입금', icon: 'ri-bank-line', color: 'text-green-600' },
-  ] as const;
+  const paymentMethods = useMemo(() => {
+    // 영문 사이트: PayPal만 표시
+    if (isEnglishSite) {
+      return [
+        {
+          id: 'paypal',
+          name: t('payment.paypal'),
+          icon: 'ri-paypal-line',
+          color: 'text-blue-700',
+          disabled: false,
+          badge: undefined,
+        },
+      ];
+    }
+
+    // 한국 사이트: 기존 결제수단 (card, kakaopay, bank)
+    return [
+      {
+        id: 'card',
+        name: '신용카드',
+        icon: 'ri-bank-card-line',
+        color: 'text-blue-600',
+        disabled: false,
+        badge: undefined,
+      },
+      {
+        id: 'kakaopay',
+        name: '카카오페이',
+        icon: 'ri-kakao-talk-fill',
+        color: 'text-yellow-600',
+        disabled: true,
+        badge: '준비 중',
+      },
+      { 
+        id: 'bank', 
+        name: '무통장입금', 
+        icon: 'ri-bank-line', 
+        color: 'text-green-600',
+        disabled: false,
+        badge: undefined,
+      },
+    ];
+  }, [isEnglishSite, t]);
 
   const loadUserCash = useCallback(async () => {
     if (!user) {
@@ -907,7 +958,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                                   ? `+$${option.bonusUSD} bonus`
                                   : `+${formatNumber(option.bonus)} 적립`}
                               </span>
-                              {!isEnglishSite && option.bonusPercent && (
+                              {!isEnglishSite && 'bonusPercent' in option && option.bonusPercent && (
                                 <span className="ml-1 bg-red-500 text-white text-xs px-1 py-0.5 rounded">
                                   {option.bonusPercent}
                                 </span>
@@ -935,7 +986,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                                 alert(t('mobile.cash.paymentUnavailable'));
                                 return;
                               }
-                              setSelectedPayment(method.id);
+                              setSelectedPayment(method.id as 'card' | 'kakaopay' | 'bank' | 'paypal');
                             }}
                             disabled={isDisabled}
                             className={`p-3 border rounded-lg text-left transition-colors ${

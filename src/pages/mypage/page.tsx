@@ -15,6 +15,7 @@ import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
 import { buildDownloadKey, downloadFile, getDownloadFileName, requestSignedDownloadUrl } from '../../utils/downloadHelpers';
 // convertUSDToKRW is not used in this component anymore
 import { useTranslation } from 'react-i18next';
+import { isEnglishHost } from '../../i18n/languages';
 
 type TabKey = 'profile' | 'purchases' | 'downloads' | 'favorites' | 'cash' | 'inquiries' | 'custom-orders';
 
@@ -211,10 +212,16 @@ export default function MyPage() {
   const [profileForm, setProfileForm] = useState({ name: '', phone: '' });
   const [profileSaving, setProfileSaving] = useState(false);
   
+  // 영문 사이트 체크
+  const isEnglishSite = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return isEnglishHost(window.location.host);
+  }, []);
+
   // 캐시충전 모달 상태
   const [showCashChargeModal, setShowCashChargeModal] = useState(false);
   const [chargeAmount, setChargeAmount] = useState(10000);
-  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank'>('bank');
+  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank' | 'paypal'>(isEnglishSite ? 'paypal' : 'bank');
   const [chargeAgreementChecked, setChargeAgreementChecked] = useState(false);
   const [chargeProcessing, setChargeProcessing] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
@@ -231,32 +238,49 @@ export default function MyPage() {
     { amount: 100000, bonus: 25000, label: '10만원', bonusPercent: '25%' },
   ], []);
 
-  const paymentMethods = useMemo(() => [
-    { 
-      id: 'card', 
-      name: t('mypage.paymentMethods.creditCard'), 
-      icon: 'ri-bank-card-line', 
-      color: 'text-blue-600',
-      disabled: true,
-      badge: t('mypage.paymentMethods.preparing'),
-    },
-    {
-      id: 'kakaopay',
-      name: t('mypage.paymentMethods.kakaoPay'),
-      icon: 'ri-kakao-talk-fill',
-      color: 'text-yellow-600',
-      disabled: true,
-      badge: t('mypage.paymentMethods.preparing'),
-    },
-    { 
-      id: 'bank', 
-      name: t('mypage.paymentMethods.bankTransfer'), 
-      icon: 'ri-bank-line', 
-      color: 'text-green-600',
-      disabled: false,
-      badge: undefined,
-    },
-  ], [t]);
+  const paymentMethods = useMemo(() => {
+    // 영문 사이트: PayPal만 표시
+    if (isEnglishSite) {
+      return [
+        {
+          id: 'paypal',
+          name: t('payment.paypal'),
+          icon: 'ri-paypal-line',
+          color: 'text-blue-700',
+          disabled: false,
+          badge: undefined,
+        },
+      ];
+    }
+
+    // 한국 사이트: 기존 결제수단 (card, kakaopay, bank)
+    return [
+      { 
+        id: 'card', 
+        name: t('mypage.paymentMethods.creditCard'), 
+        icon: 'ri-bank-card-line', 
+        color: 'text-blue-600',
+        disabled: true,
+        badge: t('mypage.paymentMethods.preparing'),
+      },
+      {
+        id: 'kakaopay',
+        name: t('mypage.paymentMethods.kakaoPay'),
+        icon: 'ri-kakao-talk-fill',
+        color: 'text-yellow-600',
+        disabled: true,
+        badge: t('mypage.paymentMethods.preparing'),
+      },
+      { 
+        id: 'bank', 
+        name: t('mypage.paymentMethods.bankTransfer'), 
+        icon: 'ri-bank-line', 
+        color: 'text-green-600',
+        disabled: false,
+        badge: undefined,
+      },
+    ];
+  }, [t, isEnglishSite]);
 
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [downloads, setDownloads] = useState<DownloadableItem[]>([]);
@@ -769,6 +793,33 @@ export default function MyPage() {
 
     if (selectedPayment === 'kakaopay') {
       alert(t('mypage.errors.paymentMethodNotReady'));
+      return;
+    }
+
+    if (selectedPayment === 'paypal') {
+      // PayPal 결제 처리 (PortOne)
+      setChargeProcessing(true);
+      try {
+        const description = `${t('mypage.cash.types.charge')} ${selectedOption.amount.toLocaleString('ko-KR')}원`;
+        await startCashCharge({
+          userId: user.id,
+          amount: selectedOption.amount,
+          bonusAmount: selectedOption.bonus ?? 0,
+          paymentMethod: 'paypal',
+          description,
+          buyerName: profile?.name ?? profileForm.name ?? null,
+          buyerEmail: user.email ?? null,
+          buyerTel: profile?.phone ?? profileForm.phone ?? null,
+          // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
+        });
+
+        // PayPal은 리다이렉트되므로 알림 불필요
+        // 포트원이 자동으로 결제 창을 열고 처리
+      } catch (error) {
+        console.error(t('mypage.console.cashChargeError'), error);
+        alert(error instanceof Error ? error.message : t('mypage.errors.paymentError'));
+        setChargeProcessing(false);
+      }
       return;
     }
 
@@ -2415,7 +2466,7 @@ export default function MyPage() {
                                 alert(t('mypage.errors.paymentMethodNotReady'));
                                 return;
                               }
-                              setSelectedPayment(method.id as 'card' | 'kakaopay' | 'bank');
+                              setSelectedPayment(method.id as 'card' | 'kakaopay' | 'bank' | 'paypal');
                             }}
                             disabled={isDisabled}
                             className={`p-3 border rounded-lg text-left transition-colors ${

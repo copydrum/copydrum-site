@@ -5,11 +5,12 @@ import {
   submitInicisPaymentForm,
   getInicisReturnUrl,
 } from './inicis';
+import { requestPayPalPayment, getPortOneReturnUrl } from './portone';
 import type { PaymentIntentResponse, PaymentStatus, VirtualAccountInfo } from './types';
 import { updateOrderPaymentStatus } from './paymentService';
 import { supabase } from '../supabase';
 
-type SupportedChargeMethod = 'card' | 'bank_transfer';
+type SupportedChargeMethod = 'card' | 'bank_transfer' | 'paypal';
 
 interface StartCashChargeParams {
   userId: string;
@@ -89,6 +90,40 @@ export const startCashCharge = async ({
       paymentMethod,
       virtualAccountInfo: bankInfo,
     };
+  }
+
+  if (paymentMethod === 'paypal') {
+    // 포트원을 통한 PayPal 결제 처리
+    const finalReturnUrl = returnUrl || getPortOneReturnUrl();
+
+    try {
+      const result = await requestPayPalPayment({
+        amount,
+        orderId,
+        buyerEmail: buyerEmail ?? undefined,
+        buyerName: buyerName ?? undefined,
+        buyerTel: buyerTel ?? undefined,
+        description,
+        returnUrl: finalReturnUrl,
+      });
+
+      if (result.success) {
+        // 결제 성공 - 포트원 콜백에서 이미 처리됨
+        // 리다이렉트는 포트원이 자동으로 처리
+        return {
+          orderId,
+          orderNumber,
+          amount,
+          paymentMethod,
+        };
+      } else {
+        // 결제 실패
+        throw new Error(result.error_msg || 'PayPal 결제가 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('[cashCharge] PayPal 결제 오류', error);
+      throw error;
+    }
   }
 
   // 카드 결제

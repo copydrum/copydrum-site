@@ -60,7 +60,7 @@ export default function CollectionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [purchasing, setPurchasing] = useState(false);
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const currentLanguage = i18n.language;
   const formatCurrency = useCallback(
     (value: number) => formatPrice({ 
@@ -90,7 +90,7 @@ export default function CollectionDetailPage() {
 
   useEffect(() => {
     if (!collectionId) {
-      setError('요청하신 모음집 정보가 없습니다.');
+      setError(t('collectionsDetail.errors.noCollectionInfo'));
       setLoading(false);
       return;
     }
@@ -111,7 +111,7 @@ export default function CollectionDetailPage() {
         }
 
         if (!collectionData) {
-          setError('요청하신 모음집을 찾을 수 없습니다.');
+          setError(t('collectionsDetail.errors.collectionNotFound'));
           setCollection(null);
           return;
         }
@@ -182,7 +182,7 @@ export default function CollectionDetailPage() {
         setCollectionSheets(activeSheets);
       } catch (err) {
         console.error('모음집 상세 정보 로드 오류:', err);
-        setError('모음집 정보를 불러오는 중 문제가 발생했습니다.');
+        setError(t('collectionsDetail.errors.loadError'));
         setCollection(null);
         setCollectionSheets([]);
         setCategories([]);
@@ -238,7 +238,7 @@ export default function CollectionDetailPage() {
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">모음집을 불러오는 중입니다...</p>
+          <p className="text-gray-600">{t('collectionsDetail.loading')}</p>
         </div>
       </div>
     );
@@ -248,13 +248,13 @@ export default function CollectionDetailPage() {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center">
         <div className="text-center max-w-md mx-auto px-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">{error || '모음집 정보를 찾을 수 없습니다.'}</h1>
-          <p className="text-gray-600 mb-6">요청하신 악보 모음집이 존재하지 않거나 비활성화되었습니다.</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">{error || t('collectionsDetail.errors.collectionNotFound')}</h1>
+          <p className="text-gray-600 mb-6">{t('collectionsDetail.errors.collectionNotAvailable')}</p>
           <button
             onClick={() => navigate('/collections')}
             className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
           >
-            모음집 목록으로 돌아가기
+            {t('collectionsDetail.backToList')}
           </button>
         </div>
       </div>
@@ -262,7 +262,7 @@ export default function CollectionDetailPage() {
   }
 
   const displayPriceLabel =
-    finalPrice > 0 ? formatCurrency(finalPrice) : collection.original_price > 0 ? formatCurrency(collection.original_price) : '무료';
+    finalPrice > 0 ? formatCurrency(finalPrice) : collection.original_price > 0 ? formatCurrency(collection.original_price) : t('collectionsDetail.free');
 
   const handlePurchase = async () => {
     if (!user) {
@@ -275,7 +275,7 @@ export default function CollectionDetailPage() {
     const sheetDetails = sheetsWithDetails.filter((sheet) => !!sheet?.id);
 
     if (sheetDetails.length === 0) {
-      alert('모음집에 포함된 악보 정보를 찾을 수 없습니다.');
+      alert(t('collectionsDetail.alerts.noSheetInfo'));
       return;
     }
 
@@ -295,19 +295,19 @@ export default function CollectionDetailPage() {
 
         alert(
           [
-            '이미 구매하신 악보가 모음집에 포함되어 있어 중복 구매가 불가능합니다.',
+            t('collectionsDetail.alerts.duplicatePurchase'),
             '',
-            '중복된 악보 목록:',
+            t('collectionsDetail.alerts.duplicateList'),
             duplicatesText,
             '',
-            '구매 내역을 마이페이지에서 확인해주세요.',
+            t('collectionsDetail.alerts.checkMyPage'),
           ].join('\n'),
         );
         return;
       }
     } catch (error) {
       console.error('모음집 구매 이력 확인 오류:', error);
-      alert('구매 이력 확인 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      alert(t('collectionsDetail.alerts.purchaseError'));
       return;
     }
 
@@ -316,14 +316,14 @@ export default function CollectionDetailPage() {
       const price = Math.max(0, finalPrice);
       const purchaseItems = sheetDetails.map((sheet) => ({
           sheetId: sheet.id,
-          sheetTitle: sheet.title ?? '악보',
+          sheetTitle: sheet.title ?? t('collectionsDetail.sheetTitle'),
           price: sheet.price ?? 0,
         }));
 
       const purchaseResult = await processCashPurchase({
         userId: user.id,
         totalPrice: price,
-        description: `악보 모음집 구매: ${collection.title}`,
+        description: t('collectionsDetail.purchaseDescription', { title: collection.title }),
         items: purchaseItems,
         sheetIdForTransaction: null,
       });
@@ -331,16 +331,16 @@ export default function CollectionDetailPage() {
       if (!purchaseResult.success) {
         if (purchaseResult.reason === 'INSUFFICIENT_CREDIT') {
           alert(
-            `보유 캐쉬가 부족합니다.\n현재 잔액: ${purchaseResult.currentCredits.toLocaleString('ko-KR')}P\n캐쉬를 충전한 뒤 다시 시도해주세요.`,
+            `${t('collectionsDetail.alerts.insufficientCredit')}\n${t('collectionsDetail.alerts.currentBalance', { amount: purchaseResult.currentCredits.toLocaleString('ko-KR') })}\n${t('collectionsDetail.alerts.chargeCash')}`,
           );
         }
         return;
       }
 
-      alert('구매가 완료되었습니다. 마이페이지에서 콘텐츠를 확인하세요.');
+      alert(t('collectionsDetail.alerts.purchaseSuccess'));
     } catch (error) {
       console.error('구매 오류:', error);
-      alert('구매 중 오류가 발생했습니다.');
+      alert(t('collectionsDetail.alerts.purchaseError'));
     } finally {
       setPurchasing(false);
     }
@@ -363,7 +363,7 @@ export default function CollectionDetailPage() {
             className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 cursor-pointer"
           >
             <i className="ri-arrow-left-line text-lg" />
-            <span>모음집 목록으로 돌아가기</span>
+            <span>{t('collectionsDetail.backToList')}</span>
           </button>
         </div>
 
@@ -383,7 +383,7 @@ export default function CollectionDetailPage() {
                   />
                   {collection.discount_percentage > 0 && (
                     <div className="absolute top-5 right-5 rounded-full bg-red-500 px-4 py-2 text-white font-semibold shadow-lg">
-                      {collection.discount_percentage}% 할인
+                      {t('collectionsDetail.discount', { percentage: collection.discount_percentage })}
                     </div>
                   )}
                 </div>
@@ -391,7 +391,7 @@ export default function CollectionDetailPage() {
                   <div className="space-y-4">
                     <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-600">
                       <i className="ri-album-line" />
-                      악보 모음집
+                      {t('collectionsDetail.badge')}
                     </span>
                     <h2 className="text-2xl font-bold text-gray-900 md:text-3xl">{translatedTitle}</h2>
                     {hasTranslatedDescription && (
@@ -415,9 +415,9 @@ export default function CollectionDetailPage() {
                   )}
 
                   <div className="rounded-2xl bg-blue-50 px-5 py-4">
-                    <p className="text-sm font-semibold text-blue-600">포함된 악보 수</p>
+                    <p className="text-sm font-semibold text-blue-600">{t('collectionsDetail.includedSheets.count')}</p>
                     <p className="mt-2 text-2xl font-extrabold text-blue-700 md:text-3xl">
-                      {sheetsWithDetails.length}곡
+                      {t('collectionsDetail.includedSheets.number', { count: sheetsWithDetails.length })}
                     </p>
                   </div>
                 </div>
@@ -425,15 +425,15 @@ export default function CollectionDetailPage() {
 
               <section className="rounded-3xl border border-gray-100 bg-white shadow-sm">
                 <header className="border-b border-gray-100 px-6 py-5 md:px-8 md:py-6">
-                  <h3 className="text-lg font-semibold text-gray-900 md:text-xl">포함된 악보</h3>
-                  <p className="mt-1 text-sm text-gray-500">모음집에 포함된 모든 악보를 확인하고 원하는 악보를 바로 살펴보세요.</p>
+                  <h3 className="text-lg font-semibold text-gray-900 md:text-xl">{t('collectionsDetail.includedSheets.title')}</h3>
+                  <p className="mt-1 text-sm text-gray-500">{t('collectionsDetail.includedSheets.description')}</p>
                 </header>
 
                 <div className="divide-y divide-gray-100">
                   {sheetsWithDetails.length === 0 ? (
                     <div className="px-6 py-10 text-center text-gray-500 md:px-8 md:py-12">
                       <i className="ri-inbox-line text-4xl text-gray-300 mb-3" />
-                      <p className="text-sm">아직 모음집에 포함된 악보가 없습니다.</p>
+                      <p className="text-sm">{t('collectionsDetail.includedSheets.empty')}</p>
                     </div>
                   ) : (
                     collectionSheets.map((item, index) => {
@@ -469,11 +469,11 @@ export default function CollectionDetailPage() {
                           <div className="flex items-center justify-between sm:justify-end gap-4 sm:min-w-[200px]">
                             {sheet.difficulty && (
                               <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-                                난이도 {sheet.difficulty}
+                                {t('collectionsDetail.sheet.difficulty', { difficulty: sheet.difficulty })}
                               </span>
                             )}
                             <span className="text-sm font-semibold text-blue-600">
-                              {sheet.price > 0 ? formatCurrency(sheet.price) : '무료'}
+                              {sheet.price > 0 ? formatCurrency(sheet.price) : t('collectionsDetail.sheet.free')}
                             </span>
                           </div>
                         </div>
@@ -486,20 +486,20 @@ export default function CollectionDetailPage() {
 
             <aside className="space-y-6">
               <div className="rounded-3xl border border-blue-100 bg-blue-50 px-5 py-6 shadow-sm md:px-6 md:py-8">
-                <h3 className="text-lg font-semibold text-blue-900">모음집 가격 정보</h3>
+                <h3 className="text-lg font-semibold text-blue-900">{t('collectionsDetail.purchase.priceInfo')}</h3>
                 <div className="mt-5 space-y-4">
                   <div className="flex items-center justify-between text-sm text-blue-800">
-                    <span>개별 악보 총 합계</span>
-                    <span className="font-semibold line-through">{totalIndividualPrice > 0 ? formatCurrency(totalIndividualPrice) : '정보 없음'}</span>
+                    <span>{t('collectionsDetail.purchase.totalIndividual')}</span>
+                    <span className="font-semibold line-through">{totalIndividualPrice > 0 ? formatCurrency(totalIndividualPrice) : t('collectionsDetail.purchase.noInfo')}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm text-blue-800">
-                    <span>모음집 판매가</span>
+                    <span>{t('collectionsDetail.purchase.collectionPrice')}</span>
                     <span className="text-xl font-bold text-blue-700 md:text-2xl">{displayPriceLabel}</span>
                   </div>
                   {savings > 0 && (
                     <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-blue-600">
-                      <span>지금 구매 시</span>
-                      <span>{formatCurrency(savings)} 절약!</span>
+                      <span>{t('collectionsDetail.purchase.buyNow')}</span>
+                      <span>{t('collectionsDetail.purchase.save', { amount: formatCurrency(savings) })}</span>
                     </div>
                   )}
                 </div>
@@ -512,40 +512,40 @@ export default function CollectionDetailPage() {
                       disabled={purchasing}
                       className="w-full bg-blue-600 text-white py-3 px-5 rounded-2xl hover:bg-blue-700 font-semibold text-base disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer transition-colors shadow-lg md:py-4 md:px-6 md:text-lg"
                     >
-                      {purchasing ? '처리 중...' : '바로구매'}
+                      {purchasing ? t('collectionsDetail.purchase.processing') : t('collectionsDetail.purchase.buyNow')}
                     </button>
                     
                     <p className="text-sm text-gray-500 text-center">
-                      모음집은 할인된 가격으로 바로구매만 가능합니다.
+                      {t('collectionsDetail.purchase.note')}
                     </p>
                   </div>
                 ) : (
                   <p className="mt-6 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-red-500">
-                    현재 비활성화된 모음집입니다. 관리자에게 문의해 주세요.
+                    {t('collectionsDetail.purchase.inactive')}
                   </p>
                 )}
               </div>
 
               <div className="rounded-3xl border border-gray-100 bg-white px-5 py-5 shadow-sm space-y-4 md:px-6 md:py-6">
-                <h4 className="text-lg font-semibold text-gray-900">다른 페이지 탐색</h4>
+                <h4 className="text-lg font-semibold text-gray-900">{t('collectionsDetail.navigation.title')}</h4>
                 <div className="space-y-3">
                   <button
                     onClick={() => navigate('/categories')}
                     className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 cursor-pointer"
                   >
-                    악보 카테고리 보기
+                    {t('collectionsDetail.navigation.viewCategories')}
                   </button>
                   <button
                     onClick={() => navigate('/event-sale')}
                     className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 cursor-pointer"
                   >
-                    이벤트 할인 악보
+                    {t('collectionsDetail.navigation.eventSale')}
                   </button>
                   <button
                     onClick={() => navigate('/custom-order')}
                     className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 cursor-pointer"
                   >
-                    주문 제작 문의
+                    {t('collectionsDetail.navigation.customOrder')}
                   </button>
                 </div>
               </div>
@@ -560,10 +560,10 @@ export default function CollectionDetailPage() {
           <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-4px_12px_rgba(15,23,42,0.15)] backdrop-blur">
             <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-blue-600">모음집 가격</p>
+                <p className="text-xs font-semibold text-blue-600">{t('collectionsDetail.purchase.mobilePrice')}</p>
                 <p className="text-lg font-bold text-gray-900">{displayPriceLabel}</p>
                 {savings > 0 ? (
-                  <p className="text-[11px] text-green-600">개별 구매 대비 {formatCurrency(savings)} 절약</p>
+                  <p className="text-[11px] text-green-600">{t('collectionsDetail.purchase.mobileSave', { amount: formatCurrency(savings) })}</p>
                 ) : null}
               </div>
               <button
@@ -574,13 +574,13 @@ export default function CollectionDetailPage() {
                   purchasing ? 'opacity-60' : 'hover:bg-blue-700'
                 }`}
               >
-                {purchasing ? '처리 중...' : '바로구매'}
+                {purchasing ? t('collectionsDetail.purchase.processing') : t('collectionsDetail.purchase.buyNow')}
               </button>
             </div>
           </div>
         ) : (
           <div className="fixed inset-x-0 bottom-0 z-40 border-t border-red-200 bg-white px-4 py-3 text-center text-sm font-semibold text-red-500 shadow-[0_-4px_12px_rgba(248,113,113,0.25)]">
-            현재 비활성화된 모음집입니다.
+            {t('collectionsDetail.purchase.mobileInactive')}
           </div>
         )}
       </div>

@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
@@ -15,6 +15,33 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    // A. 페이지 진입 시 세션 확인
+    supabase.auth.getSession().then(({ data }) => {
+      if (!isMounted) return;
+      if (data.session?.user) {
+        navigate('/mypage', { replace: true });
+      }
+    });
+
+    // B. OAuth 로그인 직후 세션 변화를 감지
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
+      if (session?.user) {
+        navigate('/mypage', { replace: true });
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
 
   const handleKakaoLogin = async () => {
     try {

@@ -51,7 +51,7 @@ export default function CollectionsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const navigate = useNavigate();
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const currentLanguage = i18n.language;
 
   // 장르 목록 (순서대로) - 마지막에 드럼레슨 추가
@@ -209,7 +209,7 @@ export default function CollectionsPage() {
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">로딩 중...</p>
+          <p className="text-gray-600">{t('collectionsPage.loading')}</p>
         </div>
       </div>
     );
@@ -228,8 +228,8 @@ export default function CollectionsPage() {
         {/* Hero Section */}
         <section className="bg-gradient-to-r from-blue-600 to-purple-600 py-12 md:py-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-3xl font-bold text-white mb-3 md:text-4xl md:mb-4">악보 모음집</h2>
-            <p className="text-base text-blue-100 md:text-xl">테마별로 엄선한 특별한 드럼 악보 컬렉션을 만나보세요.</p>
+            <h2 className="text-3xl font-bold text-white mb-3 md:text-4xl md:mb-4">{t('collectionsPage.title')}</h2>
+            <p className="text-base text-blue-100 md:text-xl">{t('collectionsPage.subtitle')}</p>
           </div>
         </section>
 
@@ -247,7 +247,7 @@ export default function CollectionsPage() {
                       : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
                   }`}
                 >
-                  전체
+                  {t('collectionsPage.filter.all')}
                 </button>
                 {categories.map((category) => (
                   <button
@@ -269,7 +269,7 @@ export default function CollectionsPage() {
               <div className="text-center py-12 md:py-16">
                 <i className="ri-inbox-line text-6xl text-gray-300 mb-4"></i>
                 <p className="text-gray-500 text-lg">
-                  {selectedCategory ? '선택한 장르에 해당하는 모음집이 없습니다.' : '등록된 모음집이 없습니다.'}
+                  {selectedCategory ? t('collectionsPage.empty.noCollectionsForCategory') : t('collectionsPage.empty.noCollections')}
                 </p>
               </div>
             ) : (
@@ -306,7 +306,7 @@ export default function CollectionsPage() {
                         />
                         {collection.discount_percentage > 0 && (
                           <div className="absolute top-4 right-4 bg-red-500 text-white px-3 py-1 rounded-full font-bold text-sm">
-                            {collection.discount_percentage}% 할인
+                            {t('collectionsPage.collection.discount', { percentage: collection.discount_percentage })}
                           </div>
                         )}
                       </div>
@@ -315,7 +315,7 @@ export default function CollectionsPage() {
                       <div className="p-6">
                         <div className="flex items-center justify-between mb-3">
                           <div className="text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                            모음집
+                            {t('collectionsPage.collection.badge')}
                           </div>
                           <div className="text-sm text-gray-500">
                             {new Date(collection.created_at).toLocaleDateString()}
@@ -339,7 +339,7 @@ export default function CollectionsPage() {
                               <div className="text-lg font-bold text-blue-600">
                                 {collection.original_price > 0
                                   ? formatCurrency(collection.original_price)
-                                  : '무료'}
+                                  : t('collectionsPage.collection.free')}
                               </div>
                             )}
                             {collection.discount_percentage > 0 && (
@@ -350,7 +350,7 @@ export default function CollectionsPage() {
                           </div>
                           <div className="flex items-center space-x-2 text-sm text-gray-500">
                             <i className="ri-music-2-line"></i>
-                            <span>{collection.sheet_count ?? 0}곡</span>
+                            <span>{t('collectionsPage.collection.songs', { count: collection.sheet_count ?? 0 })}</span>
                           </div>
                         </div>
                       </div>
