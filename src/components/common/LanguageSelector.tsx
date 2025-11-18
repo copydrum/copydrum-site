@@ -111,8 +111,8 @@ export default function LanguageSelector({ variant = 'desktop', className = '' }
     }
 
     // 같은 언어 그룹 내에서만 언어 변경 (예: 영어 -> 일본어)
+    // 주의: 도메인 기반 언어 강제 정책으로 인해 실제로는 도메인 언어로 리셋될 수 있음
     i18n.changeLanguage(langCode);
-    localStorage.setItem('i18nextLng', langCode);
     setIsOpen(false);
   };
 
