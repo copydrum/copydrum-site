@@ -106,20 +106,14 @@ serve(async (req) => {
     if (!profile) {
       console.error('No profile found for user:', user.id, user.email)
       // Try to create profile if it doesn't exist with proper name handling
-      let userName = '사용자'
+      // 이름 우선순위: user_metadata.name > full_name > 이메일 앞부분 > '사용자'
+      let userName = user.user_metadata?.name || 
+                     user.user_metadata?.full_name || 
+                     (user.email ? user.email.split('@')[0] : '사용자')
       
-      // Try multiple sources for the name
-      if (user.user_metadata?.name) {
-        userName = user.user_metadata.name
-      } else if (user.user_metadata?.full_name) {
-        userName = user.user_metadata.full_name
-      } else if (user.email) {
-        userName = user.email.split('@')[0]
-      }
-      
-      // Ensure name is not empty or null
+      // Ensure name is not empty or null (trim 후에도 빈 문자열이면 이메일 앞부분 사용)
       if (!userName || userName.trim() === '') {
-        userName = '사용자'
+        userName = user.email ? user.email.split('@')[0] : '사용자'
       }
       
       console.log('Attempting to create profile with name:', userName)

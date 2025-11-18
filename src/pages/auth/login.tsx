@@ -100,12 +100,16 @@ export default function Login() {
           
           // 프로필이 없으면 기본 프로필 생성
           if (profileError.code === 'PGRST116') {
+            // 이름 우선순위: user_metadata.name > 이메일 앞부분
+            const userName = data.user.user_metadata?.name || 
+                            (data.user.email ? data.user.email.split('@')[0] : '사용자');
+            
             const { error: insertError } = await supabase
               .from('profiles')
               .insert({
                 id: data.user.id,
                 email: data.user.email || '',
-                name: data.user.user_metadata?.name || '사용자',
+                name: userName,
                 phone: data.user.user_metadata?.phone || null,
                 role: data.user.user_metadata?.role || 'user'
               });

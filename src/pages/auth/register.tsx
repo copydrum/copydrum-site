@@ -131,6 +131,24 @@ export default function Register() {
       }
 
       if (data.user) {
+        // 프로필 생성 (이름이 있으면 사용, 없으면 이메일 앞부분 사용)
+        const userName = formData.name.trim() || formData.email.split('@')[0];
+        
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            email: formData.email,
+            name: userName,
+            role: 'user'
+          });
+
+        if (profileError) {
+          console.error('프로필 생성 오류:', profileError);
+          // 프로필 생성 실패 시 회원가입도 실패로 처리
+          throw new Error('프로필 생성에 실패했습니다. 다시 시도해주세요.');
+        }
+
         setSuccess('회원가입이 완료되었습니다! 이메일을 확인 후 로그인해주세요.');
         
         // 3초 후 로그인 페이지로 이동
