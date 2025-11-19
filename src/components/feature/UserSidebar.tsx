@@ -61,6 +61,12 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     (value: number) => new Intl.NumberFormat(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US').format(value),
     [i18n.language],
   );
+  
+  // 포인트 포맷 함수 (숫자 + P)
+  const formatPoints = useCallback(
+    (value: number) => `${value.toLocaleString('en-US')} P`,
+    [],
+  );
 
   const { cartItems } = useCart();
 
@@ -929,44 +935,55 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                 </div>
               ) : (
                 <>
-                  {/* 결제금액 */}
+                  {/* 포인트 패키지 선택 */}
                   <div className="mb-6">
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">{t('sidebar.paymentAmount')}</h3>
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">{t('sidebar.pointPackage')}</h3>
                     <div className="grid grid-cols-2 gap-3">
-                      {chargeOptions.map((option, index) => (
-                        <button
-                          key={index}
-                          onClick={() => setChargeAmount(option.amount)}
-                          className={`relative p-3 border rounded-lg text-left transition-colors ${
-                            chargeAmount === option.amount
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium">{option.label}</span>
-                            <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
-                              {chargeAmount === option.amount && (
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                              )}
-                            </div>
-                          </div>
-                          {option.bonus > 0 && (
-                            <div className="mt-1">
-                              <span className="text-xs text-gray-500">
-                                {isEnglishSite && 'amountUSD' in option
-                                  ? `+$${option.bonusUSD} bonus`
-                                  : `+${formatNumber(option.bonus)} 적립`}
+                      {chargeOptions.map((option, index) => {
+                        const totalPoints = option.amount + (option.bonus ?? 0);
+                        const bonusPercent = option.bonus && option.amount > 0
+                          ? Math.round((option.bonus / option.amount) * 100)
+                          : 0;
+                        const paymentAmount = isEnglishSite && 'amountUSD' in option
+                          ? `$${option.amountUSD}`
+                          : formatCurrency(option.amount);
+                        
+                        return (
+                          <button
+                            key={index}
+                            onClick={() => setChargeAmount(option.amount)}
+                            className={`relative p-3 border rounded-lg text-left transition-colors ${
+                              chargeAmount === option.amount
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-base font-bold text-gray-900">
+                                {t('sidebar.totalPoints', { amount: formatPoints(totalPoints) })}
                               </span>
-                              {!isEnglishSite && 'bonusPercent' in option && option.bonusPercent && (
-                                <span className="ml-1 bg-red-500 text-white text-xs px-1 py-0.5 rounded">
-                                  {option.bonusPercent}
-                                </span>
-                              )}
+                              <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
+                                {chargeAmount === option.amount && (
+                                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                )}
+                              </div>
                             </div>
-                          )}
-                        </button>
-                      ))}
+                            {option.bonus && option.bonus > 0 ? (
+                              <p className="text-xs text-gray-600 mt-1">
+                                {t('sidebar.payAndBonus', {
+                                  payment: paymentAmount,
+                                  bonus: formatPoints(option.bonus),
+                                  percent: `${bonusPercent}%`
+                                })}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-gray-600 mt-1">
+                                {paymentAmount} {isEnglishSite ? 'payment' : '결제'}
+                              </p>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 

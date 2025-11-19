@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { startCashCharge } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import type { VirtualAccountInfo } from '../../lib/payments';
-import { formatPrice, convertUSDToKRW } from '../../lib/priceFormatter';
+import { formatPrice, convertUSDToKRW, convertKRWToUSD } from '../../lib/priceFormatter';
 import { isEnglishHost } from '../../i18n/languages';
 
 interface MobileCashChargeModalProps {
@@ -42,8 +42,8 @@ export default function MobileCashChargeModal({
     [i18n.language],
   );
   const formatPoints = useCallback(
-    (value: number) => new Intl.NumberFormat(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US').format(value),
-    [i18n.language],
+    (value: number) => `${value.toLocaleString('en-US')} P`,
+    [],
   );
 
   const isEnglishSite = useMemo(() => {
@@ -415,10 +415,19 @@ export default function MobileCashChargeModal({
               ) : (
                 <>
                   <section className="mt-6">
-                    <h2 className="text-sm font-semibold text-gray-900">{t('mobile.cash.chargeAmount')}</h2>
+                    <h2 className="text-sm font-semibold text-gray-900">{t('mobile.cash.pointPackage')}</h2>
                     <div className="mt-3 grid grid-cols-2 gap-3">
                       {chargeOptions.map((option) => {
                         const isSelected = selectedAmount === option.amount;
+                        const totalPoints = option.amount + (option.bonus ?? 0);
+                        const bonusPercent = option.bonus && option.amount > 0
+                          ? Math.round((option.bonus / option.amount) * 100)
+                          : 0;
+                        // 영문 사이트에서는 USD로 표시, 한국어 사이트에서는 KRW로 표시
+                        const paymentAmount = isEnglishSite
+                          ? `$${convertKRWToUSD(option.amount).toFixed(2)}`
+                          : formatCurrency(option.amount);
+                        
                         return (
                           <button
                             key={option.amount}
@@ -430,19 +439,27 @@ export default function MobileCashChargeModal({
                                 : 'border-gray-200 bg-white text-gray-700 hover:border-blue-200'
                             }`}
                           >
-                            <p className="text-sm font-semibold">{formatCurrency(option.amount)}</p>
-                            {option.bonus ? (
-                              <p className="mt-1 text-xs text-blue-600">
-                                {isEnglishSite
-                                  ? `+${formatCurrency(option.bonus)} bonus`
-                                  : t('mobile.cash.bonusLabel', {
-                                      amount: formatPoints(option.bonus ?? 0),
-                                      percent: option.bonusPercent,
-                                    })}
+                            <div className="flex items-center justify-between mb-1">
+                              <p className="text-base font-bold text-gray-900">
+                                {t('mobile.cash.totalPoints', { amount: formatPoints(totalPoints) })}
+                              </p>
+                              <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center flex-shrink-0">
+                                {isSelected && (
+                                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                )}
+                              </div>
+                            </div>
+                            {option.bonus && option.bonus > 0 ? (
+                              <p className="text-xs text-gray-600 mt-1">
+                                {t('mobile.cash.payAndBonus', {
+                                  payment: paymentAmount,
+                                  bonus: formatPoints(option.bonus),
+                                  percent: `${bonusPercent}%`
+                                })}
                               </p>
                             ) : (
-                              <p className="mt-1 text-xs text-gray-500">
-                                {t('mobile.cash.noBonus')}
+                              <p className="text-xs text-gray-600 mt-1">
+                                {paymentAmount} {isEnglishSite ? 'payment' : '결제'}
                               </p>
                             )}
                           </button>
