@@ -119,7 +119,7 @@ function App() {
             onClose={() => setIsCashModalOpen(false)}
             user={user ?? null}
           />
-          <div className="min-h-screen bg-white pb-[80px] md:pb-0" style={{ paddingTop: '108px' }}>
+          <div className="min-h-screen bg-white pb-[80px] md:pb-0">
             <AppRoutes />
           </div>
           <MobileBottomNav
