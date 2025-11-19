@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useMemo, useEffect } from 'react';
+import { useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
 import { isEnglishHost } from '../../i18n/languages';
@@ -43,8 +43,37 @@ function getAvailablePaymentMethods(
   t: (key: string) => string,
   allowCash: boolean = true,
 ): PaymentMethodOption[] {
-  // 영문 사이트: PayPal만 표시 (기존 동작 유지)
+  // 영문 사이트: 바로구매 컨텍스트에서는 캐시 결제 + PayPal 표시
   if (domain === 'en') {
+    if (context === 'buyNow') {
+      const methods: PaymentMethodOption[] = [];
+      
+      // 캐시 결제 옵션 추가
+      if (allowCash) {
+        methods.push({
+          id: 'cash',
+          name: t('payment.payWithCash'),
+          description: t('payment.cashDescription'),
+          icon: 'ri-wallet-3-line',
+          color: 'text-purple-600',
+          disabled: false,
+        });
+      }
+      
+      // PayPal 옵션 추가
+      methods.push({
+        id: 'paypal',
+        name: t('payment.paypal'),
+        description: t('payment.paypalDescription'),
+        icon: 'ri-paypal-line',
+        color: 'text-blue-700',
+        disabled: false,
+      });
+      
+      return methods;
+    }
+    
+    // 캐시 충전 컨텍스트: PayPal만 표시 (기존 동작 유지)
     return [
       {
         id: 'paypal',
