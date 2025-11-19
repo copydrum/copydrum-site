@@ -6,15 +6,45 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // CORS — 실패하든 성공하든 항상 이 헤더를 반환해야 한다
 
-const corsHeaders = {
+const ALLOWED_ORIGINS = [
 
-  "Access-Control-Allow-Origin": "https://en.copydrum.com",
+  "https://en.copydrum.com",
 
-  "Access-Control-Allow-Headers": "content-type, authorization, apikey",
+  "https://www.en.copydrum.com",
 
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "https://copydrum.com",
 
-};
+  "https://www.copydrum.com"
+
+];
+
+
+
+function getCorsHeaders(origin?: string) {
+
+  // 실제 origin이 배열에 있으면 해당 origin을 그대로 반환
+
+  const allowedOrigin: string = origin && ALLOWED_ORIGINS.includes(origin)
+
+    ? origin
+
+    : ALLOWED_ORIGINS[0];
+
+
+
+  return {
+
+    "Access-Control-Allow-Origin": allowedOrigin,
+
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey",
+
+    "Access-Control-Max-Age": "86400",
+
+  };
+
+}
 
 
 
@@ -84,11 +114,23 @@ async function getPayPalAccessToken(clientId: string, clientSecret: string, isSa
 
 serve(async (req: Request) => {
 
+  const origin = req.headers.get("origin") ?? "";
+
+  const corsHeaders = getCorsHeaders(origin);
+
+
+
   // ===== OPTIONS (CORS preflight) =====
 
   if (req.method === "OPTIONS") {
 
-    return new Response("ok", { headers: corsHeaders });
+    return new Response(null, {
+
+      status: 204,
+
+      headers: getCorsHeaders(origin),
+
+    });
 
   }
 
