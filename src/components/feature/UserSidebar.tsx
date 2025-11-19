@@ -982,7 +982,15 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                             <div className="flex items-center justify-between">
                               <div className="flex items-center">
                                 <i className={`${method.icon} ${method.color} text-lg mr-2`}></i>
-                                <span className="text-sm font-medium">{method.id === 'card' ? t('sidebar.creditCard') : method.id === 'kakaopay' ? t('sidebar.kakaoPay') : t('sidebar.bankTransfer')}</span>
+                                <span className="text-sm font-medium">
+                                  {method.id === 'card' 
+                                    ? t('sidebar.creditCard') 
+                                    : method.id === 'kakaopay' 
+                                    ? t('sidebar.kakaoPay') 
+                                    : method.id === 'paypal'
+                                    ? t('payment.paypal')
+                                    : t('sidebar.bankTransfer')}
+                                </span>
                               </div>
                               <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
                                 {isSelected && <div className="w-2 h-2 bg-blue-500 rounded-full"></div>}
