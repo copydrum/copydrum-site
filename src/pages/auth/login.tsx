@@ -127,21 +127,18 @@ export default function Login() {
         if (profileError) {
           console.error(t('authLogin.console.profileLookupError'), profileError);
           
-          // 프로필이 없으면 기본 프로필 생성
+          // 프로필이 없으면 기본 프로필 생성 (최소한의 필드만 사용: id, email만)
           if (profileError.code === 'PGRST116') {
-            // name 필드는 null로 설정 (표시명은 getUserDisplayName으로 처리)
             const { error: insertError } = await supabase
               .from('profiles')
               .insert({
                 id: data.user.id,
-                email: data.user.email || '',
-                name: null,
-                phone: data.user.user_metadata?.phone || null,
-                role: data.user.user_metadata?.role || 'user'
+                email: data.user.email || ''
               });
             
             if (insertError) {
-              console.error(t('authLogin.console.profileCreationError'), insertError);
+              // 프로필 생성 실패해도 로그인은 계속 진행
+              console.error('프로필 생성 오류:', insertError);
             }
           }
         }

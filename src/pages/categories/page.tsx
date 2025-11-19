@@ -13,11 +13,10 @@ import { fetchUserFavorites, toggleFavorite } from '../../lib/favorites';
 import MainHeader from '../../components/common/MainHeader';
 import { processCashPurchase } from '../../lib/cashPurchases';
 import { hasPurchasedSheet } from '../../lib/purchaseCheck';
-import { BankTransferInfoModal, PaymentMethodSelector } from '../../components/payments';
+import { BankTransferInfoModal, PaymentMethodSelector, InsufficientCashModal } from '../../components/payments';
 import type { PaymentMethod } from '../../components/payments';
 import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
-import { openCashChargeModal } from '../../lib/cashChargeModal';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
 
@@ -85,6 +84,8 @@ const CategoriesPage: React.FC = () => {
   const [showBankTransferModal, setShowBankTransferModal] = useState(false);
   const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
   const [selectedTopSheetId, setSelectedTopSheetId] = useState<string | null>(null);
+  const [showInsufficientCashModal, setShowInsufficientCashModal] = useState(false);
+  const [insufficientCashInfo, setInsufficientCashInfo] = useState<{ currentBalance: number; requiredAmount: number } | null>(null);
   const { i18n, t } = useTranslation();
 
   // 장르 목록 (순서대로) - 한글 원본 (한글 사이트용)
@@ -317,12 +318,11 @@ const CategoriesPage: React.FC = () => {
 
         if (!result.success) {
           if (result.reason === 'INSUFFICIENT_CREDIT') {
-            alert(
-              t('categoriesPage.insufficientCash', { 
-                amount: result.currentCredits.toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')
-              }),
-            );
-            openCashChargeModal();
+            setInsufficientCashInfo({
+              currentBalance: result.currentCredits,
+              requiredAmount: price,
+            });
+            setShowInsufficientCashModal(true);
           }
           return;
         }
@@ -1966,7 +1966,20 @@ const CategoriesPage: React.FC = () => {
           setPaymentProcessing(false);
         }}
         onSelect={handlePurchaseMethodSelect}
+        context="buyNow"
       />
+
+      {insufficientCashInfo && (
+        <InsufficientCashModal
+          open={showInsufficientCashModal}
+          currentBalance={insufficientCashInfo.currentBalance}
+          requiredAmount={insufficientCashInfo.requiredAmount}
+          onClose={() => {
+            setShowInsufficientCashModal(false);
+            setInsufficientCashInfo(null);
+          }}
+        />
+      )}
     </div>
   );
 };

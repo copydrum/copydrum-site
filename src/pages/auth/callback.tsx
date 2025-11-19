@@ -45,32 +45,26 @@ export default function AuthCallback() {
               .single();
 
             if (profileError && profileError.code === 'PGRST116') {
-              // 프로필이 없으면 생성
-              const userMetadata = data.user.user_metadata || {};
-              const provider = data.user.app_metadata?.provider || 'oauth';
-              
-              // name 필드는 null로 설정 (표시명은 getUserDisplayName으로 처리)
+              // 프로필이 없으면 생성 (최소한의 필드만 사용: id, email만)
               const { error: insertError } = await supabase
                 .from('profiles')
                 .insert({
                   id: data.user.id,
-                  email: data.user.email || '',
-                  name: null,
-                  kakao_id: provider === 'kakao' ? userMetadata.sub : null,
-                  google_id: provider === 'google' ? userMetadata.sub : null,
-                  provider: provider,
-                  role: 'user',
+                  email: data.user.email || ''
                 });
 
               if (insertError) {
-                console.error(t('authCallback.console.profileCreationError'), insertError);
+                // 프로필 생성 실패해도 로그인은 계속 진행
+                console.error('프로필 생성 오류:', insertError);
               }
             } else if (profile) {
               // 기존 프로필 업데이트 (소셜 ID가 없으면 추가)
+              // 주의: 실제 DB에 존재하는 컬럼만 업데이트해야 함
               const provider = data.user.app_metadata?.provider || 'oauth';
               const userMetadata = data.user.user_metadata || {};
               const updates: any = {};
 
+              // 실제 DB에 존재하는 컬럼만 업데이트 (kakao_id, google_id, provider는 DB에 있을 경우에만)
               if (provider === 'kakao' && !profile.kakao_id) {
                 updates.kakao_id = userMetadata.sub;
               }
@@ -82,10 +76,15 @@ export default function AuthCallback() {
               }
 
               if (Object.keys(updates).length > 0) {
-                await supabase
+                const { error: updateError } = await supabase
                   .from('profiles')
                   .update(updates)
                   .eq('id', data.user.id);
+                
+                if (updateError) {
+                  // 프로필 업데이트 실패해도 로그인은 계속 진행
+                  console.error('프로필 업데이트 오류:', updateError);
+                }
               }
             }
 

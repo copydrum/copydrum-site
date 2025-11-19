@@ -46,8 +46,10 @@ export const createPaymentIntent = async (
     return createInicisPaymentIntent(payload);
   }
 
+  // legacy: PayAction 가상계좌는 현재 미사용 (관리자 수동 입금 확인으로 대체)
   if (isVirtualAccountPayload(payload)) {
-    return createPayactionVirtualAccount(payload);
+    // return createPayactionVirtualAccount(payload);
+    throw new Error('가상계좌 결제는 현재 사용할 수 없습니다. 무통장 입금을 사용해주세요.');
   }
 
   return {
@@ -60,8 +62,8 @@ export const approvePayment = async (payload: PaymentApprovalPayload) => {
   switch (payload.paymentProvider) {
     case 'inicis':
       return approveInicisPayment(payload);
+    // legacy: PayAction은 현재 미사용 (관리자 수동 입금 확인으로 대체)
     case 'payaction':
-      // 페이액션은 웹훅 기반으로 승인되므로 별도 처리가 필요 없지만, 수동 확인을 위한 훅을 유지
       return { success: true };
     case 'cash':
     default:
@@ -73,8 +75,10 @@ export const cancelPayment = async (payload: PaymentCancelPayload) => {
   switch (payload.paymentProvider) {
     case 'inicis':
       return cancelInicisPayment(payload);
+    // legacy: PayAction은 현재 미사용
     case 'payaction':
-      return cancelPayactionVirtualAccount(payload);
+      // return cancelPayactionVirtualAccount(payload);
+      return { success: true };
     case 'cash':
     default:
       return { success: true };
@@ -121,6 +125,7 @@ export const updateOrderPaymentStatus = async (
     payload.payment_confirmed_at = options.paymentConfirmedAt;
   }
 
+  // depositor_name 추가
   if (options.depositorName !== undefined) {
     payload.depositor_name = options.depositorName;
   }
@@ -162,6 +167,7 @@ export const normalizePaymentStatusLabel = (status: PaymentStatus | null | undef
   };
   return labelMap[status] ?? status;
 };
+
 
 
 

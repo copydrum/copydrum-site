@@ -71,11 +71,12 @@ export const startSheetPurchase = async ({
       type: 'sheet_purchase',
       sheetIds: items.map((item) => item.sheetId),
     },
+    orderType: 'product', // 주문 타입 추가
   });
 
   if (paymentMethod === 'bank_transfer') {
     // 페이액션 연동 제거, 간단한 무통장 입금 처리
-    // 입금자명 저장
+    // depositor_name 추가 - 입금자명 저장
     if (trimmedDepositorName) {
       await updateOrderPaymentStatus(orderId, 'awaiting_deposit', {
         depositorName: trimmedDepositorName,

@@ -1,3 +1,11 @@
+/**
+ * legacy: PayPal 직접 연동 Edge Function
+ * 
+ * 현재는 포트원을 통한 PayPal 결제를 사용합니다.
+ * 나중에 PayPal 직접 연동을 다시 사용할 경우를 대비해 코드는 유지합니다.
+ * 
+ * @deprecated 현재 미사용 - 포트원 PayPal로 대체됨
+ */
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 

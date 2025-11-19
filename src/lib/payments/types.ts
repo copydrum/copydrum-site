@@ -1,6 +1,25 @@
-export type PaymentMethod = 'card' | 'kakaopay' | 'bank_transfer' | 'virtual_account' | 'cash';
+/**
+ * 결제수단 타입
+ * 
+ * - bank_transfer: 무통장 입금 (한국 사이트 전용)
+ * - paypal: PayPal 결제 (영문 사이트 전용)
+ * - card: 신용카드 결제 (포트원 심사 진행 중, 현재 비활성화)
+ * - kakaopay: 카카오페이 (포트원 심사 진행 중, 현재 비활성화)
+ * - virtual_account: 가상계좌 (legacy, 현재 미사용)
+ * - cash: 보유 캐시로 결제
+ */
+export type PaymentMethod = 'card' | 'kakaopay' | 'bank_transfer' | 'virtual_account' | 'cash' | 'paypal';
 
-export type PaymentProvider = 'inicis' | 'payaction' | 'cash';
+/**
+ * 결제 제공자 타입
+ * 
+ * - portone: 포트원 (PayPal, 카드, 카카오페이)
+ * - inicis: KG이니시스 (legacy, 현재 미사용)
+ * - payaction: 페이액션 자동입금 확인 시스템 (legacy, 현재 미사용)
+ * - cash: 보유 캐시
+ * - manual: 관리자 수동 확인
+ */
+export type PaymentProvider = 'inicis' | 'payaction' | 'cash' | 'portone' | 'manual';
 
 export type PaymentStatus = 'pending' | 'awaiting_deposit' | 'paid' | 'failed' | 'cancelled' | 'refunded';
 

@@ -94,6 +94,7 @@ export const processCashPurchase = async ({
           total_amount: normalizedTotal,
           status: 'completed',
           payment_method: paymentMethod,
+          order_type: 'product', // 주문 타입 추가 (캐시로 악보 구매)
         },
       ])
       .select('id')

@@ -20,6 +20,7 @@ interface CreatePendingOrderParams {
   description: string;
   paymentStatus?: PaymentStatus;
   metadata?: Record<string, unknown>;
+  orderType?: 'product' | 'cash'; // 주문 타입 추가
 }
 
 export const createPendingOrder = async ({
@@ -29,6 +30,7 @@ export const createPendingOrder = async ({
   description,
   paymentStatus = 'pending',
   metadata = {},
+  orderType, // 주문 타입 추가
 }: CreatePendingOrderParams) => {
   const orderNumber = generateOrderNumber();
   const normalizedAmount = Math.max(0, Math.round(amount));
@@ -45,6 +47,7 @@ export const createPendingOrder = async ({
         payment_status: paymentStatus,
         raw_status: paymentStatus,
         metadata,
+        order_type: orderType, // 주문 타입 추가
       },
     ])
     .select('id, order_number')
@@ -79,6 +82,7 @@ export const createOrderWithItems = async ({
   items,
   paymentStatus = 'pending',
   metadata = {},
+  orderType = 'product', // 주문 타입 추가 (기본값: product)
 }: CreateOrderWithItemsParams) => {
   const { orderId, orderNumber } = await createPendingOrder({
     userId,
@@ -90,6 +94,7 @@ export const createOrderWithItems = async ({
       ...metadata,
       itemCount: items.length,
     },
+    orderType, // 주문 타입 추가
   });
 
   if (items.length > 0) {

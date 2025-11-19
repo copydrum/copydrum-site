@@ -67,13 +67,27 @@ export default {
 
   // Payment
   'payment.method': '결제수단',
+  'payment.selectMethod': '결제수단 선택',
+  'payment.amount': '결제 금액',
   'payment.card': '신용카드',
+  'payment.cardDescription': 'KG이니시스를 통한 안전한 신용카드 결제.',
   'payment.bank': '무통장입금',
+  'payment.bankDescription': '입금 확인 후 관리자가 수동으로 구매를 완료합니다.',
+  'payment.cash': '캐시 잔액',
+  'payment.cashDescription': '캐시 잔액에서 즉시 차감됩니다.',
+  'payment.payWithCash': '캐시로 결제',
+  'payment.notEnoughCashTitle': '캐시 잔액 부족',
+  'payment.notEnoughCashMessage': '보유 캐시가 부족하여 캐시로 결제할 수 없습니다. 캐시를 충전해주세요.',
+  'payment.goToCashCharge': '캐시 충전 페이지로 이동',
   'payment.kakao': '카카오페이',
   'payment.paypal': '페이팔',
+  'payment.paypalDescription': '페이팔로 안전하게 결제하세요. 빠르고 간편한 결제.',
   'payment.processing': '결제 처리 중...',
   'payment.success': '결제가 완료되었습니다!',
   'payment.failed': '결제에 실패했습니다. 다시 시도해주세요.',
+  'payment.cancelled': '결제 취소',
+  'payment.cancelledMessage': '결제를 취소하셨습니다. 요금이 청구되지 않았습니다.',
+  'payment.redirecting': '주문 내역으로 이동 중...',
 
   // Auth
   'auth.email': '이메일',

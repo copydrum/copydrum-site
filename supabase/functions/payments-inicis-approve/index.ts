@@ -1,3 +1,11 @@
+/**
+ * legacy: KG이니시스 직접 연동 Edge Function
+ * 
+ * 현재는 포트원으로 전환 예정이며, 카드 결제는 포트원 심사 진행 중입니다.
+ * 나중에 KG이니시스를 다시 사용할 경우를 대비해 코드는 유지합니다.
+ * 
+ * @deprecated 현재 미사용 - 포트원으로 전환 예정
+ */
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 

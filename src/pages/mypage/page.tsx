@@ -9,6 +9,7 @@ import { startCashCharge } from '../../lib/payments';
 import MainHeader from '../../components/common/MainHeader';
 import UserSidebar from '../../components/feature/UserSidebar';
 import { useCart } from '../../hooks/useCart';
+import { useUserCashBalance } from '../../hooks/useUserCashBalance';
 import type { FavoriteSheet } from '../../lib/favorites';
 import { fetchUserFavorites, removeFavorite } from '../../lib/favorites';
 import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
@@ -190,6 +191,9 @@ export default function MyPage() {
   ], [t]);
 
   const [user, setUser] = useState<User | null>(null);
+  
+  // 캐시 잔액 조회: 통일된 훅 사용 (profiles 테이블의 credits 필드가 기준)
+  const { credits: userCashBalance, loading: cashBalanceLoading, error: cashBalanceError, refresh: refreshCashBalance } = useUserCashBalance(user);
   const [loading, setLoading] = useState(true);
   
   // URL 쿼리 파라미터에서 탭 정보 읽기
@@ -446,7 +450,7 @@ export default function MyPage() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, name, display_name, phone, credits, created_at')
+        .select('id, email, name, display_name, phone, created_at')
         .eq('id', currentUser.id)
         .maybeSingle();
 
@@ -460,7 +464,7 @@ export default function MyPage() {
         name: data?.name ?? (currentUser.user_metadata?.name as string | null) ?? null,
         display_name: data?.display_name ?? null,
         phone: data?.phone ?? (currentUser.user_metadata?.phone as string | null) ?? null,
-        credits: data?.credits ?? 0,
+        credits: 0, // credits는 useUserCashBalance 훅에서 관리 (통일된 소스)
         created_at: data?.created_at ?? currentUser.created_at,
       };
 
@@ -487,6 +491,8 @@ export default function MyPage() {
     }
   }, []);
 
+  // 일반 유저용: 본인 주문만 조회 (필터 필수)
+  // RLS 정책과 함께 이중으로 보안 적용
   const loadOrders = useCallback(async (currentUser: User) => {
     try {
       // order_items 테이블의 실제 컬럼명을 확인하기 위해 먼저 간단한 쿼리 시도
@@ -523,7 +529,7 @@ export default function MyPage() {
             )
           )
         `)
-        .eq('user_id', currentUser.id)
+        .eq('user_id', currentUser.id)  // 일반 유저는 본인 주문만 필터링
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -858,7 +864,10 @@ export default function MyPage() {
 
       setBankTransferInfo(result.virtualAccountInfo ?? null);
       setShowDepositorInput(false);
-      await loadCashTransactions(user);
+      await Promise.all([
+        loadCashTransactions(user),
+        refreshCashBalance(), // 캐시 잔액 새로고침
+      ]);
       alert(t('mypage.errors.orderReceived'));
       setChargeAgreementChecked(false);
     } catch (error) {
@@ -966,7 +975,7 @@ export default function MyPage() {
         email: user.email,
         name: updates.name,
         phone: updates.phone,
-        credits: profile?.credits ?? 0,
+        credits: userCashBalance, // 통일된 캐시 잔액 사용
         updated_at: new Date().toISOString(),
       });
       if (profileError) throw profileError;
@@ -979,7 +988,7 @@ export default function MyPage() {
               email: user.email ?? null,
               name: updates.name,
               phone: updates.phone,
-              credits: profile?.credits ?? 0,
+              credits: userCashBalance, // 통일된 캐시 잔액 사용
               created_at: user.created_at,
             }
       );
@@ -1366,9 +1375,17 @@ export default function MyPage() {
                 <div className="rounded-2xl border border-red-100 bg-gradient-to-r from-red-50 via-rose-50 to-orange-50 shadow-sm p-6 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold text-red-500">{t('mypage.profile.cashBalance')}</p>
-                    <p className="mt-2 text-3xl font-black text-gray-900">
-                      {formatCurrency(profile?.credits ?? 0)}
-                    </p>
+                    {cashBalanceLoading ? (
+                      <p className="mt-2 text-3xl font-black text-gray-400 animate-pulse">로딩 중...</p>
+                    ) : cashBalanceError ? (
+                      <p className="mt-2 text-lg font-bold text-red-600">
+                        오류: {cashBalanceError.message}
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-3xl font-black text-gray-900">
+                        {formatCurrency(userCashBalance)}
+                      </p>
+                    )}
                     <p className="mt-1 text-xs text-gray-500">{t('mypage.profile.cashBalanceDescription')}</p>
                   </div>
                   <button
@@ -2100,9 +2117,17 @@ export default function MyPage() {
 
                     <div className="rounded-xl border border-blue-100 bg-blue-50 p-6">
                       <p className="text-sm text-blue-600">{t('mypage.cash.availableCash')}</p>
-                      <p className="mt-2 text-3xl font-bold text-blue-900">
-                        {formatCurrency(profile?.credits ?? 0)}
-                      </p>
+                      {cashBalanceLoading ? (
+                        <p className="mt-2 text-3xl font-bold text-blue-400 animate-pulse">로딩 중...</p>
+                      ) : cashBalanceError ? (
+                        <p className="mt-2 text-lg font-bold text-red-600">
+                          오류: {cashBalanceError.message}
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-3xl font-bold text-blue-900">
+                          {formatCurrency(userCashBalance)}
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-3">
@@ -2255,9 +2280,15 @@ export default function MyPage() {
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6 flex items-center">
                 <i className="ri-coins-line text-yellow-600 text-lg mr-2"></i>
                 <span className="text-sm text-gray-700">{t('mypage.cashCharge.currentCash')}</span>
-                <span className="ml-auto font-bold text-yellow-600">
-                  {(profile?.credits ?? 0).toLocaleString()} P
-                </span>
+                {cashBalanceLoading ? (
+                  <span className="ml-auto font-bold text-yellow-400 animate-pulse">로딩 중...</span>
+                ) : cashBalanceError ? (
+                  <span className="ml-auto text-sm font-bold text-red-600">오류</span>
+                ) : (
+                  <span className="ml-auto font-bold text-yellow-600">
+                    {userCashBalance.toLocaleString()} P
+                  </span>
+                )}
               </div>
 
               {showDepositorInput ? (

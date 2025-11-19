@@ -152,6 +152,8 @@ const MyOrdersPage = () => {
   const [downloadingKeys, setDownloadingKeys] = useState<string[]>([]);
   const { t } = useTranslation();
 
+  // 일반 유저용: 본인 주문만 조회 (필터 필수)
+  // RLS 정책과 함께 이중으로 보안 적용
   const loadOrders = useCallback(async (currentUser: User) => {
     const { data, error } = await supabase
       .from('orders')
@@ -188,7 +190,7 @@ const MyOrdersPage = () => {
         )
       `
       )
-      .eq('user_id', currentUser.id)
+      .eq('user_id', currentUser.id)  // 일반 유저는 본인 주문만 필터링
       .order('created_at', { ascending: false });
 
     if (error) {

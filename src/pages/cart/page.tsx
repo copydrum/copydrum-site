@@ -293,7 +293,11 @@ export default function CartPage() {
         return;
       }
 
-      await completeOnlinePurchase('card');
+      // legacy: 카드 결제는 현재 비활성화 (포트원 심사 진행 중)
+      // await completeOnlinePurchase('card');
+      
+      // 한국 사이트에서는 무통장 입금만 가능
+      alert(t('cartPage.bankTransferOnly') || '현재 무통장 입금만 가능합니다.');
     } catch (error) {
       console.error(t('cartPage.console.paymentProcessingError'), error);
       alert(error instanceof Error ? error.message : t('cartPage.paymentError'));
@@ -520,6 +524,7 @@ export default function CartPage() {
             setPaymentProcessing(false);
           }}
           onSelect={handlePaymentMethodSelect}
+          context="buyNow"
         />
       </div>
     </div>

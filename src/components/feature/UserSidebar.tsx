@@ -7,6 +7,7 @@ import { googleAuth } from '../../lib/google';
 import type { User } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../hooks/useCart';
+import { useUserCashBalance } from '../../hooks/useUserCashBalance';
 import { startCashCharge } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +20,8 @@ interface UserSidebarProps {
 }
 
 export default function UserSidebar({ user }: UserSidebarProps) {
-  const [userCash, setUserCash] = useState(0);
+  // 캐시 잔액 조회: 통일된 훅 사용 (profiles 테이블의 credits 필드가 기준)
+  const { credits: userCash, loading: cashLoading, error: cashError, refresh: refreshCash } = useUserCashBalance(user);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [showCashChargeModal, setShowCashChargeModal] = useState(false);
   const isEnglishSiteForState = useMemo(() => {
@@ -325,7 +327,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
       setShowDepositorInput(false);
       setChargeAgreementChecked(false);
       setDepositorName('');
-      await loadUserCash();
+      await refreshCash();
       alert('주문이 접수되었습니다.\n입금 확인 후 관리자가 캐시 충전을 완료합니다.');
     } catch (error) {
       console.error('캐쉬 충전 오류:', error);
@@ -456,39 +458,46 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     ];
   }, [isEnglishSite, t]);
 
-  const loadUserCash = useCallback(async () => {
+  // 프로필 정보 로드 (display_name, email 등)
+  const loadProfile = useCallback(async () => {
     if (!user) {
-      setUserCash(0);
+      setProfile(null);
       return;
     }
 
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('credits, display_name, email')
+        .select('display_name, email')
         .eq('id', user.id)
         .single();
 
       if (error) {
-        console.error('캐쉬 조회 오류:', error);
-        setUserCash(0);
+        console.error('[UserSidebar] 프로필 조회 오류:', error);
+        setProfile(null);
         return;
       }
 
-      setUserCash(data?.credits || 0);
       if (data) {
         setProfile(data as Profile);
       }
     } catch (error) {
-      console.error('캐쉬 로드 오류:', error);
-      setUserCash(0);
+      console.error('[UserSidebar] 프로필 로드 오류:', error);
+      setProfile(null);
     }
   }, [user]);
 
-  // 사용자 캐쉬 및 프로필 로드
+  // 프로필 정보 로드
   useEffect(() => {
-    void loadUserCash();
-  }, [loadUserCash]);
+    void loadProfile();
+  }, [loadProfile]);
+
+  // 캐시 잔액 에러가 발생한 경우 콘솔에 로그 출력
+  useEffect(() => {
+    if (cashError) {
+      console.error('[UserSidebar] 캐시 잔액 조회 실패:', cashError);
+    }
+  }, [cashError]);
 
 
   // 로그인하지 않은 경우 로그인 사이드바 표시
@@ -701,7 +710,15 @@ export default function UserSidebar({ user }: UserSidebarProps) {
 
           <div className="bg-white/20 rounded-lg p-3">
             <p className="text-xs text-blue-100">{t('sidebar.availableCash')}</p>
-            <p className="text-xl font-bold">{formatCurrency(userCash)}</p>
+            {cashLoading ? (
+              <p className="text-xl font-bold text-blue-200 animate-pulse">로딩 중...</p>
+            ) : cashError ? (
+              <p className="text-sm font-bold text-red-200">
+                오류: {cashError.message}
+              </p>
+            ) : (
+              <p className="text-xl font-bold">{formatCurrency(userCash)}</p>
+            )}
           </div>
         </div>
 
@@ -783,7 +800,13 @@ export default function UserSidebar({ user }: UserSidebarProps) {
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6 flex items-center">
                 <i className="ri-coins-line text-yellow-600 text-lg mr-2"></i>
                 <span className="text-sm text-gray-700">{t('sidebar.currentCash')}</span>
-                <span className="ml-auto font-bold text-yellow-600">{formatNumber(userCash)} P</span>
+                {cashLoading ? (
+                  <span className="ml-auto font-bold text-yellow-400 animate-pulse">로딩 중...</span>
+                ) : cashError ? (
+                  <span className="ml-auto text-sm font-bold text-red-600">오류</span>
+                ) : (
+                  <span className="ml-auto font-bold text-yellow-600">{formatNumber(userCash)} P</span>
+                )}
               </div>
 
               {showDepositorInput ? (

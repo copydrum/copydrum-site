@@ -131,42 +131,27 @@ export default function Register() {
       }
 
       if (data.user) {
-        // 프로필 생성 (name 필드는 null로 설정, 표시명은 getUserDisplayName으로 처리)
+        // 프로필 생성 (최소한의 필드만 사용: id, email만)
         // upsert를 사용하여 트리거가 먼저 생성한 프로필도 업데이트
         const { error: profileError } = await supabase
           .from('profiles')
           .upsert(
             {
               id: data.user.id,
-              email: formData.email,
-              name: null,
-              role: 'user'
+              email: formData.email
             },
             { onConflict: 'id' } // 같은 id면 update로 덮어쓰기
           );
 
         if (profileError) {
-          console.error(t('authRegister.console.profileError'), profileError);
-          // 프로필 생성 실패 시 Auth 사용자도 삭제 (롤백)
-          try {
-            const { error: functionError } = await supabase.functions.invoke('rollback-signup', {
-              body: { userId: data.user.id }
-            });
-            
-            if (functionError) {
-              console.error(t('authRegister.console.rollbackFunctionError'), functionError);
-            } else {
-              console.log(t('authRegister.console.rollbackComplete'));
-            }
-          } catch (rollbackError) {
-            console.error(t('authRegister.console.rollbackError'), rollbackError);
-          }
-          
-          throw new Error(t('authRegister.errors.profileCreationFailed'));
+          // 프로필 생성 실패해도 회원가입은 성공 처리
+          // (DB 트리거나 다른 메커니즘으로 프로필이 생성될 수 있음)
+          console.error('프로필 생성/업데이트 오류:', profileError);
         } else {
-          console.log(t('authRegister.console.profileSuccess'));
+          console.log('프로필 생성/업데이트 성공');
         }
 
+        // 프로필 생성 실패 여부와 관계없이 회원가입 성공 처리
         setSuccess(t('authRegister.messages.signUpSuccess'));
         
         // 3초 후 로그인 페이지로 이동

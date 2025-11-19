@@ -1,3 +1,11 @@
+/**
+ * legacy: PayAction 자동입금 확인 시스템용 라이브러리
+ * 
+ * 현재는 사용하지 않으며, 무통장 입금은 관리자가 수동으로 확인합니다.
+ * 나중에 PayAction을 다시 사용할 경우를 대비해 코드는 유지합니다.
+ * 
+ * @deprecated 현재 미사용 - 관리자 수동 입금 확인으로 대체됨
+ */
 import { supabase } from '../supabase';
 import type {
   PaymentCancelPayload,
@@ -56,6 +64,7 @@ export const createPayactionVirtualAccount = async (
 export const cancelPayactionVirtualAccount = async (payload: PaymentCancelPayload) => {
   return invokeEdgeFunction<{ success: true }>(CANCEL_FUNCTION, payload);
 };
+
 
 
 

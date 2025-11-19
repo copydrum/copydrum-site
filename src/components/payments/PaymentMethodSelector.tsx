@@ -1,9 +1,11 @@
-import { Fragment, useCallback, useMemo } from 'react';
+import { Fragment, useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
 import { isEnglishHost } from '../../i18n/languages';
 
 type PaymentMethod = 'cash' | 'card' | 'bank' | 'paypal';
+
+type PaymentContext = 'buyNow' | 'cashCharge';
 
 interface PaymentMethodOption {
   id: PaymentMethod;
@@ -22,9 +24,109 @@ interface PaymentMethodSelectorProps {
   onSelect: (method: PaymentMethod) => void;
   allowCash?: boolean;
   disabledMethods?: PaymentMethod[];
+  context?: PaymentContext; // 'buyNow' (바로구매) 또는 'cashCharge' (캐시 충전)
 }
 
-export type { PaymentMethod };
+export type { PaymentMethod, PaymentContext };
+
+/**
+ * 도메인과 컨텍스트에 따라 사용 가능한 결제수단 목록을 반환합니다.
+ * 
+ * @param domain - 'ko' (한국어 사이트) 또는 'en' (영문 사이트)
+ * @param context - 'buyNow' (바로구매) 또는 'cashCharge' (캐시 충전)
+ * @param t - i18n 번역 함수
+ * @returns 사용 가능한 결제수단 옵션 배열
+ */
+function getAvailablePaymentMethods(
+  domain: 'ko' | 'en',
+  context: PaymentContext,
+  t: (key: string) => string,
+  allowCash: boolean = true,
+): PaymentMethodOption[] {
+  // 영문 사이트: PayPal만 표시 (기존 동작 유지)
+  if (domain === 'en') {
+    return [
+      {
+        id: 'paypal',
+        name: t('payment.paypal'),
+        description: t('payment.paypalDescription'),
+        icon: 'ri-paypal-line',
+        color: 'text-blue-700',
+        disabled: false,
+      },
+    ];
+  }
+
+  // 한국어 사이트
+  if (domain === 'ko') {
+    // 바로구매 컨텍스트: 캐시 결제 + 무통장입금만 표시
+    if (context === 'buyNow') {
+      const methods: PaymentMethodOption[] = [];
+      
+      if (allowCash) {
+        methods.push({
+          id: 'cash',
+          name: t('payment.payWithCash'),
+          description: t('payment.cashDescription'),
+          icon: 'ri-wallet-3-line',
+          color: 'text-purple-600',
+          disabled: false,
+        });
+      }
+      
+      methods.push({
+        id: 'bank',
+        name: t('payment.bank'),
+        description: t('payment.bankDescription'),
+        icon: 'ri-bank-line',
+        color: 'text-green-600',
+        disabled: false,
+      });
+
+      // Feature flag: 향후 PG 심사 완료 후 카드/간편결제를 다시 노출할 수 있도록
+      const enableCardInKR = import.meta.env.VITE_ENABLE_CARD_IN_KR === 'true';
+      if (enableCardInKR) {
+        // 카드 결제 추가 (향후 사용)
+        methods.push({
+          id: 'card',
+          name: t('payment.card'),
+          description: t('payment.cardDescription'),
+          icon: 'ri-bank-card-line',
+          color: 'text-blue-600',
+          disabled: false,
+        });
+      }
+
+      return methods;
+    }
+
+    // 캐시 충전 컨텍스트: 무통장입금만 표시 (기존 동작 유지)
+    if (context === 'cashCharge') {
+      return [
+        {
+          id: 'bank',
+          name: t('payment.bank'),
+          description: t('payment.bankDescription'),
+          icon: 'ri-bank-line',
+          color: 'text-green-600',
+          disabled: false,
+        },
+      ];
+    }
+  }
+
+  // 기본값: 무통장입금만
+  return [
+    {
+      id: 'bank',
+      name: t('payment.bank'),
+      description: t('payment.bankDescription'),
+      icon: 'ri-bank-line',
+      color: 'text-green-600',
+      disabled: false,
+    },
+  ];
+}
 
 export const PaymentMethodSelector = ({
   open,
@@ -33,11 +135,36 @@ export const PaymentMethodSelector = ({
   onSelect,
   allowCash = true,
   disabledMethods = [],
+  context = 'buyNow', // 기본값은 바로구매
 }: PaymentMethodSelectorProps) => {
-  const { t, i18n } = useTranslation();
+  const { t, i18n: i18nInstance } = useTranslation();
+  
+  // payment 번역 키가 로딩되었는지 보장
+  // 현재 구조에서는 모든 번역이 하나의 리소스에 평탄화되어 있지만,
+  // 안전을 위해 번역 키 존재 여부를 확인
+  useEffect(() => {
+    if (open) {
+      // 번역 키가 없으면 경고 (개발 환경에서만)
+      if (process.env.NODE_ENV === 'development') {
+        const keys = [
+          'payment.selectMethod',
+          'payment.amount',
+          'payment.bankDescription',
+          'payment.cash',
+          'payment.cashDescription',
+        ];
+        keys.forEach((key) => {
+          if (!i18nInstance.exists(key)) {
+            console.warn(`[PaymentMethodSelector] 번역 키 누락: ${key}`);
+          }
+        });
+      }
+    }
+  }, [open, i18nInstance]);
+  
   const formatCurrency = useCallback(
-    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
-    [i18n.language],
+    (value: number) => formatPrice({ amountKRW: value, language: i18nInstance.language }).formatted,
+    [i18nInstance.language],
   );
 
   const isEnglishSite = useMemo(() => {
@@ -45,47 +172,13 @@ export const PaymentMethodSelector = ({
     return isEnglishHost(window.location.host);
   }, []);
 
-  const paymentMethodOptions: PaymentMethodOption[] = useMemo(() => {
-    // 영문 사이트: PayPal만 표시
-    if (isEnglishSite) {
-      return [
-        {
-          id: 'paypal',
-          name: t('payment.paypal'),
-          description: t('payment.paypalDescription'),
-          icon: 'ri-paypal-line',
-          color: 'text-blue-700',
-          disabled: false,
-        },
-      ];
-    }
+  const domain: 'ko' | 'en' = useMemo(() => {
+    return isEnglishSite ? 'en' : 'ko';
+  }, [isEnglishSite]);
 
-    // 한국 사이트: 기존 결제수단 (cash, card, bank)
-    return [
-      {
-        id: 'cash',
-        name: t('payment.cash'),
-        description: t('payment.cashDescription'),
-        icon: 'ri-coins-line',
-        color: 'text-yellow-600',
-      },
-      {
-        id: 'card',
-        name: t('payment.card'),
-        description: t('payment.cardDescription'),
-        icon: 'ri-bank-card-line',
-        color: 'text-blue-600',
-        disabled: false,
-      },
-      {
-        id: 'bank',
-        name: t('payment.bank'),
-        description: t('payment.bankDescription'),
-        icon: 'ri-bank-line',
-        color: 'text-green-600',
-      },
-    ];
-  }, [t, isEnglishSite]);
+  const paymentMethodOptions: PaymentMethodOption[] = useMemo(() => {
+    return getAvailablePaymentMethods(domain, context, t, allowCash);
+  }, [domain, context, t, allowCash]);
 
   if (!open) return null;
 

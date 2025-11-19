@@ -14,11 +14,10 @@ import { fetchEventDiscountBySheetId, isEventActive, purchaseEventDiscount } fro
 import { processCashPurchase } from '../../lib/cashPurchases';
 import { isFavorite, toggleFavorite } from '../../lib/favorites';
 import { hasPurchasedSheet } from '../../lib/purchaseCheck';
-import { BankTransferInfoModal, PaymentMethodSelector } from '../../components/payments';
+import { BankTransferInfoModal, PaymentMethodSelector, InsufficientCashModal } from '../../components/payments';
 import type { PaymentMethod } from '../../components/payments';
 import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
-import { openCashChargeModal } from '../../lib/cashChargeModal';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
 
@@ -57,6 +56,8 @@ export default function SheetDetailPage() {
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
   const [showBankTransferModal, setShowBankTransferModal] = useState(false);
+  const [showInsufficientCashModal, setShowInsufficientCashModal] = useState(false);
+  const [insufficientCashInfo, setInsufficientCashInfo] = useState<{ currentBalance: number; requiredAmount: number } | null>(null);
   const eventIsActive = eventDiscount ? isEventActive(eventDiscount) : false;
   const displayPrice = sheet ? (eventDiscount && eventIsActive ? eventDiscount.discount_price : sheet.price) : 0;
   const { i18n, t } = useTranslation();
@@ -297,12 +298,11 @@ export default function SheetDetailPage() {
 
         if (!purchaseResult.success) {
           if (purchaseResult.reason === 'INSUFFICIENT_CREDIT') {
-            alert(
-              t('sheetDetail.insufficientCash', { 
-                amount: purchaseResult.currentCredits.toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')
-              }),
-            );
-            openCashChargeModal();
+            setInsufficientCashInfo({
+              currentBalance: purchaseResult.currentCredits,
+              requiredAmount: price,
+            });
+            setShowInsufficientCashModal(true);
           }
           return;
         }
@@ -948,7 +948,20 @@ export default function SheetDetailPage() {
         amount={getSheetPrice()}
         onClose={() => setShowPaymentSelector(false)}
         onSelect={handlePaymentMethodSelect}
+        context="buyNow"
       />
+
+      {insufficientCashInfo && (
+        <InsufficientCashModal
+          open={showInsufficientCashModal}
+          currentBalance={insufficientCashInfo.currentBalance}
+          requiredAmount={insufficientCashInfo.requiredAmount}
+          onClose={() => {
+            setShowInsufficientCashModal(false);
+            setInsufficientCashInfo(null);
+          }}
+        />
+      )}
     </div>
   );
 }

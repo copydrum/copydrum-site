@@ -121,6 +121,7 @@ interface Order {
   payment_confirmed_at?: string | null;
   virtual_account_info?: VirtualAccountInfo | null;
   metadata?: Record<string, any> | null;
+  order_type?: 'product' | 'cash' | null;
   created_at: string;
   updated_at: string;
   profiles?: Profile;
@@ -826,6 +827,38 @@ const formatDate = (value: string | null | undefined) => {
   return new Date(value).toLocaleDateString('ko-KR');
 };
 
+// 주문 요약 정보 생성 함수
+const getOrderSummary = (order: Order): string => {
+  const orderType = order.order_type;
+  const orderItems = order.order_items ?? [];
+
+  if (orderType === 'cash') {
+    return `캐쉬 충전 ${formatCurrency(order.total_amount)}`;
+  }
+
+  if (orderType === 'product') {
+    if (orderItems.length === 0) {
+      return '악보 정보 없음';
+    }
+    if (orderItems.length === 1) {
+      const firstItem = orderItems[0];
+      const title = firstItem.sheet_title ?? firstItem.drum_sheets?.title ?? '제목 미확인';
+      return title;
+    }
+    // 여러 개인 경우
+    const firstItem = orderItems[0];
+    const firstTitle = firstItem.sheet_title ?? firstItem.drum_sheets?.title ?? '제목 미확인';
+    const remainingCount = orderItems.length - 1;
+    return `${firstTitle} 외 ${remainingCount}곡`;
+  }
+
+  // order_type이 null/undefined인 경우 기존 로직 유지
+  if (orderItems.length === 0) {
+    return '구매 내역 없음';
+  }
+  return `총 ${orderItems.length}개 악보`;
+};
+
 const formatPercentChange = (value: number) => {
   if (!Number.isFinite(value)) {
     return '0%';
@@ -980,6 +1013,7 @@ const AdminPage: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isOrderDetailModalOpen, setIsOrderDetailModalOpen] = useState(false);
   const [orderActionLoading, setOrderActionLoading] = useState<'delete' | 'refund' | 'confirm' | null>(null);
+  const [depositConfirmed, setDepositConfirmed] = useState(false); // 입금 확인 체크박스 상태
   const [expandedOrderIds, setExpandedOrderIds] = useState<string[]>([]);
   const isOrderExpanded = useCallback(
     (orderId: string) => expandedOrderIds.includes(orderId),
@@ -1783,6 +1817,8 @@ const AdminPage: React.FC = () => {
     }
   };
 
+  // 관리자용: 모든 회원의 주문 조회 (필터 없음)
+  // RLS 정책에서 관리자는 모든 주문을 볼 수 있도록 허용됨
   const loadOrders = async () => {
     try {
       const { data, error } = await supabase
@@ -1801,6 +1837,7 @@ const AdminPage: React.FC = () => {
           payment_confirmed_at,
           virtual_account_info,
           metadata,
+          order_type,
           created_at,
           updated_at,
           profiles (
@@ -1845,6 +1882,7 @@ const AdminPage: React.FC = () => {
           payment_confirmed_at: order.payment_confirmed_at ?? null,
           virtual_account_info: (order.virtual_account_info ?? null) as VirtualAccountInfo | null,
           metadata: order.metadata ?? null,
+          order_type: order.order_type ?? null, // 주문 타입 추가
           order_items: Array.isArray(order.order_items)
             ? order.order_items.map((item: any) => ({
                 ...item,
@@ -1870,6 +1908,7 @@ const AdminPage: React.FC = () => {
   const handleOpenOrderDetail = (order: Order) => {
     setSelectedOrder(order);
     setIsOrderDetailModalOpen(true);
+    setDepositConfirmed(false); // 주문 상세 열 때 체크박스 초기화
   };
 
   const handleCloseOrderDetail = () => {
@@ -2041,6 +2080,12 @@ const AdminPage: React.FC = () => {
       return;
     }
 
+    // 체크박스 확인
+    if (!depositConfirmed) {
+      alert('입금자명과 금액을 계좌 입금 내역과 대조했는지 확인해주세요.');
+      return;
+    }
+
     const paymentKey = selectedOrder.payment_method
       ? normalizePaymentMethodKey(selectedOrder.payment_method)
       : '';
@@ -2079,122 +2124,33 @@ const AdminPage: React.FC = () => {
           ? selectedOrder.transaction_id
           : `manual-${Date.now()}`;
 
+      // 공통 함수를 사용하여 주문 완료 처리
+      const { completeOrderAfterPayment } = await import('../../lib/payments/completeOrderAfterPayment');
+      
+      const paymentMethod = (selectedOrder.payment_method as any) || 'bank_transfer';
+      
+      await completeOrderAfterPayment(selectedOrder.id, paymentMethod, {
+        transactionId: manualTransactionId,
+        paymentConfirmedAt: nowIso,
+        depositorName: selectedOrder.depositor_name ?? undefined,
+        paymentProvider: 'manual',
+        metadata: {
+          confirmedBy: 'admin',
+          confirmedByUserId: user?.id,
+        },
+      });
+
+      // 캐시 충전인 경우 캐시 개요 갱신
       const isCashCharge =
         (selectedOrder.metadata?.type === 'cash_charge' ||
           selectedOrder.metadata?.purpose === 'cash_charge') &&
         (selectedOrder.order_items?.length ?? 0) === 0;
-
+      
       if (isCashCharge) {
-        console.log('[입금확인] 캐시 충전 처리 분기');
-        // 캐시 충전 처리
-        const chargeAmount = Math.max(0, selectedOrder.total_amount ?? 0);
-        const bonusAmount = Number(selectedOrder.metadata?.bonusAmount ?? 0);
-
-        const {
-          data: profile,
-          error: profileError,
-        } = await supabase.from('profiles').select('credits').eq('id', selectedOrder.user_id).single();
-
-        if (profileError) {
-          throw profileError;
-        }
-
-        const currentCredits = profile?.credits ?? 0;
-        const newCredits = currentCredits + chargeAmount + bonusAmount;
-
-        console.log('[입금확인] 캐시 업데이트', { currentCredits, newCredits, chargeAmount, bonusAmount });
-
-        const { error: updateProfileError } = await supabase
-          .from('profiles')
-          .update({ credits: newCredits })
-          .eq('id', selectedOrder.user_id);
-
-        if (updateProfileError) {
-          throw updateProfileError;
-        }
-
-        const { error: cashTxError } = await supabase.from('cash_transactions').insert([
-          {
-            user_id: selectedOrder.user_id,
-            transaction_type: 'charge',
-            amount: chargeAmount,
-            bonus_amount: bonusAmount,
-            balance_after: newCredits,
-            description: '무통장입금 수동 확인 (관리자)',
-            created_by: user?.id ?? selectedOrder.user_id,
-            order_id: selectedOrder.id,
-          },
-        ]);
-
-        if (cashTxError) {
-          throw cashTxError;
-        }
-
         await loadCashOverview();
-        console.log('[입금확인] 캐시 처리 완료');
-      } else if (selectedOrder.order_items && selectedOrder.order_items.length > 0) {
-        console.log('[입금확인] 악보 구매 처리 분기');
-        if (PURCHASE_LOG_ENABLED) {
-          // 악보 구매 처리 (선택 기능)
-          const purchaseRecords = selectedOrder.order_items.map((item: any) => ({
-            user_id: selectedOrder.user_id,
-            drum_sheet_id: item.drum_sheet_id,
-            order_id: selectedOrder.id,
-            price_paid: item.price ?? 0,
-          }));
-
-          const { error: purchasesError } = await supabase
-            .from('purchases')
-            .insert(purchaseRecords);
-
-          if (purchasesError) {
-            if (purchasesError.code === 'PGRST205') {
-              console.warn('purchases 테이블이 없어 구매 내역 기록을 건너뜁니다.', purchasesError);
-            } else {
-              console.error('악보 구매 내역 생성 실패:', purchasesError);
-              throw new Error('악보 구매 내역 생성에 실패했습니다.');
-            }
-          }
-        }
-      } else {
-        console.warn('[입금확인] 처리 가능한 분기가 없습니다.', selectedOrder);
       }
 
-      console.log('[입금확인] 주문 상태 업데이트 시도', selectedOrder.id);
-
-      const { error: orderUpdateError } = await supabase
-        .from('orders')
-        .update({
-          status: 'completed',
-          payment_status: 'paid',
-          raw_status: 'payment_confirmed',
-          payment_confirmed_at: nowIso,
-          transaction_id: manualTransactionId,
-        })
-        .eq('id', selectedOrder.id);
-
-      if (orderUpdateError) {
-        console.error('[입금확인] 주문 상태 업데이트 실패', orderUpdateError);
-        alert('주문 상태 업데이트에 실패했습니다. 콘솔 로그를 개발자에게 전달해 주세요.');
-        return;
-      }
-
-      console.log('[입금확인] 주문 상태 업데이트 성공');
-
-      const { error: paymentLogError } = await supabase
-        .from('payment_transactions')
-        .update({
-          status: 'paid',
-          pg_transaction_id: manualTransactionId,
-          updated_at: nowIso,
-        })
-        .eq('order_id', selectedOrder.id);
-
-      if (paymentLogError) {
-        console.warn('결제 로그 업데이트 실패:', paymentLogError);
-      }
-
-      console.log('[입금확인] payment_transactions 업데이트 완료');
+      console.log('[입금확인] 주문 완료 처리 성공');
 
       await loadOrders();
       console.log('[입금확인] 주문 목록 갱신 완료');
@@ -4517,6 +4473,7 @@ const AdminPage: React.FC = () => {
       order.order_number ?? '',
       order.profiles?.name ?? '',
       order.profiles?.email ?? '',
+      order.depositor_name ?? '', // 입금자명 검색 추가
       paymentLabel,
       statusMeta.label,
     ]
@@ -4524,7 +4481,13 @@ const AdminPage: React.FC = () => {
       .toLowerCase();
 
     const matchesSearch = normalizedOrderSearch ? searchableFields.includes(normalizedOrderSearch) : true;
-    const matchesStatus = orderStatusFilter === 'all' ? true : order.status === orderStatusFilter;
+    // 상태 필터: 'awaiting_deposit'인 경우 payment_status도 확인
+    const matchesStatus =
+      orderStatusFilter === 'all'
+        ? true
+        : orderStatusFilter === 'awaiting_deposit'
+        ? order.status === 'awaiting_deposit' || order.payment_status === 'awaiting_deposit'
+        : order.status === orderStatusFilter;
 
     const paymentKey = order.payment_method ? normalizePaymentMethodKey(order.payment_method) : '';
     const matchesPayment = orderPaymentFilter === 'all' ? true : paymentKey === orderPaymentFilter;
@@ -7739,26 +7702,32 @@ const AdminPage: React.FC = () => {
           </div>
 
           <div className="space-y-6 px-6 py-6">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-xl bg-blue-50 p-4">
-                <p className="text-xs font-medium uppercase tracking-wider text-blue-700">총 결제금액</p>
-                <p className="mt-2 text-2xl font-semibold text-blue-900">{formatCurrency(selectedOrder.total_amount)}</p>
-                <p className="mt-1 text-xs text-blue-700">결제수단: {paymentLabel}</p>
-              </div>
-              <div className="rounded-xl bg-teal-50 p-4">
-                <p className="text-xs font-medium uppercase tracking-wider text-teal-700">구매 악보 수</p>
-                <p className="mt-2 text-2xl font-semibold text-teal-900">{itemCount.toLocaleString('ko-KR')}개</p>
-                <p className="mt-1 text-xs text-teal-700">다운로드 가능한 악보 개수</p>
-                <p className="mt-1 text-xs text-teal-700">
-                  총 다운로드 시도 {totalDownloadAttempts.toLocaleString('ko-KR')}회
-                </p>
-              </div>
-              <div className="rounded-xl bg-purple-50 p-4">
-                <p className="text-xs font-medium uppercase tracking-wider text-purple-700">최근 업데이트</p>
-                <p className="mt-2 text-lg font-semibold text-purple-900">{formatDateTime(selectedOrder.updated_at)}</p>
-                {selectedOrder.raw_status && selectedOrder.raw_status !== selectedOrder.status ? (
-                  <p className="mt-1 text-xs text-purple-600">원본 상태: {selectedOrder.raw_status}</p>
-                ) : null}
+            {/* 주문 요약 카드 */}
+            <div className="rounded-xl border-2 border-gray-200 bg-gradient-to-br from-gray-50 to-white p-6 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <span className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold ${statusMeta.className}`}>
+                    {statusMeta.label}
+                  </span>
+                  <div className="flex flex-col">
+                    <span className="text-xs text-gray-500">결제방법</span>
+                    <span className="text-sm font-medium text-gray-900">{paymentLabel}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs text-gray-500">입금자명</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedOrder.depositor_name || '-'}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-6">
+                  <div className="text-right">
+                    <span className="text-xs text-gray-500">총 결제금액</span>
+                    <p className="text-xl font-bold text-gray-900">{formatCurrency(selectedOrder.total_amount)}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs text-gray-500">주문일</span>
+                    <p className="text-sm font-medium text-gray-900">{formatDate(selectedOrder.created_at)}</p>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -7790,6 +7759,11 @@ const AdminPage: React.FC = () => {
                     <div className="flex flex-col gap-1">
                       <dt className="text-gray-500">총 결제금액</dt>
                       <dd className="font-medium text-gray-900">{formatCurrency(selectedOrder.total_amount)}</dd>
+                    </div>
+                    {/* depositor_name 추가 */}
+                    <div className="flex flex-col gap-1">
+                      <dt className="text-gray-500">입금자명</dt>
+                      <dd className="font-medium text-gray-900">{selectedOrder.depositor_name || '-'}</dd>
                     </div>
                   </dl>
                 </section>
@@ -7908,12 +7882,34 @@ const AdminPage: React.FC = () => {
                 </section>
 
                 {isBankTransfer && ['awaiting_deposit', 'pending'].includes(normalizedSelectedStatus) ? (
-                  <section className="rounded-xl border border-amber-200 bg-amber-50 p-6 space-y-4">
+                  <section className="sticky top-4 rounded-xl border border-amber-200 bg-amber-50 p-6 space-y-4 shadow-lg">
                     <h4 className="text-lg font-semibold text-amber-900">무통장입금 수동 확인</h4>
-                    <p className="text-sm text-amber-800">
-                      입금이 확인되면 아래 버튼을 눌러 다운로드를 활성화하세요. 주문 상태가 &lsquo;완료&rsquo;로
-                      변경됩니다.
-                    </p>
+                    
+                    {/* 주문 요약 */}
+                    <div className="rounded-lg border border-amber-300 bg-white/80 p-4 text-sm text-amber-900">
+                      <div className="font-semibold text-amber-800 mb-2">주문 요약</div>
+                      <div className="space-y-1">
+                        <div>
+                          <span className="font-medium">입금자명:</span>{' '}
+                          <span className="text-amber-900 font-semibold">
+                            {selectedOrder.depositor_name || selectedOrder.virtual_account_info?.expectedDepositor || '미지정'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="font-medium">금액:</span>{' '}
+                          <span className="text-amber-900 font-semibold">
+                            {formatCurrency(selectedOrder.total_amount)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="font-medium">주문번호:</span>{' '}
+                          <span className="text-amber-900 font-semibold">
+                            {displayOrderNumber}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
                     {selectedOrder.virtual_account_info ? (
                       <dl className="grid gap-2 rounded-lg border border-amber-200 bg-white/70 p-4 text-sm text-amber-900 sm:grid-cols-2">
                         <div>
@@ -7946,14 +7942,29 @@ const AdminPage: React.FC = () => {
                         </div>
                       </dl>
                     ) : null}
-                    <button
-                      type="button"
-                      onClick={handleConfirmBankDeposit}
-                      disabled={orderActionLoading !== null}
-                      className="inline-flex w-full items-center justify-center rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {orderActionLoading === 'confirm' ? '입금 확인 중...' : '입금 확인 처리'}
-                    </button>
+
+                    {/* 체크박스 및 확인 버튼 */}
+                    <div className="space-y-3 pt-2 border-t border-amber-300">
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={depositConfirmed}
+                          onChange={(e) => setDepositConfirmed(e.target.checked)}
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                        />
+                        <span className="text-sm text-amber-900">
+                          입금자명과 금액을 계좌 입금 내역과 대조했습니다.
+                        </span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleConfirmBankDeposit}
+                        disabled={orderActionLoading !== null || !depositConfirmed}
+                        className="inline-flex w-full items-center justify-center rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {orderActionLoading === 'confirm' ? '입금 확인 중...' : '입금 확인 처리'}
+                      </button>
+                    </div>
                   </section>
                 ) : null}
 
@@ -8014,11 +8025,25 @@ const AdminPage: React.FC = () => {
               <i className="ri-search-line pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
               <input
                 type="text"
-                placeholder="주문번호, 주문 ID, 고객명, 이메일 검색..."
+                placeholder="주문번호, 고객명, 이메일, 입금자명 검색..."
                 value={orderSearchTerm}
                 onChange={(event) => setOrderSearchTerm(event.target.value)}
-                className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-4 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    // 검색 실행 (필터링은 자동으로 됨)
+                  }
+                }}
+                className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-10 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              <button
+                type="button"
+                onClick={() => {
+                  // 검색 실행 (필터링은 자동으로 됨)
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <i className="ri-search-line text-base"></i>
+              </button>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -8040,19 +8065,66 @@ const AdminPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <select
-              value={orderStatusFilter}
-              onChange={(event) => setOrderStatusFilter(event.target.value as OrderStatus | 'all')}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          {/* 상태별 필터 탭 */}
+          <div className="flex flex-wrap gap-2 border-b border-gray-200">
+            <button
+              type="button"
+              onClick={() => setOrderStatusFilter('all')}
+              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                orderStatusFilter === 'all'
+                  ? 'border-blue-500 text-blue-600 bg-blue-50'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
             >
-              <option value="all">전체 상태</option>
-              {ORDER_STATUS_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              전체
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrderStatusFilter('pending')}
+              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                orderStatusFilter === 'pending'
+                  ? 'border-yellow-500 text-yellow-600 bg-yellow-50'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              결제 대기
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrderStatusFilter('awaiting_deposit')}
+              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                orderStatusFilter === 'awaiting_deposit'
+                  ? 'border-amber-500 text-amber-600 bg-amber-50'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              입금 확인 필요
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrderStatusFilter('completed')}
+              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                orderStatusFilter === 'completed'
+                  ? 'border-blue-500 text-blue-600 bg-blue-50'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              완료
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrderStatusFilter('refunded')}
+              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                orderStatusFilter === 'refunded'
+                  ? 'border-purple-500 text-purple-600 bg-purple-50'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              환불
+            </button>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 
             <select
               value={orderPaymentFilter}
@@ -8130,14 +8202,14 @@ const AdminPage: React.FC = () => {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">주문 ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">고객</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">구매 악보 수</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">금액</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">결제 방법</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">주문일</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">고객명</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">주문 타입</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">요약</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">금액</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">결제방법</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">주문일</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -8154,41 +8226,41 @@ const AdminPage: React.FC = () => {
                   const paymentLabel = getPaymentMethodLabel(order.payment_method);
                   const expanded = isOrderExpanded(order.id);
                   const orderItems = order.order_items ?? [];
+                  const isCash = order.order_type === 'cash';
+                  const isProduct = order.order_type === 'product';
+                  const orderSummary = getOrderSummary(order);
+
+                  // 주문 타입 배지 스타일
+                  const getOrderTypeBadge = () => {
+                    if (isProduct) {
+                      return (
+                        <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                          악보 구매
+                        </span>
+                      );
+                    }
+                    if (isCash) {
+                      return (
+                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                          캐쉬 충전
+                        </span>
+                      );
+                    }
+                    // 주문 타입 추가 - null인 경우 표시
+                    return (
+                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                        알 수 없음
+                      </span>
+                    );
+                  };
 
                   return (
                     <React.Fragment key={order.id}>
-                      <tr className={`hover:bg-gray-50 ${expanded ? 'bg-gray-50/80' : ''}`}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => toggleOrderExpanded(order.id)}
-                              className="rounded-full border border-gray-200 bg-white p-1 text-gray-500 hover:border-blue-200 hover:text-blue-600"
-                              aria-label={expanded ? '주문 상세 접기' : '주문 상세 펼치기'}
-                            >
-                              <i
-                                className={`ri-${expanded ? 'arrow-down-s-line' : 'arrow-right-s-line'} text-lg`}
-                              ></i>
-                            </button>
-                            <span>{order.id.slice(0, 8)}...</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{order.profiles?.name ?? '이름 미확인'}</div>
-                            <div className="text-sm text-gray-500">{order.profiles?.email ?? '-'}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {itemCount.toLocaleString('ko-KR')}개
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ₩{order.total_amount.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {paymentLabel}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                      <tr
+                        className={`cursor-pointer hover:bg-gray-50 transition-colors ${expanded ? 'bg-gray-50/80' : ''}`}
+                        onClick={() => handleOpenOrderDetail(order)}
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <span
                             className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${statusMeta.className}`}
                             title={statusMeta.description}
@@ -8196,17 +8268,41 @@ const AdminPage: React.FC = () => {
                             {statusMeta.label}
                           </span>
                         </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{order.profiles?.name ?? '이름 미확인'}</div>
+                            <div className="text-xs text-gray-500">{order.profiles?.email ?? '-'}</div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {getOrderTypeBadge()}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          <div className="max-w-xs truncate" title={orderSummary}>
+                            {orderSummary}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                          ₩{order.total_amount.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {paymentLabel}
+                        </td>
                         <td
-                          className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                          className="px-4 py-3 whitespace-nowrap text-sm text-gray-500"
                           title={formatDateTime(order.created_at)}
                         >
                           {formatDate(order.created_at)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
                           <button
                             type="button"
-                            onClick={() => handleOpenOrderDetail(order)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenOrderDetail(order);
+                            }}
                             className="text-blue-600 hover:text-blue-900 transition-colors"
+                            title="상세 보기"
                           >
                             <i className="ri-eye-line w-4 h-4"></i>
                           </button>
@@ -8215,58 +8311,159 @@ const AdminPage: React.FC = () => {
                       {expanded && (
                         <tr className="bg-gray-50">
                           <td colSpan={8} className="px-6 pb-6 pt-4">
-                            {orderItems.length === 0 ? (
-                              <p className="text-sm text-gray-500">구매한 악보가 없습니다.</p>
-                            ) : (
+                            {isCash ? (
+                              // 캐쉬 충전 주문 상세 정보
                               <div className="space-y-4">
                                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
-                                  <span>총 {orderItems.length.toLocaleString('ko-KR')}개 악보</span>
                                   <span>주문번호: {order.order_number ?? order.id.slice(0, 8).toUpperCase()}</span>
                                 </div>
-                                <div className="grid gap-3 md:grid-cols-2">
-                                  {orderItems.map((item) => {
-                                    const sheetTitle = item.sheet_title ?? item.drum_sheets?.title ?? '제목 미확인';
-                                    const sheetArtist = item.drum_sheets?.artist ?? '아티스트 정보 없음';
-                                    const thumbnail = item.drum_sheets?.thumbnail_url ?? null;
-
-                                    return (
-                                      <div
-                                        key={item.id}
-                                        className="flex items-start gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
-                                      >
-                                        <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
-                                          {thumbnail ? (
-                                            <img src={thumbnail} alt={sheetTitle} className="h-full w-full object-cover" />
-                                          ) : (
-                                            <div className="flex h-full w-full items-center justify-center text-gray-400">
-                                              <i className="ri-music-2-line text-lg"></i>
-                                            </div>
-                                          )}
+                                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6">
+                                  <div className="flex items-start gap-4">
+                                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100">
+                                      <i className="ri-wallet-3-line text-xl text-emerald-600"></i>
+                                    </div>
+                                    <div className="flex-1">
+                                      <h3 className="text-lg font-semibold text-gray-900">캐쉬 충전 내역</h3>
+                                      <div className="mt-3 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-sm text-gray-600">충전 금액</span>
+                                          <span className="text-lg font-bold text-emerald-600">
+                                            {formatCurrency(order.total_amount)}
+                                          </span>
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-sm font-semibold text-gray-900 truncate">{sheetTitle}</p>
-                                          <p className="text-xs text-gray-500 truncate">{sheetArtist}</p>
-                                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-                                            <span>가격 {formatCurrency(item.price)}</span>
-                                            {item.created_at ? <span>구매일 {formatDate(item.created_at)}</span> : null}
-                                            {item.sheet_id ? <span>ID {item.sheet_id}</span> : null}
-                                            <span className="inline-flex items-center gap-1 text-gray-600">
-                                              <i className="ri-download-2-line text-gray-400"></i>
-                                              다운로드 {item.download_attempt_count ?? 0}회
-                                            </span>
-                                            <span className="inline-flex items-center gap-1 text-gray-600">
-                                              <i className="ri-history-line text-gray-400"></i>
-                                              {item.last_downloaded_at
-                                                ? `최근 ${formatDateTime(item.last_downloaded_at)}`
-                                                : '다운로드 이력 없음'}
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-sm text-gray-600">결제 방법</span>
+                                          <span className="text-sm font-medium text-gray-900">{paymentLabel}</span>
+                                        </div>
+                                        {order.payment_confirmed_at && (
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-sm text-gray-600">충전 완료일</span>
+                                            <span className="text-sm text-gray-900">
+                                              {formatDateTime(order.payment_confirmed_at)}
                                             </span>
                                           </div>
-                                        </div>
+                                        )}
+                                        {order.depositor_name && (
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-sm text-gray-600">입금자명</span>
+                                            <span className="text-sm text-gray-900">{order.depositor_name}</span>
+                                          </div>
+                                        )}
                                       </div>
-                                    );
-                                  })}
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
+                            ) : isProduct ? (
+                              // 악보 구매 주문 상세 정보
+                              orderItems.length === 0 ? (
+                                <p className="text-sm text-gray-500">구매한 악보가 없습니다.</p>
+                              ) : (
+                                <div className="space-y-4">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                                    <span>총 {orderItems.length.toLocaleString('ko-KR')}개 악보</span>
+                                    <span>주문번호: {order.order_number ?? order.id.slice(0, 8).toUpperCase()}</span>
+                                  </div>
+                                  <div className="grid gap-3 md:grid-cols-2">
+                                    {orderItems.map((item) => {
+                                      const sheetTitle = item.sheet_title ?? item.drum_sheets?.title ?? '제목 미확인';
+                                      const sheetArtist = item.drum_sheets?.artist ?? '아티스트 정보 없음';
+                                      const thumbnail = item.drum_sheets?.thumbnail_url ?? null;
+
+                                      return (
+                                        <div
+                                          key={item.id}
+                                          className="flex items-start gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+                                        >
+                                          <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
+                                            {thumbnail ? (
+                                              <img src={thumbnail} alt={sheetTitle} className="h-full w-full object-cover" />
+                                            ) : (
+                                              <div className="flex h-full w-full items-center justify-center text-gray-400">
+                                                <i className="ri-music-2-line text-lg"></i>
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-semibold text-gray-900 truncate">{sheetTitle}</p>
+                                            <p className="text-xs text-gray-500 truncate">{sheetArtist}</p>
+                                            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                                              <span>가격 {formatCurrency(item.price)}</span>
+                                              {item.created_at ? <span>구매일 {formatDate(item.created_at)}</span> : null}
+                                              {item.sheet_id ? <span>ID {item.sheet_id}</span> : null}
+                                              <span className="inline-flex items-center gap-1 text-gray-600">
+                                                <i className="ri-download-2-line text-gray-400"></i>
+                                                다운로드 {item.download_attempt_count ?? 0}회
+                                              </span>
+                                              <span className="inline-flex items-center gap-1 text-gray-600">
+                                                <i className="ri-history-line text-gray-400"></i>
+                                                {item.last_downloaded_at
+                                                  ? `최근 ${formatDateTime(item.last_downloaded_at)}`
+                                                  : '다운로드 이력 없음'}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )
+                            ) : (
+                              // order_type이 null/undefined인 경우 기존 로직 유지
+                              orderItems.length === 0 ? (
+                                <p className="text-sm text-gray-500">구매한 악보가 없습니다.</p>
+                              ) : (
+                                <div className="space-y-4">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                                    <span>총 {orderItems.length.toLocaleString('ko-KR')}개 악보</span>
+                                    <span>주문번호: {order.order_number ?? order.id.slice(0, 8).toUpperCase()}</span>
+                                  </div>
+                                  <div className="grid gap-3 md:grid-cols-2">
+                                    {orderItems.map((item) => {
+                                      const sheetTitle = item.sheet_title ?? item.drum_sheets?.title ?? '제목 미확인';
+                                      const sheetArtist = item.drum_sheets?.artist ?? '아티스트 정보 없음';
+                                      const thumbnail = item.drum_sheets?.thumbnail_url ?? null;
+
+                                      return (
+                                        <div
+                                          key={item.id}
+                                          className="flex items-start gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+                                        >
+                                          <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
+                                            {thumbnail ? (
+                                              <img src={thumbnail} alt={sheetTitle} className="h-full w-full object-cover" />
+                                            ) : (
+                                              <div className="flex h-full w-full items-center justify-center text-gray-400">
+                                                <i className="ri-music-2-line text-lg"></i>
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-semibold text-gray-900 truncate">{sheetTitle}</p>
+                                            <p className="text-xs text-gray-500 truncate">{sheetArtist}</p>
+                                            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                                              <span>가격 {formatCurrency(item.price)}</span>
+                                              {item.created_at ? <span>구매일 {formatDate(item.created_at)}</span> : null}
+                                              {item.sheet_id ? <span>ID {item.sheet_id}</span> : null}
+                                              <span className="inline-flex items-center gap-1 text-gray-600">
+                                                <i className="ri-download-2-line text-gray-400"></i>
+                                                다운로드 {item.download_attempt_count ?? 0}회
+                                              </span>
+                                              <span className="inline-flex items-center gap-1 text-gray-600">
+                                                <i className="ri-history-line text-gray-400"></i>
+                                                {item.last_downloaded_at
+                                                  ? `최근 ${formatDateTime(item.last_downloaded_at)}`
+                                                  : '다운로드 이력 없음'}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )
                             )}
                           </td>
                         </tr>

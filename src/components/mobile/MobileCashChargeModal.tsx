@@ -65,15 +65,8 @@ export default function MobileCashChargeModal({
       ];
     }
 
-    // 한국 사이트: 기존 결제수단 (card, bank)
+    // 한국 사이트: 무통장 입금만 표시 (포트원 카드/카카오페이는 심사 진행 중)
     return [
-      {
-        id: 'card',
-        nameKey: 'payment.card',
-        icon: 'ri-bank-card-line',
-        color: 'text-blue-600',
-        disabled: false,
-      },
       {
         id: 'bank',
         nameKey: 'payment.bank',
@@ -188,7 +181,7 @@ export default function MobileCashChargeModal({
     }
 
     if (selectedPayment === 'paypal') {
-      // PayPal 결제 처리 (PortOne)
+      // PayPal 결제 처리 (PortOne) - 영문 사이트 전용
       setIsProcessing(true);
       try {
         await startCashCharge({
@@ -213,37 +206,13 @@ export default function MobileCashChargeModal({
     }
 
     if (selectedPayment === 'bank') {
+      // 무통장 입금 - 한국 사이트 전용
       setShowDepositorInput(true);
       return;
     }
 
-    if (selectedPayment === 'card') {
-      setIsProcessing(true);
-      try {
-        const result = await startCashCharge({
-          userId: user.id,
-          amount: selectedOption.amount,
-          bonusAmount: selectedOption.bonus ?? 0,
-          paymentMethod: 'card',
-          description: `${t('mobile.cash.title')} ${formatCurrency(selectedOption.amount)}`,
-          buyerName: user.email ?? null,
-          buyerEmail: user.email ?? null,
-          // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
-        });
-
-        if (result.paymentIntent?.requestForm) {
-          alert(t('mobile.cash.paymentWindowOpen') || '결제창이 열립니다. 결제를 완료해 주세요.');
-        } else {
-          alert(t('mobile.cash.error') || '결제 처리 중 오류가 발생했습니다.');
-        }
-      } catch (error) {
-        console.error('모바일 캐쉬 충전 오류:', error);
-        alert(error instanceof Error ? error.message : t('mobile.cash.error'));
-      } finally {
-        setIsProcessing(false);
-      }
-      return;
-    }
+    // legacy: 카드 결제는 현재 비활성화 (포트원 심사 진행 중)
+    // if (selectedPayment === 'card') { ... }
   };
 
   const handleBankTransferConfirm = async () => {
