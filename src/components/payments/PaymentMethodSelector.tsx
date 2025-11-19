@@ -210,6 +210,15 @@ export const PaymentMethodSelector = ({
     return getAvailablePaymentMethods(domain, context, t, allowCash);
   }, [domain, context, t, allowCash]);
 
+  // 한국어 사이트에서만 포인트 가격 표시 (영문 사이트는 영향 없음)
+  const pointPrice = useMemo(() => {
+    const calculated = calculatePointPrice(amount);
+    // 한국어 사이트에서는 한국어 형식으로, 영문 사이트에서는 영문 형식으로 표시
+    return isEnglishSite 
+      ? calculated.toLocaleString('en-US')
+      : calculated.toLocaleString('ko-KR');
+  }, [amount, isEnglishSite]);
+
   if (!open) return null;
 
   return (
@@ -221,9 +230,11 @@ export const PaymentMethodSelector = ({
             <p className="text-sm text-gray-600">
               {t('payment.amount')} <span className="font-semibold text-gray-900">{formatCurrency(amount)}</span>
             </p>
-            <p className="text-sm text-gray-600">
-              {t('payment.pointPrice', { price: calculatePointPrice(amount).toLocaleString('en-US') })}
-            </p>
+            {!isEnglishSite && (
+              <p className="text-sm text-gray-600">
+                {t('payment.pointPrice', { price: pointPrice })}
+              </p>
+            )}
           </div>
         </div>
 

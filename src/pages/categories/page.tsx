@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
@@ -20,6 +20,7 @@ import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
 import { calculatePointPrice } from '../../lib/pointPrice';
+import { isEnglishHost } from '../../i18n/languages';
 
 interface Category {
   id: string;
@@ -88,6 +89,12 @@ const CategoriesPage: React.FC = () => {
   const [showInsufficientCashModal, setShowInsufficientCashModal] = useState(false);
   const [insufficientCashInfo, setInsufficientCashInfo] = useState<{ currentBalance: number; requiredAmount: number } | null>(null);
   const { i18n, t } = useTranslation();
+
+  // 한국어 사이트 여부 확인
+  const isKoreanSite = useMemo(() => {
+    if (typeof window === 'undefined') return true;
+    return !isEnglishHost(window.location.host);
+  }, []);
 
   // 장르 목록 (순서대로) - 한글 원본 (한글 사이트용)
   const genreListKo = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
@@ -1457,18 +1464,22 @@ const CategoriesPage: React.FC = () => {
                               <span className="text-2xl font-extrabold text-red-500">
                                 {formatCurrency(selectedDisplayPrice)}
                               </span>
-                              <span className="text-sm text-gray-600">
-                                {t('payment.pointPrice', { price: calculatePointPrice(selectedDisplayPrice).toLocaleString('en-US') })}
-                              </span>
+                              {isKoreanSite && (
+                                <span className="text-sm text-gray-600">
+                                  {t('payment.pointPrice', { price: calculatePointPrice(selectedDisplayPrice).toLocaleString('ko-KR') })}
+                                </span>
+                              )}
                             </>
                           ) : (
                             <>
                               <span className="text-2xl font-bold text-gray-900">
                                 {formatCurrency(selectedDisplayPrice)}
                               </span>
-                              <span className="text-sm text-gray-600">
-                                {t('payment.pointPrice', { price: calculatePointPrice(selectedDisplayPrice).toLocaleString('en-US') })}
-                              </span>
+                              {isKoreanSite && (
+                                <span className="text-sm text-gray-600">
+                                  {t('payment.pointPrice', { price: calculatePointPrice(selectedDisplayPrice).toLocaleString('ko-KR') })}
+                                </span>
+                              )}
                             </>
                           )}
                         </div>

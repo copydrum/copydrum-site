@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
@@ -68,6 +68,12 @@ export default function SheetDetailPage() {
     language: i18n.language,
     host: typeof window !== 'undefined' ? window.location.host : undefined
   }).formatted;
+
+  // 한국어 사이트 여부 확인
+  const isKoreanSite = useMemo(() => {
+    if (typeof window === 'undefined') return true;
+    return !isEnglishHost(window.location.host);
+  }, []);
 
   // 카테고리 이름을 번역하는 함수 (영문 사이트용)
   const getCategoryName = (categoryName: string | null | undefined): string => {
@@ -743,9 +749,11 @@ export default function SheetDetailPage() {
                     <span className={`text-3xl font-bold ${eventDiscount && eventIsActive ? 'text-red-500' : 'text-blue-600'}`}>
                       {formatCurrency(displayPrice)}
                     </span>
-                    <span className="text-sm text-gray-600 mt-1">
-                      {t('payment.pointPrice', { price: calculatePointPrice(displayPrice).toLocaleString('en-US') })}
-                    </span>
+                    {isKoreanSite && (
+                      <span className="text-sm text-gray-600 mt-1">
+                        {t('payment.pointPrice', { price: calculatePointPrice(displayPrice).toLocaleString('ko-KR') })}
+                      </span>
+                    )}
                     {eventDiscount && !eventIsActive && (
                       <span className="text-xs text-gray-500 mt-1">
                         {eventDiscount.status === 'scheduled'
