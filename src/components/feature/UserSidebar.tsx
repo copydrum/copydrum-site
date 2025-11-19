@@ -11,6 +11,7 @@ import { useUserCashBalance } from '../../hooks/useUserCashBalance';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
 import { isEnglishHost } from '../../i18n/languages';
+import { getUserDisplayName } from '../../utils/userDisplayName';
 import PointChargeModal from '../payments/PointChargeModal';
 
 interface UserSidebarProps {
