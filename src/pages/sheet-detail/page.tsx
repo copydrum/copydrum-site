@@ -64,6 +64,12 @@ export default function SheetDetailPage() {
   const eventIsActive = eventDiscount ? isEventActive(eventDiscount) : false;
   const displayPrice = sheet ? (eventDiscount && eventIsActive ? eventDiscount.discount_price : sheet.price) : 0;
   
+  // 한국어 사이트 여부 확인
+  const isKoreanSite = useMemo(() => {
+    if (typeof window === 'undefined') return true;
+    return !isEnglishHost(window.location.host);
+  }, []);
+
   // 포인트 가격 계산 (한국어 사이트에서만 사용)
   const pointPrice = useMemo(() => {
     if (!isKoreanSite || !displayPrice || displayPrice <= 0) return 0;
@@ -75,12 +81,6 @@ export default function SheetDetailPage() {
     language: i18n.language,
     host: typeof window !== 'undefined' ? window.location.host : undefined
   }).formatted;
-
-  // 한국어 사이트 여부 확인
-  const isKoreanSite = useMemo(() => {
-    if (typeof window === 'undefined') return true;
-    return !isEnglishHost(window.location.host);
-  }, []);
 
   // 영문 사이트 여부 확인 (공용 유틸 함수 사용)
   const englishSite = useMemo(() => isEnglishSite(), []);
