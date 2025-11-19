@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
 import { isEnglishHost } from '../../i18n/languages';
 import { calculatePointPrice } from '../../lib/pointPrice';
+import { isEnglishSite } from '../../utils/site';
 
 interface DrumSheet {
   id: string;
@@ -74,6 +75,9 @@ export default function SheetDetailPage() {
     if (typeof window === 'undefined') return true;
     return !isEnglishHost(window.location.host);
   }, []);
+
+  // 영문 사이트 여부 확인 (공용 유틸 함수 사용)
+  const englishSite = useMemo(() => isEnglishSite(), []);
 
   // 카테고리 이름을 번역하는 함수 (영문 사이트용)
   const getCategoryName = (categoryName: string | null | undefined): string => {
@@ -208,10 +212,10 @@ export default function SheetDetailPage() {
     if (!difficulty) return t('sheetDetail.difficulty.notSet');
     
     const normalizedDifficulty = (difficulty || '').toLowerCase().trim();
-    const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
+    const isEnglishSiteLocal = isEnglishSite();
     
     // 영문 사이트에서 한글 난이도 값을 영어로 변환
-    if (isEnglishSite || i18n.language === 'en') {
+    if (isEnglishSiteLocal || i18n.language === 'en') {
       const difficultyMapEn: Record<string, string> = {
         '초급': 'Beginner',
         '중급': 'Intermediate',
@@ -924,7 +928,7 @@ export default function SheetDetailPage() {
 
           {/* 환불 규정 안내 블록 */}
           <div className="bg-gray-50 rounded-lg p-6 mt-8">
-            {isEnglishSite ? (
+            {englishSite ? (
               <>
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">Refund Policy</h3>
                 <p className="text-sm text-gray-700 mb-2">
