@@ -8,8 +8,8 @@ const getPortOneMerchantCode = (): string | undefined => {
   return import.meta.env.VITE_PORTONE_MERCHANT_CODE;
 };
 
-// 포트원 PayPal 채널 이름
-const PORTONE_PAYPAL_CHANNEL = 'copydrum_paypal';
+// 포트원 PayPal 채널 이름 (현재 PayPal은 PortOne을 사용하지 않음)
+// const PORTONE_PAYPAL_CHANNEL = 'copydrum_paypal';
 
 // 포트원 타입 정의
 declare global {
@@ -127,6 +127,7 @@ export const initPortOne = async (merchantCode?: string): Promise<void> => {
 
 // PayPal 결제 요청
 export interface RequestPayPalPaymentParams {
+  userId: string; // 사용자 ID (필수)
   amount: number; // KRW 금액
   orderId: string; // 주문 ID (merchant_uid로 사용)
   buyerEmail?: string;
@@ -145,106 +146,57 @@ export interface RequestPayPalPaymentResult {
   error_msg?: string;
 }
 
-// PayPal 결제 요청 함수
+// PayPal 결제 요청 함수 (PortOne을 사용하지 않고 직접 PayPal API 사용)
 export const requestPayPalPayment = async (
   params: RequestPayPalPaymentParams,
 ): Promise<RequestPayPalPaymentResult> => {
-  // 포트원 스크립트만 로드 (merchant code 검사 없이)
-  await ensurePortOneLoaded();
-
-  if (!window.IMP) {
-    throw new Error('포트원 스크립트가 로드되지 않았습니다.');
-  }
-
-  // PayPal 결제는 merchant code 없이도 동작할 수 있도록
-  // 환경 변수에서 merchant code를 가져오되, 없어도 계속 진행
-  const merchantCode = getPortOneMerchantCode();
-  if (merchantCode) {
-    window.IMP.init(merchantCode);
-    console.log('[portone] PayPal 결제를 위한 초기화 완료', { merchantCode });
-  } else {
-    console.warn('[portone] PayPal 결제: merchant code가 없지만 계속 진행합니다.');
-  }
-
-  // KRW를 USD로 변환
-  const usdAmount = convertKRWToUSD(params.amount);
-
-  // 결제 완료 후 리다이렉트 URL 생성
-  const returnUrl =
-    params.returnUrl ||
-    (typeof window !== 'undefined'
-      ? `${window.location.origin}/payments/portone-paypal/return`
-      : '');
-
-  // 포트원 결제 파라미터 구성
-  const paymentParams: PortOnePaymentParams = {
-    pg: PORTONE_PAYPAL_CHANNEL,
-    pay_method: 'paypal',
-    merchant_uid: params.orderId,
-    name: params.description,
-    amount: usdAmount,
-    currency: 'USD',
-    buyer_email: params.buyerEmail,
-    buyer_name: params.buyerName,
-    buyer_tel: params.buyerTel,
-    m_redirect_url: returnUrl,
-  };
-
-  console.log('[portone] PayPal 결제 요청', {
-    params: paymentParams,
-    originalAmountKRW: params.amount,
-    convertedAmountUSD: usdAmount,
+  // PortOne을 사용하지 않고 직접 PayPal API를 사용
+  // paypal.ts의 함수들을 사용하도록 import 필요
+  const { createPayPalPaymentIntent, getPayPalReturnUrl } = await import('./paypal');
+  
+  console.log('[paypal] PayPal 결제 요청 (PortOne 미사용)', {
+    orderId: params.orderId,
+    amount: params.amount,
   });
 
-  // Promise로 래핑하여 결제 결과 반환
-  return new Promise<RequestPayPalPaymentResult>((resolve, reject) => {
-    try {
-      window.IMP!.request_pay(paymentParams, async (response: PortOnePaymentResponse) => {
-        console.log('[portone] PayPal 결제 응답', response);
+  try {
+    // PayPal 결제 Intent 생성 (Edge Function 호출)
+    const intent = await createPayPalPaymentIntent({
+      userId: params.userId,
+      orderId: params.orderId,
+      amount: params.amount,
+      description: params.description,
+      buyerEmail: params.buyerEmail,
+      buyerName: params.buyerName,
+      returnUrl: params.returnUrl || getPayPalReturnUrl(),
+    });
 
-        if (response.success) {
-          // 결제 성공
-          // 주문 상태 업데이트는 리다이렉트 페이지에서 처리하거나
-          // 여기서 비동기로 처리할 수 있음
-          // 현재는 리다이렉트 페이지에서 처리하도록 함
-          console.log('[portone] PayPal 결제 성공', {
-            imp_uid: response.imp_uid,
-            merchant_uid: response.merchant_uid,
-            paid_amount: response.paid_amount,
-          });
-
-          // 리다이렉트는 포트원이 자동으로 처리하므로
-          // 여기서는 성공 결과만 반환
-          resolve({
-            success: true,
-            imp_uid: response.imp_uid,
-            merchant_uid: response.merchant_uid,
-            paid_amount: response.paid_amount,
-          });
-        } else {
-          // 결제 실패
-          console.error('[portone] PayPal 결제 실패', {
-            error_code: response.error_code,
-            error_msg: response.error_msg,
-            fullResponse: response,
-          });
-
-          resolve({
-            success: false,
-            error_code: response.error_code,
-            error_msg: response.error_msg,
-          });
-        }
-      });
-    } catch (error) {
-      console.error('[portone] 결제 요청 중 예외', error);
-      reject(
-        error instanceof Error
-          ? error
-          : new Error('결제 요청 중 예상치 못한 오류가 발생했습니다.'),
-      );
+    // sessionStorage에 주문 정보 저장 (리다이렉트 페이지에서 사용)
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('paypal_order_id', params.orderId);
+      sessionStorage.setItem('paypal_paypal_order_id', intent.paypalOrderId);
     }
-  });
+
+    // PayPal 승인 URL로 리다이렉트
+    if (intent.approvalUrl) {
+      window.location.href = intent.approvalUrl;
+    } else {
+      throw new Error('PayPal 승인 URL을 받지 못했습니다.');
+    }
+
+    // 리다이렉트되므로 여기서는 성공으로 반환
+    // 실제 결제 완료는 리다이렉트 페이지에서 처리
+    return {
+      success: true,
+      merchant_uid: params.orderId,
+    };
+  } catch (error) {
+    console.error('[paypal] PayPal 결제 요청 오류', error);
+    return {
+      success: false,
+      error_msg: error instanceof Error ? error.message : 'PayPal 결제 요청 중 오류가 발생했습니다.',
+    };
+  }
 };
 
 // PortOne 카드 결제용 인터페이스

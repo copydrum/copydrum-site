@@ -5,7 +5,7 @@ import {
   submitInicisPaymentForm,
   getInicisReturnUrl,
 } from './inicis';
-import { requestPayPalPayment, getPortOneReturnUrl } from './portone';
+import { requestPayPalPayment } from './portone';
 import type { PaymentIntentResponse, PaymentStatus, VirtualAccountInfo } from './types';
 import { updateOrderPaymentStatus } from './paymentService';
 import { supabase } from '../supabase';
@@ -94,23 +94,22 @@ export const startCashCharge = async ({
   }
 
   if (paymentMethod === 'paypal') {
-    // 포트원을 통한 PayPal 결제 처리
-    const finalReturnUrl = returnUrl || getPortOneReturnUrl();
-
+    // 직접 PayPal API를 통한 결제 처리 (PortOne 미사용)
     try {
       const result = await requestPayPalPayment({
+        userId,
         amount,
         orderId,
         buyerEmail: buyerEmail ?? undefined,
         buyerName: buyerName ?? undefined,
         buyerTel: buyerTel ?? undefined,
         description,
-        returnUrl: finalReturnUrl,
+        returnUrl: returnUrl, // returnUrl이 없으면 requestPayPalPayment 내부에서 자동 생성
       });
 
       if (result.success) {
-        // 결제 성공 - 포트원 콜백에서 이미 처리됨
-        // 리다이렉트는 포트원이 자동으로 처리
+        // PayPal 승인 URL로 리다이렉트됨
+        // 실제 결제 완료는 리다이렉트 페이지(/payments/paypal/return)에서 처리
         return {
           orderId,
           orderNumber,

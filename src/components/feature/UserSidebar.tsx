@@ -256,7 +256,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     // if (selectedPayment === 'kakaopay') { ... }
 
     if (selectedPayment === 'paypal') {
-      // PayPal 결제 처리 (PortOne)
+      // PayPal 결제 처리 (직접 PayPal API 사용, PortOne 미사용)
       setChargeProcessing(true);
       try {
         const description = `${selectedOption.label} (${formatCurrency(selectedOption.amount)})`;
@@ -268,11 +268,11 @@ export default function UserSidebar({ user }: UserSidebarProps) {
           description,
           buyerName: getUserDisplayName(profile, user.email || null) ?? null,
           buyerEmail: user.email ?? null,
-          // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
+          // returnUrl은 requestPayPalPayment에서 자동으로 생성
         });
 
         // PayPal은 리다이렉트되므로 알림 불필요
-        // 포트원이 자동으로 결제 창을 열고 처리
+        // PayPal 승인 URL로 자동 리다이렉트됨
       } catch (error) {
         console.error('캐쉬 충전 오류:', error);
         alert(error instanceof Error ? error.message : '캐쉬 충전 중 오류가 발생했습니다.');
