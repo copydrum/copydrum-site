@@ -1,20 +1,77 @@
 
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import { getSiteUrl } from '../../lib/siteUrl';
 import Footer from '../../components/common/Footer';
 import MainHeader from '../../components/common/MainHeader';
 
+// 이전 경로를 가져오는 헬퍼 함수
+const getRedirectPath = (): string => {
+  if (typeof window === 'undefined') return '/';
+  
+  // 1. URL 쿼리 파라미터에서 확인 (예: /login?from=/sheet-detail/123)
+  const urlParams = new URLSearchParams(window.location.search);
+  const fromParam = urlParams.get('from');
+  if (fromParam) {
+    return fromParam;
+  }
+  
+  // 2. localStorage에서 확인
+  const storedPath = localStorage.getItem('auth_redirect_path');
+  if (storedPath) {
+    return storedPath;
+  }
+  
+  // 3. 기본값: 홈
+  return '/';
+};
+
+// 이전 경로를 저장하는 헬퍼 함수
+const saveRedirectPath = (path: string) => {
+  if (typeof window === 'undefined') return;
+  // 로그인 페이지 자체는 저장하지 않음
+  if (path && !path.includes('/login') && !path.includes('/auth/login')) {
+    localStorage.setItem('auth_redirect_path', path);
+  }
+};
+
 export default function Login() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+
+  useEffect(() => {
+    // 로그인 페이지 진입 시 이전 경로 저장
+    const currentPath = location.pathname + location.search;
+    const fromParam = searchParams.get('from');
+    
+    if (fromParam) {
+      // 쿼리 파라미터로 전달된 경로 저장
+      saveRedirectPath(fromParam);
+    } else {
+      // 현재 경로가 로그인 페이지가 아니면 저장 (뒤로가기 등으로 진입한 경우)
+      const referrer = document.referrer;
+      if (referrer) {
+        try {
+          const referrerUrl = new URL(referrer);
+          const referrerPath = referrerUrl.pathname + referrerUrl.search;
+          if (referrerPath && !referrerPath.includes('/login') && !referrerPath.includes('/auth/login')) {
+            saveRedirectPath(referrerPath);
+          }
+        } catch (e) {
+          // referrer 파싱 실패 시 무시
+        }
+      }
+    }
+  }, [location, searchParams]);
 
   useEffect(() => {
     let isMounted = true;
@@ -23,7 +80,8 @@ export default function Login() {
     supabase.auth.getSession().then(({ data }) => {
       if (!isMounted) return;
       if (data.session?.user) {
-        navigate('/mypage', { replace: true });
+        const redirectPath = getRedirectPath();
+        navigate(redirectPath, { replace: true });
       }
     });
 
@@ -33,7 +91,8 @@ export default function Login() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return;
       if (session?.user) {
-        navigate('/mypage', { replace: true });
+        const redirectPath = getRedirectPath();
+        navigate(redirectPath, { replace: true });
       }
     });
 
@@ -143,12 +202,15 @@ export default function Login() {
           }
         }
 
-        // 로그인 성공 시 현재 호스트의 홈페이지로 이동 (호스트 유지, 해시 제거)
+        // 로그인 성공 시 이전 경로로 이동 (없으면 홈)
+        const redirectPath = getRedirectPath();
+        // localStorage에서 경로 제거 (한 번만 사용)
         if (typeof window !== 'undefined') {
+          localStorage.removeItem('auth_redirect_path');
           const currentOrigin = window.location.origin;
-          window.location.replace(`${currentOrigin}/`);
+          window.location.replace(`${currentOrigin}${redirectPath}`);
         } else {
-          navigate('/');
+          navigate(redirectPath);
         }
       }
     } catch (err: any) {

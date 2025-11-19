@@ -4,6 +4,27 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import MainHeader from '../../components/common/MainHeader';
 
+// 이전 경로를 가져오는 헬퍼 함수
+const getRedirectPath = (): string => {
+  if (typeof window === 'undefined') return '/';
+  
+  // 1. URL 쿼리 파라미터에서 확인
+  const urlParams = new URLSearchParams(window.location.search);
+  const fromParam = urlParams.get('from');
+  if (fromParam) {
+    return fromParam;
+  }
+  
+  // 2. localStorage에서 확인
+  const storedPath = localStorage.getItem('auth_redirect_path');
+  if (storedPath) {
+    return storedPath;
+  }
+  
+  // 3. 기본값: 홈
+  return '/';
+};
+
 export default function AuthCallback() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -88,8 +109,7 @@ export default function AuthCallback() {
               }
             }
 
-            // 로그인 성공 - 현재 호스트의 홈으로 이동 (호스트 유지, 해시 제거)
-            // 만약 잘못된 호스트로 리다이렉트되었다면 올바른 호스트로 이동
+            // 로그인 성공 - 이전 경로로 이동 (없으면 홈)
             if (typeof window !== 'undefined') {
               const currentOrigin = window.location.origin;
               const currentHost = window.location.host;
@@ -99,14 +119,23 @@ export default function AuthCallback() {
               const originalHost = localStorage.getItem('oauth_original_host');
               if (originalHost && originalHost !== currentHost) {
                 const protocol = window.location.protocol;
-                window.location.replace(`${protocol}//${originalHost}/`);
+                const redirectPath = getRedirectPath();
+                // localStorage에서 경로 제거 (한 번만 사용)
+                localStorage.removeItem('auth_redirect_path');
                 localStorage.removeItem('oauth_original_host');
+                window.location.replace(`${protocol}//${originalHost}${redirectPath}`);
                 return;
               }
               
-              window.location.replace(`${currentOrigin}/`);
+              // 이전 경로로 이동 (없으면 홈)
+              const redirectPath = getRedirectPath();
+              // localStorage에서 경로 제거 (한 번만 사용)
+              localStorage.removeItem('auth_redirect_path');
+              window.location.replace(`${currentOrigin}${redirectPath}`);
             } else {
-              navigate('/');
+              // SSR 환경에서는 기본적으로 홈으로 (실제로는 브라우저에서만 실행됨)
+              const redirectPath = getRedirectPath();
+              navigate(redirectPath);
             }
           }
         } else {
