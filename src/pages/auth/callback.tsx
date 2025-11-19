@@ -49,18 +49,13 @@ export default function AuthCallback() {
               const userMetadata = data.user.user_metadata || {};
               const provider = data.user.app_metadata?.provider || 'oauth';
               
-              // 이름 우선순위: user_metadata.name > full_name > nickname > 이메일 앞부분
-              const userName = userMetadata.name || 
-                               userMetadata.full_name || 
-                               userMetadata.nickname || 
-                               (data.user.email ? data.user.email.split('@')[0] : t('authCallback.defaultUserName'));
-              
+              // name 필드는 null로 설정 (표시명은 getUserDisplayName으로 처리)
               const { error: insertError } = await supabase
                 .from('profiles')
                 .insert({
                   id: data.user.id,
                   email: data.user.email || '',
-                  name: userName,
+                  name: null,
                   kakao_id: provider === 'kakao' ? userMetadata.sub : null,
                   google_id: provider === 'google' ? userMetadata.sub : null,
                   provider: provider,

@@ -3,8 +3,10 @@ import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
+import type { Profile } from '../../lib/supabase';
 import { googleAuth } from '../../lib/google';
 import { formatPrice } from '../../lib/priceFormatter';
+import { getUserDisplayName } from '../../utils/userDisplayName';
 
 interface MobileMenuSidebarProps {
   isOpen: boolean;
@@ -35,17 +37,15 @@ export default function MobileMenuSidebar({
   const location = useLocation();
   const { t, i18n } = useTranslation();
   const [userCash, setUserCash] = useState(0);
+  const [profile, setProfile] = useState<Profile | null>(null);
 
   const greeting = useMemo(() => {
     if (!user) {
       return t('auth.loginRequired');
     }
-    const name =
-      user.user_metadata?.name ||
-      user.email?.split('@')[0] ||
-      t('site.name');
+    const name = getUserDisplayName(profile, user.email || null);
     return t('mobile.menu.greeting', { name });
-  }, [t, user]);
+  }, [t, user, profile]);
 
   const formatCurrency = useCallback(
     (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
@@ -55,13 +55,14 @@ export default function MobileMenuSidebar({
   const loadUserCash = useCallback(async () => {
     if (!user) {
       setUserCash(0);
+      setProfile(null);
       return;
     }
 
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('credits')
+        .select('credits, display_name, email')
         .eq('id', user.id)
         .single();
 
@@ -72,6 +73,9 @@ export default function MobileMenuSidebar({
       }
 
       setUserCash(data?.credits || 0);
+      if (data) {
+        setProfile(data as Profile);
+      }
     } catch (error) {
       console.error('모바일 캐쉬 로드 오류:', error);
       setUserCash(0);

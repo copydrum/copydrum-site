@@ -16,6 +16,8 @@ import { buildDownloadKey, downloadFile, getDownloadFileName, requestSignedDownl
 // convertUSDToKRW is not used in this component anymore
 import { useTranslation } from 'react-i18next';
 import { isEnglishHost } from '../../i18n/languages';
+import { getUserDisplayName } from '../../utils/userDisplayName';
+import type { Profile } from '../../lib/supabase';
 
 type TabKey = 'profile' | 'purchases' | 'downloads' | 'favorites' | 'cash' | 'inquiries' | 'custom-orders';
 
@@ -25,6 +27,7 @@ interface ProfileInfo {
   id: string;
   email: string | null;
   name: string | null;
+  display_name?: string | null;
   phone: string | null;
   credits: number;
   created_at: MaybeDateString;
@@ -253,24 +256,8 @@ export default function MyPage() {
       ];
     }
 
-    // 한국 사이트: 기존 결제수단 (card, kakaopay, bank)
+    // 한국 사이트: 무통장 입금만 표시 (포트원 카드/카카오페이는 심사 진행 중)
     return [
-      { 
-        id: 'card', 
-        name: t('mypage.paymentMethods.creditCard'), 
-        icon: 'ri-bank-card-line', 
-        color: 'text-blue-600',
-        disabled: true,
-        badge: t('mypage.paymentMethods.preparing'),
-      },
-      {
-        id: 'kakaopay',
-        name: t('mypage.paymentMethods.kakaoPay'),
-        icon: 'ri-kakao-talk-fill',
-        color: 'text-yellow-600',
-        disabled: true,
-        badge: t('mypage.paymentMethods.preparing'),
-      },
       { 
         id: 'bank', 
         name: t('mypage.paymentMethods.bankTransfer'), 
@@ -459,7 +446,7 @@ export default function MyPage() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, name, phone, credits, created_at')
+        .select('id, email, name, display_name, phone, credits, created_at')
         .eq('id', currentUser.id)
         .maybeSingle();
 
@@ -471,6 +458,7 @@ export default function MyPage() {
         id: currentUser.id,
         email: data?.email ?? currentUser.email ?? null,
         name: data?.name ?? (currentUser.user_metadata?.name as string | null) ?? null,
+        display_name: data?.display_name ?? null,
         phone: data?.phone ?? (currentUser.user_metadata?.phone as string | null) ?? null,
         credits: data?.credits ?? 0,
         created_at: data?.created_at ?? currentUser.created_at,
@@ -791,10 +779,11 @@ export default function MyPage() {
       return;
     }
 
-    if (selectedPayment === 'kakaopay') {
-      alert(t('mypage.errors.paymentMethodNotReady'));
-      return;
-    }
+    // legacy: 카카오페이는 현재 비활성화 (포트원 심사 진행 중)
+    // if (selectedPayment === 'kakaopay') {
+    //   alert(t('mypage.errors.paymentMethodNotReady'));
+    //   return;
+    // }
 
     if (selectedPayment === 'paypal') {
       // PayPal 결제 처리 (PortOne)
@@ -807,7 +796,7 @@ export default function MyPage() {
           bonusAmount: selectedOption.bonus ?? 0,
           paymentMethod: 'paypal',
           description,
-          buyerName: profile?.name ?? profileForm.name ?? null,
+          buyerName: getUserDisplayName(profile as Profile | null, profile?.email || null) ?? null,
           buyerEmail: user.email ?? null,
           buyerTel: profile?.phone ?? profileForm.phone ?? null,
           // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
@@ -823,36 +812,11 @@ export default function MyPage() {
       return;
     }
 
-    if (selectedPayment === 'card') {
-      // 카드 결제 처리
-      setChargeProcessing(true);
-      try {
-        const description = `${t('mypage.cash.types.charge')} ${selectedOption.amount.toLocaleString('ko-KR')}원`;
-        const result = await startCashCharge({
-          userId: user.id,
-          amount: selectedOption.amount,
-          bonusAmount: selectedOption.bonus ?? 0,
-          paymentMethod: 'card',
-          description,
-          buyerName: profile?.name ?? profileForm.name ?? null,
-          buyerEmail: user.email ?? null,
-          buyerTel: profile?.phone ?? profileForm.phone ?? null,
-          // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
-        });
-
-        if (result.paymentIntent?.requestForm) {
-          alert(t('mypage.errors.paymentWindowOpen'));
-        } else {
-          alert(t('mypage.errors.paymentError'));
-        }
-      } catch (error) {
-        console.error(t('mypage.console.cashChargeError'), error);
-        alert(error instanceof Error ? error.message : t('mypage.errors.paymentError'));
-      } finally {
-        setChargeProcessing(false);
-      }
-      return;
-    }
+    // legacy: 카드 결제는 현재 비활성화 (포트원 심사 진행 중)
+    // if (selectedPayment === 'card') {
+    //   // 카드 결제 처리
+    //   ...
+    // }
 
     if (selectedPayment === 'bank') {
       // 무통장 입금은 입금자명 입력 단계로 이동
@@ -1389,11 +1353,11 @@ export default function MyPage() {
               <div className="grid gap-6 lg:grid-cols-2">
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex items-center gap-6">
                   <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold">
-                    {(profile?.name ?? profile?.email ?? 'U').slice(0, 1).toUpperCase()}
+                    {getUserDisplayName(profile as Profile | null, profile?.email || null).slice(0, 1).toUpperCase()}
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">{t('mypage.profile.memberInfo')}</p>
-                    <h3 className="text-xl font-bold text-gray-900">{profile?.name || t('mypage.profile.nameNotSet')}</h3>
+                    <h3 className="text-xl font-bold text-gray-900">{getUserDisplayName(profile as Profile | null, profile?.email || null)}</h3>
                     <p className="text-sm text-gray-600">{profile?.email}</p>
                     <p className="mt-2 text-xs text-gray-400">{t('mypage.profile.joinedOn')} {formatDate(profile?.created_at)}</p>
                   </div>

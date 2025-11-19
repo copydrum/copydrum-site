@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
 import { supabase } from '../../lib/supabase';
+import type { Profile } from '../../lib/supabase';
 import { getSiteUrl } from '../../lib/siteUrl';
 import { googleAuth } from '../../lib/google';
 import type { User } from '@supabase/supabase-js';
@@ -11,6 +12,7 @@ import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import { formatPrice, convertUSDToKRW } from '../../lib/priceFormatter';
 import { isEnglishHost } from '../../i18n/languages';
+import { getUserDisplayName } from '../../utils/userDisplayName';
 
 interface UserSidebarProps {
   user: User | null;
@@ -18,6 +20,7 @@ interface UserSidebarProps {
 
 export default function UserSidebar({ user }: UserSidebarProps) {
   const [userCash, setUserCash] = useState(0);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [showCashChargeModal, setShowCashChargeModal] = useState(false);
   const isEnglishSiteForState = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -247,10 +250,8 @@ export default function UserSidebar({ user }: UserSidebarProps) {
       return;
     }
 
-    if (selectedPayment === 'kakaopay') {
-      alert('카카오페이 결제는 준비 중입니다. 다른 결제수단을 이용해주세요.');
-      return;
-    }
+    // legacy: 카카오페이는 현재 비활성화 (포트원 심사 진행 중)
+    // if (selectedPayment === 'kakaopay') { ... }
 
     if (selectedPayment === 'paypal') {
       // PayPal 결제 처리 (PortOne)
@@ -263,7 +264,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
           bonusAmount: selectedOption.bonus ?? 0,
           paymentMethod: 'paypal',
           description,
-          buyerName: user.user_metadata?.name ?? user.email ?? null,
+          buyerName: getUserDisplayName(profile, user.email || null) ?? null,
           buyerEmail: user.email ?? null,
           // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
         });
@@ -278,35 +279,8 @@ export default function UserSidebar({ user }: UserSidebarProps) {
       return;
     }
 
-    if (selectedPayment === 'card') {
-      // 카드 결제 처리
-      setChargeProcessing(true);
-      try {
-        const description = `${selectedOption.label} (${formatCurrency(selectedOption.amount)})`;
-        const result = await startCashCharge({
-          userId: user.id,
-          amount: selectedOption.amount,
-          bonusAmount: selectedOption.bonus ?? 0,
-          paymentMethod: 'card',
-          description,
-          buyerName: user.user_metadata?.name ?? user.email ?? null,
-          buyerEmail: user.email ?? null,
-          // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
-        });
-
-        if (result.paymentIntent?.requestForm) {
-          alert('결제창이 열립니다. 결제를 완료해 주세요.');
-        } else {
-          alert('결제 처리 중 오류가 발생했습니다.');
-        }
-      } catch (error) {
-        console.error('캐쉬 충전 오류:', error);
-        alert(error instanceof Error ? error.message : '캐쉬 충전 중 오류가 발생했습니다.');
-      } finally {
-        setChargeProcessing(false);
-      }
-      return;
-    }
+    // legacy: 카드 결제는 현재 비활성화 (포트원 심사 진행 중)
+    // if (selectedPayment === 'card') { ... }
 
     if (selectedPayment === 'bank') {
       setShowDepositorInput(true);
@@ -469,24 +443,8 @@ export default function UserSidebar({ user }: UserSidebarProps) {
       ];
     }
 
-    // 한국 사이트: 기존 결제수단 (card, kakaopay, bank)
+    // 한국 사이트: 무통장 입금만 표시 (포트원 카드/카카오페이는 심사 진행 중)
     return [
-      {
-        id: 'card',
-        name: '신용카드',
-        icon: 'ri-bank-card-line',
-        color: 'text-blue-600',
-        disabled: false,
-        badge: undefined,
-      },
-      {
-        id: 'kakaopay',
-        name: '카카오페이',
-        icon: 'ri-kakao-talk-fill',
-        color: 'text-yellow-600',
-        disabled: true,
-        badge: '준비 중',
-      },
       { 
         id: 'bank', 
         name: '무통장입금', 
@@ -507,7 +465,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('credits')
+        .select('credits, display_name, email')
         .eq('id', user.id)
         .single();
 
@@ -518,13 +476,16 @@ export default function UserSidebar({ user }: UserSidebarProps) {
       }
 
       setUserCash(data?.credits || 0);
+      if (data) {
+        setProfile(data as Profile);
+      }
     } catch (error) {
       console.error('캐쉬 로드 오류:', error);
       setUserCash(0);
     }
   }, [user]);
 
-  // 사용자 캐쉬 로드
+  // 사용자 캐쉬 및 프로필 로드
   useEffect(() => {
     void loadUserCash();
   }, [loadUserCash]);
@@ -727,7 +688,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-4 text-white">
           <div className="mb-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold">{user?.user_metadata?.name || t('sidebar.user')}</h2>
+              <h2 className="text-lg font-bold">{getUserDisplayName(profile, user?.email || null) || t('sidebar.user')}</h2>
               <button
                 onClick={handleLogout}
                 className="text-xs bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-white transition-colors cursor-pointer"

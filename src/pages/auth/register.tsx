@@ -13,7 +13,6 @@ export default function Register() {
     email: '',
     password: '',
     confirmPassword: '',
-    name: '',
     agreeTerms: false,
     agreePrivacy: false,
     agreeMarketing: false
@@ -112,14 +111,13 @@ export default function Register() {
     }
 
     try {
-      // Supabase 회원가입 - 메타데이터에 추가 정보 포함
+      // Supabase 회원가입
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
           emailRedirectTo: `${location.origin}/auth/callback`,
           data: {
-            name: formData.name,
             role: 'user' // 기본값으로 'user' 고정
           }
         }
@@ -133,17 +131,15 @@ export default function Register() {
       }
 
       if (data.user) {
-        // 프로필 생성 (이름이 있으면 사용, 없으면 이메일 앞부분 사용)
-        const userName = formData.name.trim() || formData.email.split('@')[0];
-        
-        // upsert를 사용하여 트리거가 먼저 생성한 프로필도 실제 이름으로 덮어쓰기
+        // 프로필 생성 (name 필드는 null로 설정, 표시명은 getUserDisplayName으로 처리)
+        // upsert를 사용하여 트리거가 먼저 생성한 프로필도 업데이트
         const { error: profileError } = await supabase
           .from('profiles')
           .upsert(
             {
               id: data.user.id,
               email: formData.email,
-              name: userName,
+              name: null,
               role: 'user'
             },
             { onConflict: 'id' } // 같은 id면 update로 덮어쓰기
@@ -222,24 +218,6 @@ export default function Register() {
                     {success}
                   </div>
                 )}
-
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                    {t('authRegister.form.name')} *
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      id="name"
-                      name="name"
-                      type="text"
-                      required
-                      value={formData.name}
-                      onChange={handleChange}
-                      className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      placeholder={t('authRegister.form.namePlaceholder')}
-                    />
-                  </div>
-                </div>
 
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700">
