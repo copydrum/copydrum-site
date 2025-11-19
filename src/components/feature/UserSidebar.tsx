@@ -24,10 +24,13 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   const { credits: userCash, loading: cashLoading, error: cashError, refresh: refreshCash } = useUserCashBalance(user);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [showCashChargeModal, setShowCashChargeModal] = useState(false);
+  
+  // 영문 사이트 여부 확인 (초기 상태에서 사용되므로 먼저 정의)
   const isEnglishSiteForState = useMemo(() => {
     if (typeof window === 'undefined') return false;
     return isEnglishHost(window.location.host);
   }, []);
+  
   const [chargeAmount, setChargeAmount] = useState(
     isEnglishSiteForState ? convertUSDToKRW(10) : 10000
   );
@@ -58,6 +61,15 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     (value: number) => new Intl.NumberFormat(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US').format(value),
     [i18n.language],
   );
+
+  const { cartItems } = useCart();
+
+  // 영문 사이트 여부 확인 (formatCash보다 먼저 정의되어야 함)
+  const isEnglishSite = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return isEnglishHost(window.location.host);
+  }, []);
+
   // 캐시 표시용 포맷 함수 (영문 사이트는 en-US 포맷, 한국어 사이트는 기존 포맷)
   const formatCash = useCallback(
     (value: number) => {
@@ -71,13 +83,6 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     },
     [isEnglishSite, i18n.language],
   );
-
-  const { cartItems } = useCart();
-
-  const isEnglishSite = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return isEnglishHost(window.location.host);
-  }, []);
 
   const handleLogout = async () => {
     try {
