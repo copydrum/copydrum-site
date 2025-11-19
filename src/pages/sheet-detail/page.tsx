@@ -913,6 +913,41 @@ export default function SheetDetailPage() {
               </button>
             </div>
           </div>
+
+          {/* 환불 규정 안내 블록 */}
+          <div className="bg-gray-50 rounded-lg p-6 mt-8">
+            {isEnglishSite ? (
+              <>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Refund Policy</h3>
+                <p className="text-sm text-gray-700 mb-2">
+                  This product is a digital PDF drum sheet music file. Once the file has
+                  been downloaded or accessed, it cannot be refunded.
+                </p>
+                <p className="text-sm text-gray-700">
+                  For details, please check our{' '}
+                  <a href="/policy/refund" className="text-blue-600 hover:text-blue-800 underline">
+                    Refund &amp; Delivery Policy
+                  </a>
+                  .
+                </p>
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">환불 규정</h3>
+                <p className="text-sm text-gray-700 mb-2">
+                  본 상품은 디지털 PDF 드럼 악보 파일로, 파일 다운로드 또는 열람이 이루어진
+                  경우 환불이 불가합니다.
+                </p>
+                <p className="text-sm text-gray-700">
+                  자세한 내용은{' '}
+                  <a href="/policy/refund" className="text-blue-600 hover:text-blue-800 underline">
+                    환불 및 제공(배송) 정책
+                  </a>
+                  을 확인해 주세요.
+                </p>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

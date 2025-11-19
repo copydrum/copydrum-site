@@ -38,7 +38,7 @@ export default function Footer() {
     { label: t('footer.guide'), href: '/guide' },
     { label: t('footer.faq'), href: '/customer-support' },
     { label: t('footer.contact'), href: '/customer-support?tab=contact' },
-    { label: t('footer.refundPolicy'), href: '/customer-support?tab=faq' },
+    { label: isEnglishSite ? 'Refund & Delivery Policy' : '환불정책', href: '/policy/refund' },
   ];
 
   const companyLinks: FooterLink[] = [

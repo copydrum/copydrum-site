@@ -33,6 +33,7 @@ const InicisClosePage = lazy(() => import('../pages/payments/inicis-close/page')
 const PayPalReturnPage = lazy(() => import('../pages/payments/paypal-return/page'));
 const PayPalCancelPage = lazy(() => import('../pages/payments/paypal-cancel/page'));
 const PortOnePayPalReturnPage = lazy(() => import('../pages/payments/portone-paypal-return/page'));
+const RefundPolicyPage = lazy(() => import('../pages/policy/RefundPolicyPage'));
 
 // 로딩 컴포넌트
 const LoadingSpinner = () => (
@@ -314,6 +315,14 @@ const routes: RouteObject[] = [
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <PortOnePayPalReturnPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/policy/refund',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <RefundPolicyPage />
       </Suspense>
     ),
   },
