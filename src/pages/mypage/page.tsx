@@ -4,8 +4,7 @@ import type { ChangeEvent, FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
-import type { VirtualAccountInfo } from '../../lib/payments';
-import { startCashCharge } from '../../lib/payments';
+import PointChargeModal from '../../components/payments/PointChargeModal';
 import MainHeader from '../../components/common/MainHeader';
 import UserSidebar from '../../components/feature/UserSidebar';
 import { useCart } from '../../hooks/useCart';
@@ -237,51 +236,6 @@ export default function MyPage() {
 
   // 캐시충전 모달 상태
   const [showCashChargeModal, setShowCashChargeModal] = useState(false);
-  const [chargeAmount, setChargeAmount] = useState(10000);
-  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank' | 'paypal'>(isEnglishSite ? 'paypal' : 'bank');
-  const [chargeAgreementChecked, setChargeAgreementChecked] = useState(false);
-  const [chargeProcessing, setChargeProcessing] = useState(false);
-  const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
-  const [showDepositorInput, setShowDepositorInput] = useState(false);
-  const [depositorName, setDepositorName] = useState('');
-
-  // Charge options - 기본값은 한국어 사이트 기준 (원화)
-  const chargeOptions = useMemo(() => [
-    { amount: 3000, bonus: 0, label: '3천원' },
-    { amount: 5000, bonus: 500, label: '5천원', bonusPercent: '10%' },
-    { amount: 10000, bonus: 1500, label: '1만원', bonusPercent: '15%' },
-    { amount: 30000, bonus: 6000, label: '3만원', bonusPercent: '20%' },
-    { amount: 50000, bonus: 11000, label: '5만원', bonusPercent: '22%' },
-    { amount: 100000, bonus: 25000, label: '10만원', bonusPercent: '25%' },
-  ], []);
-
-  const paymentMethods = useMemo(() => {
-    // 영문 사이트: PayPal만 표시
-    if (isEnglishSite) {
-      return [
-        {
-          id: 'paypal',
-          name: t('payment.paypal'),
-          icon: 'ri-paypal-line',
-          color: 'text-blue-700',
-          disabled: false,
-          badge: undefined,
-        },
-      ];
-    }
-
-    // 한국 사이트: 무통장 입금만 표시 (포트원 카드/카카오페이는 심사 진행 중)
-    return [
-      { 
-        id: 'bank', 
-        name: t('mypage.paymentMethods.bankTransfer'), 
-        icon: 'ri-bank-line', 
-        color: 'text-green-600',
-        disabled: false,
-        badge: undefined,
-      },
-    ];
-  }, [t, isEnglishSite]);
 
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [downloads, setDownloads] = useState<DownloadableItem[]>([]);
@@ -763,139 +717,11 @@ export default function MyPage() {
   );
 
   const handleCashCharge = () => {
-    setBankTransferInfo(null);
-    setChargeAgreementChecked(false);
-    setChargeProcessing(false);
     setShowCashChargeModal(true);
   };
 
   const handleCloseCashChargeModal = () => {
     setShowCashChargeModal(false);
-    setChargeAgreementChecked(false);
-    setChargeProcessing(false);
-    setBankTransferInfo(null);
-    setShowDepositorInput(false);
-    setDepositorName('');
-  };
-
-  const handleChargeConfirm = async () => {
-    if (!user) {
-      alert(t('mypage.errors.loginRequired'));
-      return;
-    }
-
-    if (!chargeAgreementChecked) {
-      alert(t('mypage.errors.agreementRequired'));
-      return;
-    }
-
-    const selectedOption = chargeOptions.find((option) => option.amount === chargeAmount);
-    if (!selectedOption) {
-      alert(t('mypage.errors.amountNotFound'));
-      return;
-    }
-
-    // legacy: 카카오페이는 현재 비활성화 (포트원 심사 진행 중)
-    // if (selectedPayment === 'kakaopay') {
-    //   alert(t('mypage.errors.paymentMethodNotReady'));
-    //   return;
-    // }
-
-    if (selectedPayment === 'paypal') {
-      // PayPal 결제 처리 (PortOne)
-      setChargeProcessing(true);
-      try {
-        const formattedAmount = formatPrice({ 
-          amountKRW: selectedOption.amount, 
-          language: i18n.language,
-          host: typeof window !== 'undefined' ? window.location.host : undefined
-        }).formatted;
-        const description = `${t('mypage.cash.types.charge')} ${formattedAmount}`;
-        await startCashCharge({
-          userId: user.id,
-          amount: selectedOption.amount,
-          bonusAmount: selectedOption.bonus ?? 0,
-          paymentMethod: 'paypal',
-          description,
-          buyerName: getUserDisplayName(profile as Profile | null, profile?.email || null) ?? null,
-          buyerEmail: user.email ?? null,
-          buyerTel: profile?.phone ?? profileForm.phone ?? null,
-          // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
-        });
-
-        // PayPal은 리다이렉트되므로 알림 불필요
-        // 포트원이 자동으로 결제 창을 열고 처리
-      } catch (error) {
-        console.error(t('mypage.console.cashChargeError'), error);
-        alert(error instanceof Error ? error.message : t('mypage.errors.paymentError'));
-        setChargeProcessing(false);
-      }
-      return;
-    }
-
-    // legacy: 카드 결제는 현재 비활성화 (포트원 심사 진행 중)
-    // if (selectedPayment === 'card') {
-    //   // 카드 결제 처리
-    //   ...
-    // }
-
-    if (selectedPayment === 'bank') {
-      // 무통장 입금은 입금자명 입력 단계로 이동
-      setShowDepositorInput(true);
-      return;
-    }
-  };
-
-  const handleBankTransferConfirm = async () => {
-    if (!user) return;
-
-    if (!depositorName.trim()) {
-      alert(t('mypage.errors.depositorNameRequired'));
-      return;
-    }
-
-    const selectedOption = chargeOptions.find((option) => option.amount === chargeAmount);
-    if (!selectedOption) {
-      alert(t('mypage.errors.amountNotFound'));
-      return;
-    }
-
-    setChargeProcessing(true);
-
-    try {
-      const formattedAmount = formatPrice({ 
-        amountKRW: selectedOption.amount, 
-        language: i18n.language,
-        host: typeof window !== 'undefined' ? window.location.host : undefined
-      }).formatted;
-      const description = `${t('mypage.cash.types.charge')} ${formattedAmount}`;
-      const result = await startCashCharge({
-        userId: user.id,
-        amount: selectedOption.amount,
-        bonusAmount: selectedOption.bonus ?? 0,
-        paymentMethod: 'bank_transfer',
-        description,
-        buyerName: profile?.name ?? profileForm.name ?? null,
-        buyerEmail: user.email ?? null,
-        buyerTel: profile?.phone ?? profileForm.phone ?? null,
-        depositorName: depositorName.trim(),
-        // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
-      });
-
-      setBankTransferInfo(result.virtualAccountInfo ?? null);
-      setShowDepositorInput(false);
-      await Promise.all([
-        loadCashTransactions(user),
-        refreshCashBalance(), // 캐시 잔액 새로고침
-      ]);
-      alert(t('mypage.errors.orderReceived'));
-      setChargeAgreementChecked(false);
-    } catch (error) {
-      console.error(t('mypage.console.cashChargeError'), error);
-      alert(error instanceof Error ? error.message : t('mypage.errors.paymentError'));
-    } finally {
-      setChargeProcessing(false);
-    }
   };
 
   const handleSearch = () => {
@@ -2283,269 +2109,24 @@ export default function MyPage() {
         </main>
       </div>
 
-      {/* 캐쉬충전 모달 */}
-      {showCashChargeModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
-          <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            {/* 헤더 */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">{t('mypage.cashCharge.title')}</h2>
-              <button onClick={handleCloseCashChargeModal} className="text-gray-400 hover:text-gray-600 cursor-pointer">
-                <i className="ri-close-line text-xl"></i>
-              </button>
-            </div>
-
-            <div className="p-4">
-              {/* 현재 포인트 */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6 flex items-center">
-                <i className="ri-coins-line text-yellow-600 text-lg mr-2"></i>
-                <span className="text-sm text-gray-700">{t('mypage.cashCharge.currentCash')}</span>
-                {cashBalanceLoading ? (
-                  <span className="ml-auto font-bold text-yellow-400 animate-pulse">로딩 중...</span>
-                ) : cashBalanceError ? (
-                  <span className="ml-auto text-sm font-bold text-red-600">오류</span>
-                ) : (
-                  <span className="ml-auto font-bold text-yellow-600">
-                    {formatCash(userCashBalance, isEnglishSite)}
-                  </span>
-                )}
-              </div>
-
-              {showDepositorInput ? (
-                <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-gray-900">{t('mypage.cashCharge.bankTransferInfo.title')}</h3>
-                  
-                  <div className="bg-blue-50 rounded-lg px-4 py-3 border border-blue-200">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">{t('mypage.cashCharge.bankTransferInfo.amount')}</span>
-                      <span className="text-lg font-bold text-blue-600">
-                        {formatCurrency(chargeAmount)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bg-gray-50 rounded-lg px-4 py-3 space-y-2">
-                    <h4 className="text-xs font-semibold text-gray-900 mb-2">{t('mypage.cashCharge.bankTransferInfo.title')}</h4>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-600">{t('mypage.cashCharge.bankTransferInfo.bank')}</span>
-                      <span className="text-xs font-medium text-gray-900">카카오뱅크</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-600">{t('mypage.cashCharge.bankTransferInfo.accountNumber')}</span>
-                      <span className="text-xs font-medium text-gray-900">3333-15-0302437</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-600">{t('mypage.cashCharge.bankTransferInfo.accountHolder')}</span>
-                      <span className="text-xs font-medium text-gray-900">강만수</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label htmlFor="depositor-name" className="block text-sm font-semibold text-gray-900">
-                      {t('mypage.cashCharge.depositorName')} <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      id="depositor-name"
-                      type="text"
-                      value={depositorName}
-                      onChange={(e) => setDepositorName(e.target.value)}
-                      placeholder={t('mypage.cashCharge.depositorNamePlaceholder')}
-                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <p className="text-xs text-gray-500">
-                      {t('mypage.cashCharge.depositorNameHint')}
-                    </p>
-                  </div>
-
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
-                    <div className="flex gap-2">
-                      <i className="ri-information-line text-yellow-600 text-base flex-shrink-0 mt-0.5"></i>
-                      <div className="text-xs text-gray-700 space-y-1">
-                        <p>• {t('mypage.cashCharge.bankTransferNotice.line1')}</p>
-                        <p>• {t('mypage.cashCharge.bankTransferNotice.line2')}</p>
-                        <p>• {t('mypage.cashCharge.bankTransferNotice.line3')}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setShowDepositorInput(false)}
-                      className="flex-1 border border-gray-300 text-gray-700 py-2.5 px-4 rounded-lg hover:bg-gray-50 font-medium text-sm transition-colors"
-                    >
-                      {t('mypage.cashCharge.back')}
-                    </button>
-                    <button
-                      onClick={handleBankTransferConfirm}
-                      disabled={chargeProcessing}
-                      className="flex-1 bg-blue-600 text-white py-2.5 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-70 font-medium text-sm transition-colors"
-                    >
-                      {chargeProcessing ? t('mypage.cashCharge.processing') : t('mypage.cashCharge.confirm')}
-                    </button>
-                  </div>
-                </div>
-              ) : bankTransferInfo ? (
-                <div className="space-y-5">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h3 className="text-sm font-semibold text-blue-800 mb-3">{t('mypage.cashCharge.bankTransferGuide.title')}</h3>
-                    <ul className="space-y-2 text-sm text-gray-700">
-                      <li>
-                        <span className="font-medium text-gray-900">{t('mypage.cashCharge.bankTransferGuide.bank')}</span> {bankTransferInfo.bankName}
-                      </li>
-                      <li>
-                        <span className="font-medium text-gray-900">{t('mypage.cashCharge.bankTransferGuide.accountNumber')}</span>{' '}
-                        {bankTransferInfo.accountNumber}
-                      </li>
-                      <li>
-                        <span className="font-medium text-gray-900">{t('mypage.cashCharge.bankTransferGuide.accountHolder')}</span> {bankTransferInfo.depositor}
-                      </li>
-                      <li>
-                        <span className="font-medium text-gray-900">{t('mypage.cashCharge.bankTransferGuide.amount')}</span>{' '}
-                        {formatCurrency(bankTransferInfo.amount ?? chargeAmount)}
-                      </li>
-                      {bankTransferInfo.expectedDepositor ? (
-                        <li>
-                          <span className="font-medium text-gray-900">{t('mypage.cashCharge.bankTransferInfo.depositorName')}</span>{' '}
-                          <span className="text-blue-600 font-semibold">
-                            {bankTransferInfo.expectedDepositor}
-                          </span>
-                        </li>
-                      ) : null}
-                    </ul>
-                    {bankTransferInfo.message ? (
-                      <p className="mt-4 text-xs text-gray-600">{bankTransferInfo.message}</p>
-                    ) : null}
-                  </div>
-
-                  <button
-                    onClick={handleCloseCashChargeModal}
-                    className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 font-bold text-sm transition-colors"
-                  >
-                    {t('mypage.cashCharge.confirm')}
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {/* 결제금액 */}
-                  <div className="mb-6">
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">{t('mypage.cashCharge.paymentAmountTitle')}</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      {chargeOptions.map((option, index) => (
-                        <button
-                          key={index}
-                          onClick={() => setChargeAmount(option.amount)}
-                          className={`relative p-3 border rounded-lg text-left transition-colors ${
-                            chargeAmount === option.amount
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium">{option.label}</span>
-                            <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
-                              {chargeAmount === option.amount && (
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                              )}
-                            </div>
-                          </div>
-                          {option.bonus > 0 && (
-                            <div className="mt-1">
-                              <span className="text-xs text-gray-500">
-                                {`+${option.bonus.toLocaleString()} 적립`}
-                              </span>
-                              {option.bonusPercent && (
-                                <span className="ml-1 bg-red-500 text-white text-xs px-1 py-0.5 rounded">
-                                  {option.bonusPercent}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* 결제방법 */}
-                  <div className="mb-6">
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">{t('mypage.cashCharge.paymentMethod')}</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      {paymentMethods.map((method) => {
-                        const isSelected = selectedPayment === method.id;
-                        const isDisabled = method.disabled;
-                        return (
-                          <button
-                            key={method.id}
-                            type="button"
-                            onClick={() => {
-                              if (isDisabled) {
-                                alert(t('mypage.errors.paymentMethodNotReady'));
-                                return;
-                              }
-                              setSelectedPayment(method.id as 'card' | 'kakaopay' | 'bank' | 'paypal');
-                            }}
-                            disabled={isDisabled}
-                            className={`p-3 border rounded-lg text-left transition-colors ${
-                              isSelected
-                                ? 'border-blue-500 bg-blue-50'
-                                : 'border-gray-200 hover:border-gray-300'
-                            } ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center">
-                                <i className={`${method.icon} ${method.color} text-lg mr-2`}></i>
-                                <span className="text-sm font-medium">{method.name}</span>
-                              </div>
-                              <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
-                                {isSelected && <div className="w-2 h-2 bg-blue-500 rounded-full"></div>}
-                              </div>
-                            </div>
-                            {method.badge ? (
-                              <div className="mt-1">
-                                <span className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded">
-                                  {method.badge}
-                                </span>
-                              </div>
-                            ) : null}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* 약관 동의 */}
-                  <div className="mb-6">
-                    <label className="flex items-start cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={chargeAgreementChecked}
-                        onChange={(event) => setChargeAgreementChecked(event.target.checked)}
-                        className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
-                      />
-                      <span className="ml-2 text-xs text-gray-600 leading-relaxed">
-                        {t('mypage.cashCharge.agreement')}
-                        <button type="button" className="text-blue-600 hover:text-blue-800 ml-1">
-                          <i className="ri-arrow-down-s-line"></i>
-                        </button>
-                      </span>
-                    </label>
-                  </div>
-
-                  {/* 충전하기 버튼 */}
-                  <button
-                    onClick={handleChargeConfirm}
-                    disabled={chargeProcessing}
-                    className={`w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-lg font-bold text-sm transition-colors ${
-                      chargeProcessing ? 'opacity-70 cursor-not-allowed' : 'hover:from-blue-700 hover:to-purple-700'
-                    }`}
-                  >
-                    {chargeProcessing ? t('mypage.cashCharge.processing') : t('mypage.cashCharge.next')}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 포인트 충전 모달 */}
+      <PointChargeModal
+        open={showCashChargeModal}
+        onClose={handleCloseCashChargeModal}
+        user={user}
+        profile={profile}
+        userCash={userCashBalance}
+        cashLoading={cashBalanceLoading}
+        cashError={cashBalanceError}
+        onCashUpdate={async () => {
+          if (user) {
+            await Promise.all([
+              loadCashTransactions(user),
+              refreshCashBalance(),
+            ]);
+          }
+        }}
+      />
 
       <button
         onClick={() => navigate('/cart')}
