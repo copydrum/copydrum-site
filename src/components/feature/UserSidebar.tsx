@@ -944,52 +944,92 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                         const bonusPercent = option.bonus && option.amount > 0
                           ? Math.round((option.bonus / option.amount) * 100)
                           : 0;
-                        const paymentAmount = isEnglishSite && 'amountUSD' in option
-                          ? `$${option.amountUSD}`
-                          : formatCurrency(option.amount);
                         
-                        return (
-                          <button
-                            key={index}
-                            onClick={() => setChargeAmount(option.amount)}
-                            className={`relative p-3 border rounded-lg text-left transition-colors ${
-                              chargeAmount === option.amount
-                                ? 'border-blue-500 bg-blue-50'
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-base font-bold text-gray-900">
-                                {t('sidebar.totalPoints', { amount: formatPoints(totalPoints) })}
-                              </span>
-                              <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
-                                {chargeAmount === option.amount && (
-                                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                )}
+                        // 한국 사이트와 영문 사이트 분기 처리
+                        if (isEnglishSite && 'amountUSD' in option) {
+                          // 영문 사이트: USD 기반 UI 유지
+                          const paymentAmount = `$${option.amountUSD}`;
+                          return (
+                            <button
+                              key={index}
+                              onClick={() => setChargeAmount(option.amount)}
+                              className={`relative p-3 border rounded-lg text-left transition-colors ${
+                                chargeAmount === option.amount
+                                  ? 'border-blue-500 bg-blue-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-base font-bold text-gray-900">
+                                  {t('sidebar.totalPoints', { amount: formatPoints(totalPoints) })}
+                                </span>
+                                <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
+                                  {chargeAmount === option.amount && (
+                                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                            {option.bonus && option.bonus > 0 ? (
-                              <p className="text-xs text-gray-600 mt-1">
-                                {t('sidebar.payAndBonus', {
-                                  payment: paymentAmount,
-                                  bonus: formatPoints(option.bonus),
-                                  percent: `${bonusPercent}%`
-                                })}
-                              </p>
-                            ) : (
-                              <p className="text-xs text-gray-600 mt-1">
-                                {paymentAmount} {isEnglishSite ? 'payment' : '결제'}
-                              </p>
-                            )}
-                          </button>
-                        );
+                              {option.bonus && option.bonus > 0 ? (
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {t('sidebar.payAndBonus', {
+                                    payment: paymentAmount,
+                                    bonus: formatPoints(option.bonus),
+                                    percent: `${bonusPercent}%`
+                                  })}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {paymentAmount} payment
+                                </p>
+                              )}
+                            </button>
+                          );
+                        } else {
+                          // 한국 사이트: KRW 기반 UI
+                          const amountKRW = formatNumber(option.amount);
+                          const bonusPoints = option.bonus ? formatPoints(option.bonus) : '0 P';
+                          
+                          return (
+                            <button
+                              key={index}
+                              onClick={() => setChargeAmount(option.amount)}
+                              className={`relative p-3 border rounded-lg text-left transition-colors ${
+                                chargeAmount === option.amount
+                                  ? 'border-blue-500 bg-blue-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-base font-bold text-gray-900">
+                                  총 {formatPoints(totalPoints)}
+                                </span>
+                                <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
+                                  {chargeAmount === option.amount && (
+                                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                  )}
+                                </div>
+                              </div>
+                              {option.bonus && option.bonus > 0 ? (
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {amountKRW}원 결제 · 보너스 +{bonusPoints} ({bonusPercent}%)
+                                </p>
+                              ) : (
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {amountKRW}원 결제
+                                </p>
+                              )}
+                            </button>
+                          );
+                        }
                       })}
                     </div>
                   </div>
 
                   {/* 결제방법 */}
                   <div className="mb-6">
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">{t('sidebar.paymentMethod')}</h3>
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">
+                      {isEnglishSite ? t('sidebar.paymentMethod') : t('sidebar.paymentMethodLabel')}
+                    </h3>
                     <div className="grid grid-cols-2 gap-3">
                       {paymentMethods.map((method) => {
                         const isSelected = selectedPayment === method.id;

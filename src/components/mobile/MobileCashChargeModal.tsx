@@ -45,6 +45,10 @@ export default function MobileCashChargeModal({
     (value: number) => `${value.toLocaleString('en-US')} P`,
     [],
   );
+  const formatNumber = useCallback(
+    (value: number) => new Intl.NumberFormat(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US').format(value),
+    [i18n.language],
+  );
 
   const isEnglishSite = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -423,47 +427,85 @@ export default function MobileCashChargeModal({
                         const bonusPercent = option.bonus && option.amount > 0
                           ? Math.round((option.bonus / option.amount) * 100)
                           : 0;
-                        // 영문 사이트에서는 USD로 표시, 한국어 사이트에서는 KRW로 표시
-                        const paymentAmount = isEnglishSite
-                          ? `$${convertKRWToUSD(option.amount).toFixed(2)}`
-                          : formatCurrency(option.amount);
                         
-                        return (
-                          <button
-                            key={option.amount}
-                            type="button"
-                            onClick={() => setSelectedAmount(option.amount)}
-                            className={`rounded-xl border px-4 py-3 text-left transition-colors ${
-                              isSelected
-                                ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                : 'border-gray-200 bg-white text-gray-700 hover:border-blue-200'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-1">
-                              <p className="text-base font-bold text-gray-900">
-                                {t('mobile.cash.totalPoints', { amount: formatPoints(totalPoints) })}
-                              </p>
-                              <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center flex-shrink-0">
-                                {isSelected && (
-                                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                )}
+                        // 한국 사이트와 영문 사이트 분기 처리
+                        if (isEnglishSite) {
+                          // 영문 사이트: USD 기반 UI 유지
+                          const paymentAmount = `$${convertKRWToUSD(option.amount).toFixed(2)}`;
+                          return (
+                            <button
+                              key={option.amount}
+                              type="button"
+                              onClick={() => setSelectedAmount(option.amount)}
+                              className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+                                isSelected
+                                  ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                  : 'border-gray-200 bg-white text-gray-700 hover:border-blue-200'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="text-base font-bold text-gray-900">
+                                  {t('mobile.cash.totalPoints', { amount: formatPoints(totalPoints) })}
+                                </p>
+                                <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center flex-shrink-0">
+                                  {isSelected && (
+                                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                            {option.bonus && option.bonus > 0 ? (
-                              <p className="text-xs text-gray-600 mt-1">
-                                {t('mobile.cash.payAndBonus', {
-                                  payment: paymentAmount,
-                                  bonus: formatPoints(option.bonus),
-                                  percent: `${bonusPercent}%`
-                                })}
-                              </p>
-                            ) : (
-                              <p className="text-xs text-gray-600 mt-1">
-                                {paymentAmount} {isEnglishSite ? 'payment' : '결제'}
-                              </p>
-                            )}
-                          </button>
-                        );
+                              {option.bonus && option.bonus > 0 ? (
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {t('mobile.cash.payAndBonus', {
+                                    payment: paymentAmount,
+                                    bonus: formatPoints(option.bonus),
+                                    percent: `${bonusPercent}%`
+                                  })}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {paymentAmount} payment
+                                </p>
+                              )}
+                            </button>
+                          );
+                        } else {
+                          // 한국 사이트: KRW 기반 UI
+                          const amountKRW = formatNumber(option.amount);
+                          const bonusPoints = option.bonus ? formatPoints(option.bonus) : '0 P';
+                          
+                          return (
+                            <button
+                              key={option.amount}
+                              type="button"
+                              onClick={() => setSelectedAmount(option.amount)}
+                              className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+                                isSelected
+                                  ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                  : 'border-gray-200 bg-white text-gray-700 hover:border-blue-200'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="text-base font-bold text-gray-900">
+                                  총 {formatPoints(totalPoints)}
+                                </p>
+                                <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center flex-shrink-0">
+                                  {isSelected && (
+                                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                  )}
+                                </div>
+                              </div>
+                              {option.bonus && option.bonus > 0 ? (
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {amountKRW}원 결제 · 보너스 +{bonusPoints} ({bonusPercent}%)
+                                </p>
+                              ) : (
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {amountKRW}원 결제
+                                </p>
+                              )}
+                            </button>
+                          );
+                        }
                       })}
                     </div>
                   </section>

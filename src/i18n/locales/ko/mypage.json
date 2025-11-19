@@ -45,7 +45,7 @@
     "joinedOn": "가입일",
     "cashBalance": "보유 캐시",
     "cashBalanceDescription": "다음 악보 구매 시 사용 가능합니다.",
-    "chargeCash": "캐시 충전",
+    "chargeCash": "포인트 충전",
     "email": "이메일",
     "name": "이름",
     "namePlaceholder": "이름을 입력하세요",
@@ -140,7 +140,7 @@
   "cash": {
     "title": "캐시 내역",
     "description": "보유 캐시와 사용 내역을 확인하세요.",
-    "chargeCash": "캐시 충전",
+    "chargeCash": "포인트 충전",
     "availableCash": "보유 캐시",
     "loadingHistory": "캐쉬 내역을 불러오는 중입니다...",
     "noHistory": "표시할 캐시 내역이 없습니다.",
@@ -194,8 +194,8 @@
     }
   },
   "cashCharge": {
-    "title": "캐쉬충전",
-    "currentCash": "보유 악보캐쉬",
+    "title": "포인트 충전",
+    "currentCash": "보유 포인트",
     "paymentAmount": "결제금액",
     "bankTransferInfo": {
       "title": "무통장 입금 정보",
@@ -210,7 +210,7 @@
     "depositorNameHint": "* 회원명과 입금자가 다른 경우, 입금자명을 기입해 주시기 바랍니다.",
     "bankTransferNotice": {
       "title": "무통장입금 안내",
-      "line1": "• 입금 확인 후 관리자가 수동으로 캐시 충전을 완료합니다.",
+      "line1": "• 입금 확인 후 관리자가 수동으로 포인트 충전을 완료합니다.",
       "line2": "• 입금자명이 일치하지 않으면 확인이 지연될 수 있습니다.",
       "line3": "• 입금 확인은 영업일 기준 1~2일 소요될 수 있습니다."
     },
@@ -246,7 +246,7 @@
     "paymentWindowOpen": "결제창이 열립니다. 결제를 완료해 주세요.",
     "paymentError": "결제 처리 중 오류가 발생했습니다.",
     "depositorNameRequired": "입금자명을 입력해 주세요.",
-    "orderReceived": "주문이 접수되었습니다.\\n입금 확인 후 관리자가 캐시 충전을 완료합니다.",
+    "orderReceived": "주문이 접수되었습니다.\\n입금 확인 후 관리자가 포인트 충전을 완료합니다.",
     "allFieldsRequired": "모든 필드를 입력해주세요.",
     "inquirySubmitted": "문의가 접수되었습니다. 빠른 시일 내에 답변드리겠습니다.",
     "inquiryError": "문의 전송 중 오류가 발생했습니다. 다시 시도해주세요.",
