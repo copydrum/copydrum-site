@@ -372,6 +372,9 @@ export default function PointChargeModal({
                     if (isEnglishSite && 'amountUSD' in option) {
                       // 영문 사이트: USD 기반 UI 유지
                       const paymentAmount = `$${option.amountUSD}`;
+                      const formattedTotalPoints = formatPoints(totalPoints);
+                      const formattedBonusPoints = option.bonus ? formatPoints(option.bonus) : '0 P';
+                      
                       return (
                         <button
                           key={index}
@@ -384,7 +387,7 @@ export default function PointChargeModal({
                         >
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-base font-bold text-gray-900">
-                              {t('sidebar.totalPoints', { amount: formatPoints(totalPoints) })}
+                              {t('sidebar.totalPoints', { amount: formattedTotalPoints })}
                             </span>
                             <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
                               {chargeAmount === option.amount && (
@@ -396,8 +399,8 @@ export default function PointChargeModal({
                             <p className="text-xs text-gray-600 mt-1">
                               {t('sidebar.payAndBonus', {
                                 payment: paymentAmount,
-                                bonus: formatPoints(option.bonus),
-                                percent: `${bonusPercent}%`
+                                bonus: formattedBonusPoints.replace(' P', ''),
+                                percent: bonusPercent
                               })}
                             </p>
                           ) : (

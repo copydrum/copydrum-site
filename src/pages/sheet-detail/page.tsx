@@ -63,6 +63,12 @@ export default function SheetDetailPage() {
   const [insufficientCashInfo, setInsufficientCashInfo] = useState<{ currentBalance: number; requiredAmount: number } | null>(null);
   const eventIsActive = eventDiscount ? isEventActive(eventDiscount) : false;
   const displayPrice = sheet ? (eventDiscount && eventIsActive ? eventDiscount.discount_price : sheet.price) : 0;
+  
+  // 포인트 가격 계산 (한국어 사이트에서만 사용)
+  const pointPrice = useMemo(() => {
+    if (!isKoreanSite || !displayPrice || displayPrice <= 0) return 0;
+    return calculatePointPrice(displayPrice);
+  }, [displayPrice, isKoreanSite]);
   const { i18n, t } = useTranslation();
   const formatCurrency = (value: number) => formatPrice({ 
     amountKRW: value, 
@@ -753,9 +759,9 @@ export default function SheetDetailPage() {
                     <span className={`text-3xl font-bold ${eventDiscount && eventIsActive ? 'text-red-500' : 'text-blue-600'}`}>
                       {formatCurrency(displayPrice)}
                     </span>
-                    {isKoreanSite && (
+                    {isKoreanSite && pointPrice > 0 && (
                       <span className="text-sm text-gray-600 mt-1">
-                        {t('payment.pointPrice', { price: calculatePointPrice(displayPrice).toLocaleString('ko-KR') })}
+                        {t('payment.pointPrice', { price: pointPrice.toLocaleString('ko-KR') })}
                       </span>
                     )}
                     {eventDiscount && !eventIsActive && (
