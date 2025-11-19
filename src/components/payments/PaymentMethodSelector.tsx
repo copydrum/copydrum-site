@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
+import { calculatePointPrice } from '../../lib/pointPrice';
 import { isEnglishHost } from '../../i18n/languages';
 
 type PaymentMethod = 'cash' | 'card' | 'bank' | 'paypal';
@@ -216,9 +217,14 @@ export const PaymentMethodSelector = ({
       <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
         <div className="border-b border-gray-200 px-5 py-4">
           <h2 className="text-lg font-semibold text-gray-900">{t('payment.selectMethod')}</h2>
-          <p className="mt-1 text-sm text-gray-600">
-            {t('payment.amount')} <span className="font-semibold text-gray-900">{formatCurrency(amount)}</span>
-          </p>
+          <div className="mt-1 space-y-1">
+            <p className="text-sm text-gray-600">
+              {t('payment.amount')} <span className="font-semibold text-gray-900">{formatCurrency(amount)}</span>
+            </p>
+            <p className="text-sm text-gray-600">
+              {t('payment.pointPrice', { price: calculatePointPrice(amount).toLocaleString('en-US') })}
+            </p>
+          </div>
         </div>
 
         <div className="px-5 py-4">

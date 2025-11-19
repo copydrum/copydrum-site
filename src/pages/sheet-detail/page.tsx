@@ -21,6 +21,7 @@ import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
 import { isEnglishHost } from '../../i18n/languages';
+import { calculatePointPrice } from '../../lib/pointPrice';
 
 interface DrumSheet {
   id: string;
@@ -741,6 +742,9 @@ export default function SheetDetailPage() {
                     )}
                     <span className={`text-3xl font-bold ${eventDiscount && eventIsActive ? 'text-red-500' : 'text-blue-600'}`}>
                       {formatCurrency(displayPrice)}
+                    </span>
+                    <span className="text-sm text-gray-600 mt-1">
+                      {t('payment.pointPrice', { price: calculatePointPrice(displayPrice).toLocaleString('en-US') })}
                     </span>
                     {eventDiscount && !eventIsActive && (
                       <span className="text-xs text-gray-500 mt-1">

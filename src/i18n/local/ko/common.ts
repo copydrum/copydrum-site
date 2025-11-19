@@ -79,6 +79,7 @@ export default {
   'payment.notEnoughCashTitle': '캐시 잔액 부족',
   'payment.notEnoughCashMessage': '보유 포인트가 부족하여 포인트로 결제할 수 없습니다. 포인트를 충전해주세요.',
   'payment.goToCashCharge': '포인트 충전 페이지로 이동',
+  'payment.pointPrice': '포인트 결제 시: {price}P',
   'payment.kakao': '카카오페이',
   'payment.paypal': '페이팔',
   'payment.paypalDescription': '페이팔로 안전하게 결제하세요. 빠르고 간편한 결제.',

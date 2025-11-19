@@ -79,6 +79,7 @@ export default {
   'payment.notEnoughCashTitle': 'Insufficient Cash Balance',
   'payment.notEnoughCashMessage': 'You do not have enough cash balance to pay with cash. Please charge your cash balance.',
   'payment.goToCashCharge': 'Go to Cash Charge Page',
+  'payment.pointPrice': 'Pay with Points: {price}P',
   'payment.kakao': 'Kakao Pay',
   'payment.paypal': 'PayPal',
   'payment.paypalDescription': 'Pay securely with PayPal. Fast and easy payment.',

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { openCashChargeModal } from '../../lib/cashChargeModal';
 import { formatPrice } from '../../lib/priceFormatter';
 import { isEnglishHost } from '../../i18n/languages';
+import { calculatePointPrice } from '../../lib/pointPrice';
 
 interface InsufficientCashModalProps {
   open: boolean;
@@ -60,6 +61,12 @@ export const InsufficientCashModal = ({
               <span className="text-gray-600">{t('payment.amount')}:</span>
               <span className="font-semibold text-gray-900">
                 {formatCashAmount(requiredAmount)}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">{i18n.language?.startsWith('ko') ? '포인트 결제 시' : 'Pay with Points'}:</span>
+              <span className="font-semibold text-gray-700">
+                {calculatePointPrice(requiredAmount).toLocaleString('en-US')}P
               </span>
             </div>
             <div className="flex justify-between text-sm">

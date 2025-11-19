@@ -11,6 +11,7 @@ import type { VirtualAccountInfo } from '../../lib/payments';
 import { openCashChargeModal } from '../../lib/cashChargeModal';
 import { useTranslation } from 'react-i18next';
 import { formatPrice as formatPriceWithCurrency } from '../../lib/priceFormatter';
+import { calculatePointPrice } from '../../lib/pointPrice';
 
 type PendingCartPurchase = {
   targetItemIds: string[];
@@ -452,6 +453,9 @@ export default function CartPage() {
 
                     <div className="text-right">
                       <p className="text-lg font-bold text-gray-900">{formatPriceValue(item.price)}</p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {t('payment.pointPrice', { price: calculatePointPrice(item.price).toLocaleString('en-US') })}
+                      </p>
                     </div>
 
                     <button
@@ -470,9 +474,14 @@ export default function CartPage() {
                   <span className="text-lg font-medium text-gray-900">
                     {t('cartPage.selectedItems', { count: selectedItems.length })}
                   </span>
-                  <span className="text-2xl font-bold text-blue-600">
-                    {formatPriceValue(getTotalPrice(selectedItems))}
-                  </span>
+                  <div className="flex flex-col items-end">
+                    <span className="text-2xl font-bold text-blue-600">
+                      {formatPriceValue(getTotalPrice(selectedItems))}
+                    </span>
+                    <span className="text-sm text-gray-600 mt-1">
+                      {t('payment.pointPrice', { price: calculatePointPrice(getTotalPrice(selectedItems)).toLocaleString('en-US') })}
+                    </span>
+                  </div>
                 </div>
                 
                 <div className="flex space-x-3">

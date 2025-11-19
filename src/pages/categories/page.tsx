@@ -19,6 +19,7 @@ import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
+import { calculatePointPrice } from '../../lib/pointPrice';
 
 interface Category {
   id: string;
@@ -1456,11 +1457,19 @@ const CategoriesPage: React.FC = () => {
                               <span className="text-2xl font-extrabold text-red-500">
                                 {formatCurrency(selectedDisplayPrice)}
                               </span>
+                              <span className="text-sm text-gray-600">
+                                {t('payment.pointPrice', { price: calculatePointPrice(selectedDisplayPrice).toLocaleString('en-US') })}
+                              </span>
                             </>
                           ) : (
-                            <span className="text-2xl font-bold text-gray-900">
-                              {formatCurrency(selectedDisplayPrice)}
-                            </span>
+                            <>
+                              <span className="text-2xl font-bold text-gray-900">
+                                {formatCurrency(selectedDisplayPrice)}
+                              </span>
+                              <span className="text-sm text-gray-600">
+                                {t('payment.pointPrice', { price: calculatePointPrice(selectedDisplayPrice).toLocaleString('en-US') })}
+                              </span>
+                            </>
                           )}
                         </div>
                         <input
