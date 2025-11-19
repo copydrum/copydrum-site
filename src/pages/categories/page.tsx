@@ -19,7 +19,7 @@ import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
-import { calculatePointPrice } from '../../lib/pointPrice';
+import { calculatePointPrice, calculatePointPriceFromUsd } from '../../lib/pointPrice';
 import { isEnglishHost } from '../../i18n/languages';
 
 interface Category {
@@ -796,6 +796,27 @@ const CategoriesPage: React.FC = () => {
   const selectedDisplayPrice = selectedSheet ? getDisplayPrice(selectedSheet) : 0;
   const selectedSheetIsFavorite = selectedSheet ? favoriteIds.has(selectedSheet.id) : false;
   const selectedSheetFavoriteLoading = selectedSheet ? favoriteLoadingIds.has(selectedSheet.id) : false;
+  
+  // 영문 사이트에서 포인트 가격 계산 (USD 가격을 포인트로 변환)
+  const selectedPointPrice = useMemo(() => {
+    if (!selectedSheet || !selectedDisplayPrice) return 0;
+    if (isKoreanSite) {
+      // 한국어 사이트: KRW 가격을 포인트로 변환
+      return calculatePointPrice(selectedDisplayPrice);
+    } else {
+      // 영문 사이트: USD 가격을 포인트로 변환
+      const priceInfo = formatPrice({ 
+        amountKRW: selectedDisplayPrice, 
+        language: i18n.language,
+        host: typeof window !== 'undefined' ? window.location.host : undefined
+      });
+      if (priceInfo.currency === 'USD') {
+        return calculatePointPriceFromUsd(priceInfo.amount);
+      }
+      // 혹시 KRW로 표시되는 경우를 대비
+      return calculatePointPrice(selectedDisplayPrice);
+    }
+  }, [selectedSheet, selectedDisplayPrice, isKoreanSite, i18n.language]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -1466,7 +1487,12 @@ const CategoriesPage: React.FC = () => {
                               </span>
                               {isKoreanSite && (
                                 <span className="text-sm text-gray-600">
-                                  {t('payment.pointPrice', { price: calculatePointPrice(selectedDisplayPrice).toLocaleString('ko-KR') })}
+                                  {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('ko-KR') })}
+                                </span>
+                              )}
+                              {!isKoreanSite && (
+                                <span className="text-sm text-gray-600">
+                                  {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('en-US') })}
                                 </span>
                               )}
                             </>
@@ -1477,7 +1503,12 @@ const CategoriesPage: React.FC = () => {
                               </span>
                               {isKoreanSite && (
                                 <span className="text-sm text-gray-600">
-                                  {t('payment.pointPrice', { price: calculatePointPrice(selectedDisplayPrice).toLocaleString('ko-KR') })}
+                                  {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('ko-KR') })}
+                                </span>
+                              )}
+                              {!isKoreanSite && (
+                                <span className="text-sm text-gray-600">
+                                  {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('en-US') })}
                                 </span>
                               )}
                             </>
