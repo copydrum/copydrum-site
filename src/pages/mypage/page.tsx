@@ -122,6 +122,16 @@ interface CashHistoryEntry {
 const formatCurrency = (value: number) => `₩${value.toLocaleString('ko-KR')}`;
 const formatDate = (value: MaybeDateString) => (value ? new Date(value).toLocaleDateString('ko-KR') : '-');
 const formatDateTime = (value: MaybeDateString) => (value ? new Date(value).toLocaleString('ko-KR') : '-');
+// 캐시 표시용 포맷 함수 (영문 사이트는 en-US 포맷, 한국어 사이트는 기존 포맷)
+const formatCash = (value: number, isEnglishSite: boolean) => {
+  if (isEnglishSite) {
+    // 영문 사이트: en-US 포맷으로 숫자만 표시 (예: 230,500 P)
+    return `${value.toLocaleString('en-US')} P`;
+  } else {
+    // 한국어 사이트: 기존 포맷 유지
+    return formatCurrency(value);
+  }
+};
 
 // Status maps and helper functions will be created inside component using t()
 
@@ -1383,7 +1393,7 @@ export default function MyPage() {
                       </p>
                     ) : (
                       <p className="mt-2 text-3xl font-black text-gray-900">
-                        {formatCurrency(userCashBalance)}
+                        {formatCash(userCashBalance, isEnglishSite)}
                       </p>
                     )}
                     <p className="mt-1 text-xs text-gray-500">{t('mypage.profile.cashBalanceDescription')}</p>
@@ -2125,7 +2135,7 @@ export default function MyPage() {
                         </p>
                       ) : (
                         <p className="mt-2 text-3xl font-bold text-blue-900">
-                          {formatCurrency(userCashBalance)}
+                          {formatCash(userCashBalance, isEnglishSite)}
                         </p>
                       )}
                     </div>

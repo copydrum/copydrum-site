@@ -20,6 +20,7 @@ import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
+import { isEnglishHost } from '../../i18n/languages';
 
 interface DrumSheet {
   id: string;
@@ -197,7 +198,26 @@ export default function SheetDetailPage() {
   };
 
   const getDifficultyDisplayText = (difficulty: string) => {
+    if (!difficulty) return t('sheetDetail.difficulty.notSet');
+    
     const normalizedDifficulty = (difficulty || '').toLowerCase().trim();
+    const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
+    
+    // 영문 사이트에서 한글 난이도 값을 영어로 변환
+    if (isEnglishSite || i18n.language === 'en') {
+      const difficultyMapEn: Record<string, string> = {
+        '초급': 'Beginner',
+        '중급': 'Intermediate',
+        '고급': 'Advanced',
+      };
+      
+      // 한글 값이면 영어로 변환
+      if (difficultyMapEn[difficulty]) {
+        return difficultyMapEn[difficulty];
+      }
+    }
+    
+    // 영어 값이거나 한국어 사이트인 경우
     switch (normalizedDifficulty) {
       case 'beginner':
         return t('sheetDetail.difficulty.beginner');
@@ -206,7 +226,8 @@ export default function SheetDetailPage() {
       case 'advanced':
         return t('sheetDetail.difficulty.advanced');
       default:
-        return difficulty || t('sheetDetail.difficulty.notSet');
+        // 한국어 사이트에서는 원본 한글 값 그대로 반환
+        return difficulty;
     }
   };
 

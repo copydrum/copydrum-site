@@ -32,19 +32,18 @@ const buildResponse = <T>(payload: T, status = 200) =>
     headers: { ...getCorsHeaders(), "Content-Type": "application/json" },
   });
 
+// PayPal API Base URL (Live only)
+const PAYPAL_BASE_URL = "https://api-m.paypal.com";
+
 // PayPal Access Token 가져오기
-async function getPayPalAccessToken(clientId: string, clientSecret: string, isSandbox: boolean): Promise<string> {
-  const baseUrl = isSandbox 
-    ? "https://api.sandbox.paypal.com" 
-    : "https://api.paypal.com";
+async function getPayPalAccessToken(clientId: string, clientSecret: string): Promise<string> {
+  const basicAuth = btoa(`${clientId}:${clientSecret}`);
   
-  const auth = btoa(`${clientId}:${clientSecret}`);
-  
-  const response = await fetch(`${baseUrl}/v1/oauth2/token`, {
+  const response = await fetch(`${PAYPAL_BASE_URL}/v1/oauth2/token`, {
     method: "POST",
     headers: {
-      "Authorization": `Basic ${auth}`,
       "Content-Type": "application/x-www-form-urlencoded",
+      "Authorization": `Basic ${basicAuth}`,
     },
     body: "grant_type=client_credentials",
   });
@@ -61,20 +60,17 @@ async function getPayPalAccessToken(clientId: string, clientSecret: string, isSa
 // PayPal Order 승인 (Capture)
 async function capturePayPalOrder(
   accessToken: string,
-  paypalOrderId: string,
-  isSandbox: boolean
+  paypalOrderId: string
 ): Promise<any> {
-  const baseUrl = isSandbox 
-    ? "https://api.sandbox.paypal.com" 
-    : "https://api.paypal.com";
+  const defaultHeaders = {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${accessToken}`,
+    "Prefer": "return=representation",
+  };
 
-  const response = await fetch(`${baseUrl}/v2/checkout/orders/${paypalOrderId}/capture`, {
+  const response = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders/${paypalOrderId}/capture`, {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      "Prefer": "return=representation",
-    },
+    headers: defaultHeaders,
   });
 
   if (!response.ok) {
@@ -105,9 +101,13 @@ serve(async (req) => {
   try {
     const supabaseUrl = requireEnv("SUPABASE_URL");
     const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
-    const paypalClientId = requireEnv("PAYPAL_CLIENT_ID");
-    const paypalClientSecret = requireEnv("PAYPAL_CLIENT_SECRET");
-    const paypalSandbox = Deno.env.get("PAYPAL_SANDBOX") === "true";
+    const CLIENT_ID = Deno.env.get("PAYPAL_LIVE_CLIENT_ID") ?? "";
+    const SECRET = Deno.env.get("PAYPAL_LIVE_SECRET") ?? "";
+
+    console.log("[paypal-approve] env check", {
+      clientId: CLIENT_ID.slice(0, 8),
+      secretLen: SECRET.length,
+    });
 
     const payload = await req.json();
     const { orderId, paypalOrderId, payerId } = payload ?? {};
@@ -144,10 +144,10 @@ serve(async (req) => {
     }
 
     // PayPal Access Token 가져오기
-    const accessToken = await getPayPalAccessToken(paypalClientId, paypalClientSecret, paypalSandbox);
+    const accessToken = await getPayPalAccessToken(CLIENT_ID, SECRET);
 
     // PayPal Order 승인 (Capture)
-    const captureResult = await capturePayPalOrder(accessToken, paypalOrderId, paypalSandbox);
+    const captureResult = await capturePayPalOrder(accessToken, paypalOrderId);
 
     if (captureResult.status !== "COMPLETED") {
       return buildResponse(

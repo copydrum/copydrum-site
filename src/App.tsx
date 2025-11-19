@@ -13,7 +13,6 @@ import MobileSearchOverlay from './components/mobile/MobileSearchOverlay';
 import MobileCashChargeModal from './components/mobile/MobileCashChargeModal';
 import HreflangTags from './components/common/HreflangTags';
 import MaintenanceNotice from './components/common/MaintenanceNotice';
-import PaymentNotice from './components/common/PaymentNotice';
 
 console.log('VITE_MAINTENANCE_MODE =', import.meta.env.VITE_MAINTENANCE_MODE);
 
@@ -101,9 +100,6 @@ function App() {
           {/* SEO: hreflang 태그 */}
           <HreflangTags />
           
-          {/* 결제 공지 */}
-          <PaymentNotice />
-          
           <MobileHeader
             user={user}
             onMenuToggle={() => setIsMobileMenuOpen(true)}
@@ -123,7 +119,7 @@ function App() {
             onClose={() => setIsCashModalOpen(false)}
             user={user ?? null}
           />
-          <div className="min-h-screen bg-white pb-[80px] md:pb-0" style={{ paddingTop: 'calc(var(--payment-notice-height, 0px) + 108px)' }}>
+          <div className="min-h-screen bg-white pb-[80px] md:pb-0" style={{ paddingTop: '108px' }}>
             <AppRoutes />
           </div>
           <MobileBottomNav

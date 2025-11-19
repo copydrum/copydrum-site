@@ -9,15 +9,12 @@ const corsHeaders = {
 }
 
 // Supabase Secrets 에서 값 가져오기
-const PAYPAL_CLIENT_ID = Deno.env.get("PAYPAL_CLIENT_ID") ?? ""
-const PAYPAL_CLIENT_SECRET = Deno.env.get("PAYPAL_CLIENT_SECRET") ?? ""
-const PAYPAL_SANDBOX = (Deno.env.get("PAYPAL_SANDBOX") ?? "true") === "true"
+const CLIENT_ID = Deno.env.get("PAYPAL_LIVE_CLIENT_ID") ?? ""
+const SECRET = Deno.env.get("PAYPAL_LIVE_SECRET") ?? ""
 const SITE_URL = Deno.env.get("SITE_URL") ?? "https://en.copydrum.com"
 
-// 샌드박스 / 라이브 엔드포인트
-const PAYPAL_BASE_URL = PAYPAL_SANDBOX
-  ? "https://api-m.sandbox.paypal.com"
-  : "https://api-m.paypal.com"
+// PayPal API Base URL (Live only)
+const PAYPAL_BASE_URL = "https://api-m.paypal.com"
 
 console.log("payments-paypal-create function loaded")
 
@@ -42,7 +39,12 @@ Deno.serve(async (req) => {
     const currencyCode = body.currency_code ?? "USD"
     const orderId = body.orderId ?? "COPYDRUM_ORDER"
 
-    if (!amount || !PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
+    console.log("[paypal-create] env check", {
+      clientId: CLIENT_ID.slice(0, 8),
+      secretLen: SECRET.length,
+    });
+
+    if (!amount || !CLIENT_ID || !SECRET) {
       return new Response(
         JSON.stringify({ error: "Missing amount or PayPal credentials" }),
         {
@@ -56,14 +58,13 @@ Deno.serve(async (req) => {
     }
 
     // 1) 액세스 토큰 발급
-    const basicAuth = "Basic " +
-      btoa(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`)
+    const basicAuth = btoa(`${CLIENT_ID}:${SECRET}`)
 
     const tokenRes = await fetch(`${PAYPAL_BASE_URL}/v1/oauth2/token`, {
       method: "POST",
       headers: {
-        Authorization: basicAuth,
         "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": `Basic ${basicAuth}`,
       },
       body: "grant_type=client_credentials",
     })
@@ -87,12 +88,14 @@ Deno.serve(async (req) => {
     const accessToken = tokenData.access_token as string
 
     // 2) 주문 생성
+    const defaultHeaders = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${accessToken}`,
+    };
+
     const createRes = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers: defaultHeaders,
       body: JSON.stringify({
         intent: "CAPTURE",
         purchase_units: [
@@ -107,8 +110,8 @@ Deno.serve(async (req) => {
         application_context: {
           brand_name: "COPYDRUM",
           user_action: "PAY_NOW",
-          return_url: `${SITE_URL}/paypal/success`,
-          cancel_url: `${SITE_URL}/paypal/cancel`,
+          return_url: "https://en.copydrum.com/paypal/return",
+          cancel_url: "https://en.copydrum.com/paypal/cancel",
         },
       }),
     })

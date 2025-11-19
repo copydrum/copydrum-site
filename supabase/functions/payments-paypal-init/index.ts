@@ -6,45 +6,17 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // CORS — 실패하든 성공하든 항상 이 헤더를 반환해야 한다
 
-const ALLOWED_ORIGINS = [
+const getCorsHeaders = (origin?: string) => ({
 
-  "https://en.copydrum.com",
+  "Access-Control-Allow-Origin": "https://en.copydrum.com", // 또는 필요하면 동적으로
 
-  "https://www.en.copydrum.com",
+  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
 
-  "https://copydrum.com",
+  "Access-Control-Allow-Headers": "apikey, authorization, x-client-info, x-client-id, x-supabase-auth, content-type",
 
-  "https://www.copydrum.com"
+  "Access-Control-Max-Age": "86400",
 
-];
-
-
-
-function getCorsHeaders(origin?: string) {
-
-  // 실제 origin이 배열에 있으면 해당 origin을 그대로 반환
-
-  const allowedOrigin: string = origin && ALLOWED_ORIGINS.includes(origin)
-
-    ? origin
-
-    : ALLOWED_ORIGINS[0];
-
-
-
-  return {
-
-    "Access-Control-Allow-Origin": allowedOrigin,
-
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey",
-
-    "Access-Control-Max-Age": "86400",
-
-  };
-
-}
+});
 
 
 
@@ -76,25 +48,28 @@ function convertKRWtoUSD(krw: number) {
 
 
 
+// PayPal API Base URL (Live only)
+const PAYPAL_BASE_URL = "https://api-m.paypal.com";
+
 // PayPal 토큰 요청
 
-async function getPayPalAccessToken(clientId: string, clientSecret: string, isSandbox: boolean) {
+async function getPayPalAccessToken(clientId: string, clientSecret: string) {
 
-  const base = isSandbox ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
+  console.log(`[paypal-init] getPayPalAccessToken - baseUrl = ${PAYPAL_BASE_URL}`);
 
-  const auth = btoa(`${clientId}:${clientSecret}`);
+  const basicAuth = btoa(`${clientId}:${clientSecret}`);
 
 
 
-  const res = await fetch(`${base}/v1/oauth2/token`, {
+  const res = await fetch(`${PAYPAL_BASE_URL}/v1/oauth2/token`, {
 
     method: "POST",
 
     headers: {
 
-      "Authorization": `Basic ${auth}`,
-
       "Content-Type": "application/x-www-form-urlencoded",
+
+      "Authorization": `Basic ${basicAuth}`,
 
     },
 
@@ -104,7 +79,15 @@ async function getPayPalAccessToken(clientId: string, clientSecret: string, isSa
 
 
 
-  if (!res.ok) throw new Error(`PayPal token error: ${await res.text()}`);
+  if (!res.ok) {
+
+    const errorText = await res.text();
+
+    console.error(`[paypal-init] PayPal token error - status: ${res.status}, body: ${errorText}`);
+
+    throw new Error(`PayPal token error: ${res.status} ${errorText}`);
+
+  }
 
   return (await res.json()).access_token;
 
@@ -128,7 +111,7 @@ serve(async (req: Request) => {
 
       status: 204,
 
-      headers: getCorsHeaders(origin),
+      headers: corsHeaders,
 
     });
 
@@ -176,9 +159,15 @@ serve(async (req: Request) => {
 
     return new Response(
 
-      JSON.stringify({ error: "userId, orderId, amount are required" }),
+      JSON.stringify({ 
 
-      { status: 400, headers: corsHeaders }
+        success: false,
+
+        error: { message: "userId, orderId, amount are required" } 
+
+      }),
+
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
 
     );
 
@@ -194,11 +183,11 @@ serve(async (req: Request) => {
 
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  const paypalClientId = Deno.env.get("PAYPAL_CLIENT_ID")!;
+  const CLIENT_ID = Deno.env.get("PAYPAL_LIVE_CLIENT_ID") ?? "";
 
-  const paypalClientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET")!;
+  const SECRET = Deno.env.get("PAYPAL_LIVE_SECRET") ?? "";
 
-  const sandbox = (Deno.env.get("PAYPAL_SANDBOX") ?? "true") === "true";
+  console.log(`[paypal-init] Using PayPal Live API - baseUrl = ${PAYPAL_BASE_URL}`);
 
 
 
@@ -224,11 +213,19 @@ serve(async (req: Request) => {
 
   if (!order) {
 
-    return new Response(JSON.stringify({ error: "Order not found" }), {
+    console.error(`[paypal-init] Order not found - orderId: ${orderId}, userId: ${userId}`);
+
+    return new Response(JSON.stringify({ 
+
+      success: false,
+
+      error: { message: "Order not found" } 
+
+    }), {
 
       status: 404,
 
-      headers: corsHeaders,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
 
     });
 
@@ -238,27 +235,69 @@ serve(async (req: Request) => {
 
   // PayPal token
 
-  const token = await getPayPalAccessToken(paypalClientId, paypalClientSecret, sandbox);
+  console.log("[paypal-init] env check", {
+
+    clientId: CLIENT_ID.slice(0, 8),
+
+    secretLen: SECRET.length,
+
+  });
+
+  let token: string;
+
+  try {
+
+    token = await getPayPalAccessToken(CLIENT_ID, SECRET);
+
+    console.log(`[paypal-init] PayPal token obtained successfully`);
+
+  } catch (error) {
+
+    console.error(`[paypal-init] Failed to get PayPal token:`, error);
+
+    return new Response(JSON.stringify({ 
+
+      success: false,
+
+      error: { 
+
+        message: error instanceof Error ? error.message : "Failed to get PayPal access token" 
+
+      } 
+
+    }), {
+
+      status: 500,
+
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+
+    });
+
+  }
 
 
 
-  const base = sandbox ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
+  console.log(`[paypal-init] Creating PayPal order - baseUrl = ${PAYPAL_BASE_URL}`);
 
 
 
   // PayPal order 생성
 
-  const paypalRes = await fetch(`${base}/v2/checkout/orders`, {
+  const defaultHeaders = {
+
+    "Content-Type": "application/json",
+
+    "Authorization": `Bearer ${token}`,
+
+  };
+
+
+
+  const paypalRes = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders`, {
 
     method: "POST",
 
-    headers: {
-
-      "Authorization": `Bearer ${token}`,
-
-      "Content-Type": "application/json",
-
-    },
+    headers: defaultHeaders,
 
     body: JSON.stringify({
 
@@ -280,9 +319,9 @@ serve(async (req: Request) => {
 
         user_action: "PAY_NOW",
 
-        return_url: `https://en.copydrum.com/payments/paypal/return`,
+        return_url: "https://en.copydrum.com/paypal/return",
 
-        cancel_url: `https://en.copydrum.com/payments/paypal/cancel`,
+        cancel_url: "https://en.copydrum.com/paypal/cancel",
 
       },
 
@@ -298,19 +337,63 @@ serve(async (req: Request) => {
 
   if (!paypalRes.ok) {
 
-    return new Response(JSON.stringify({ error: "PayPal order failed", details: paypalOrder }), {
+    console.error(`[paypal-init] PayPal order creation failed - status: ${paypalRes.status}, body:`, JSON.stringify(paypalOrder));
+
+    return new Response(JSON.stringify({ 
+
+      success: false,
+
+      error: { 
+
+        message: `PayPal order creation failed: ${paypalRes.status}`,
+
+        details: paypalOrder 
+
+      } 
+
+    }), {
 
       status: 500,
 
-      headers: corsHeaders,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
 
     });
 
   }
 
+  console.log(`[paypal-init] PayPal order created successfully - orderId: ${paypalOrder.id}`);
+
 
 
   const approvalUrl = paypalOrder.links?.find((l: any) => l.rel === "approve")?.href;
+
+  console.log(`[paypal-init] Approval URL: ${approvalUrl}`);
+
+
+
+  if (!approvalUrl) {
+
+    console.error(`[paypal-init] Approval URL not found in PayPal order response`);
+
+    return new Response(JSON.stringify({ 
+
+      success: false,
+
+      error: { 
+
+        message: "PayPal approval URL not found" 
+
+      } 
+
+    }), {
+
+      status: 500,
+
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+
+    });
+
+  }
 
 
 
@@ -320,15 +403,19 @@ serve(async (req: Request) => {
 
       success: true,
 
-      orderId,
+      data: {
 
-      paypalOrderId: paypalOrder.id,
+        orderId,
 
-      approvalUrl,
+        paypalOrderId: paypalOrder.id,
+
+        approvalUrl,
+
+      },
 
     }),
 
-    { status: 200, headers: corsHeaders },
+    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
 
   );
 

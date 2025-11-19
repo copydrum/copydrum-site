@@ -58,6 +58,19 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     (value: number) => new Intl.NumberFormat(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US').format(value),
     [i18n.language],
   );
+  // 캐시 표시용 포맷 함수 (영문 사이트는 en-US 포맷, 한국어 사이트는 기존 포맷)
+  const formatCash = useCallback(
+    (value: number) => {
+      if (isEnglishSite) {
+        // 영문 사이트: en-US 포맷으로 숫자만 표시 (예: 230,500 P)
+        return `${value.toLocaleString('en-US')} P`;
+      } else {
+        // 한국어 사이트: 기존 포맷 유지
+        return formatPrice({ amountKRW: value, language: i18n.language }).formatted;
+      }
+    },
+    [isEnglishSite, i18n.language],
+  );
 
   const { cartItems } = useCart();
 
@@ -717,7 +730,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                 오류: {cashError.message}
               </p>
             ) : (
-              <p className="text-xl font-bold">{formatCurrency(userCash)}</p>
+              <p className="text-xl font-bold">{formatCash(userCash)}</p>
             )}
           </div>
         </div>

@@ -44,6 +44,9 @@ const invokeEdgeFunction = async <T>(functionName: string, payload: unknown): Pr
     body: payload,
   });
 
+  // Edge Function 응답을 콘솔에 출력
+  console.log(`[paypal] ${functionName} response:`, { data, error });
+
   if (error) {
     console.error(`[paypal] ${functionName} invoke error`, error);
     throw new Error(error.message ?? `PayPal Edge Function ${functionName} 호출 중 오류가 발생했습니다.`);
@@ -57,6 +60,7 @@ const invokeEdgeFunction = async <T>(functionName: string, payload: unknown): Pr
     const message =
       data.error?.message ??
       (typeof data.error === 'string' ? data.error : 'PayPal 결제 처리 중 오류가 발생했습니다.');
+    console.error(`[paypal] ${functionName} failed:`, data.error);
     throw new Error(message);
   }
 

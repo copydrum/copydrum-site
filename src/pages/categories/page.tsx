@@ -1400,7 +1400,7 @@ const CategoriesPage: React.FC = () => {
                         </span>
                       )}
                       {selectedSheet.categories?.name && (
-                        <p className="text-sm text-gray-500 mb-1">{selectedSheet.categories.name}</p>
+                        <p className="text-sm text-gray-500 mb-1">{getCategoryName(selectedSheet.categories.name)}</p>
                       )}
                       {selectedSheet.difficulty && (
                         <div className="text-sm text-gray-500 space-y-1">

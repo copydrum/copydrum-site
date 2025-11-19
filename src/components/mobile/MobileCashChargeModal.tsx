@@ -51,6 +51,20 @@ export default function MobileCashChargeModal({
     return isEnglishHost(window.location.host);
   }, []);
 
+  // 캐시 표시용 포맷 함수 (영문 사이트는 en-US 포맷, 한국어 사이트는 기존 포맷)
+  const formatCash = useCallback(
+    (value: number) => {
+      if (isEnglishSite) {
+        // 영문 사이트: en-US 포맷으로 숫자만 표시 (예: 230,500 P)
+        return `${value.toLocaleString('en-US')} P`;
+      } else {
+        // 한국어 사이트: 기존 포맷 유지
+        return formatPrice({ amountKRW: value, language: i18n.language }).formatted;
+      }
+    },
+    [isEnglishSite, i18n.language],
+  );
+
   const paymentMethodConfigs = useMemo<PaymentMethodConfig[]>(() => {
     // 영문 사이트: PayPal만 표시
     if (isEnglishSite) {
@@ -278,7 +292,7 @@ export default function MobileCashChargeModal({
                 <div>
                   <p className="text-xs text-blue-700">{t('mobile.cash.currentBalance')}</p>
                   <p className="text-2xl font-extrabold text-blue-900">
-                    {formatCurrency(userCash)}
+                    {formatCash(userCash)}
                   </p>
                 </div>
                 <i className="ri-wallet-3-line text-3xl text-blue-500" />
