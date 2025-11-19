@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { isEnglishHost } from '../../i18n/languages';
 import { getUserDisplayName } from '../../utils/userDisplayName';
 import type { Profile } from '../../lib/supabase';
+import { formatPrice } from '../../lib/priceFormatter';
 
 type TabKey = 'profile' | 'purchases' | 'downloads' | 'favorites' | 'cash' | 'inquiries' | 'custom-orders';
 
@@ -122,15 +123,14 @@ interface CashHistoryEntry {
 const formatCurrency = (value: number) => `₩${value.toLocaleString('ko-KR')}`;
 const formatDate = (value: MaybeDateString) => (value ? new Date(value).toLocaleDateString('ko-KR') : '-');
 const formatDateTime = (value: MaybeDateString) => (value ? new Date(value).toLocaleString('ko-KR') : '-');
-// 캐시 표시용 포맷 함수 (영문 사이트는 en-US 포맷, 한국어 사이트는 기존 포맷)
+// 캐시 표시용 포맷 함수 (영문 사이트는 USD, 한국어 사이트는 KRW)
 const formatCash = (value: number, isEnglishSite: boolean) => {
-  if (isEnglishSite) {
-    // 영문 사이트: en-US 포맷으로 숫자만 표시 (예: 230,500 P)
-    return `${value.toLocaleString('en-US')} P`;
-  } else {
-    // 한국어 사이트: 기존 포맷 유지
-    return formatCurrency(value);
-  }
+  // formatPrice를 사용하여 자동으로 USD/KRW 결정
+  return formatPrice({ 
+    amountKRW: value, 
+    language: isEnglishSite ? 'en' : 'ko',
+    host: typeof window !== 'undefined' ? window.location.host : undefined
+  }).formatted;
 };
 
 // Status maps and helper functions will be created inside component using t()
@@ -139,7 +139,7 @@ export default function MyPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { cartItems, addToCart, isInCart } = useCart();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // Status maps using t()
   const orderStatusStyles = useMemo(() => ({
@@ -805,7 +805,12 @@ export default function MyPage() {
       // PayPal 결제 처리 (PortOne)
       setChargeProcessing(true);
       try {
-        const description = `${t('mypage.cash.types.charge')} ${selectedOption.amount.toLocaleString('ko-KR')}원`;
+        const formattedAmount = formatPrice({ 
+          amountKRW: selectedOption.amount, 
+          language: i18n.language,
+          host: typeof window !== 'undefined' ? window.location.host : undefined
+        }).formatted;
+        const description = `${t('mypage.cash.types.charge')} ${formattedAmount}`;
         await startCashCharge({
           userId: user.id,
           amount: selectedOption.amount,
@@ -858,7 +863,12 @@ export default function MyPage() {
     setChargeProcessing(true);
 
     try {
-      const description = `${t('mypage.cash.types.charge')} ${selectedOption.amount.toLocaleString('ko-KR')}원`;
+      const formattedAmount = formatPrice({ 
+        amountKRW: selectedOption.amount, 
+        language: i18n.language,
+        host: typeof window !== 'undefined' ? window.location.host : undefined
+      }).formatted;
+      const description = `${t('mypage.cash.types.charge')} ${formattedAmount}`;
       const result = await startCashCharge({
         userId: user.id,
         amount: selectedOption.amount,
@@ -2296,7 +2306,7 @@ export default function MyPage() {
                   <span className="ml-auto text-sm font-bold text-red-600">오류</span>
                 ) : (
                   <span className="ml-auto font-bold text-yellow-600">
-                    {userCashBalance.toLocaleString()} P
+                    {formatCash(userCashBalance, isEnglishSite)}
                   </span>
                 )}
               </div>

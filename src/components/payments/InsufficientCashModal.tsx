@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { openCashChargeModal } from '../../lib/cashChargeModal';
+import { formatPrice } from '../../lib/priceFormatter';
+import { isEnglishHost } from '../../i18n/languages';
 
 interface InsufficientCashModalProps {
   open: boolean;
@@ -17,6 +19,18 @@ export const InsufficientCashModal = ({
 }: InsufficientCashModalProps) => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+
+  // 영문 사이트 여부 확인
+  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
+
+  // 캐시 금액 포맷 함수 (영문 사이트는 USD, 한국어 사이트는 KRW)
+  const formatCashAmount = (amount: number) => {
+    return formatPrice({ 
+      amountKRW: amount, 
+      language: i18n.language,
+      host: typeof window !== 'undefined' ? window.location.host : undefined
+    }).formatted;
+  };
 
   if (!open) return null;
 
@@ -45,19 +59,19 @@ export const InsufficientCashModal = ({
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">{t('payment.amount')}:</span>
               <span className="font-semibold text-gray-900">
-                {requiredAmount.toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')}원
+                {formatCashAmount(requiredAmount)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">{t('payment.cash')}:</span>
               <span className="font-semibold text-red-600">
-                {currentBalance.toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')}원
+                {formatCashAmount(currentBalance)}
               </span>
             </div>
             <div className="flex justify-between text-sm pt-2 border-t border-gray-200">
               <span className="text-gray-600">{i18n.language?.startsWith('ko') ? '부족한 금액' : 'Shortfall'}:</span>
               <span className="font-semibold text-red-600">
-                {(requiredAmount - currentBalance).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')}원
+                {formatCashAmount(requiredAmount - currentBalance)}
               </span>
             </div>
           </div>
