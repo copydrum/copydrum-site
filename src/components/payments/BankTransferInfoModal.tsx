@@ -60,11 +60,11 @@ export const BankTransferInfoModal = ({
             <div className="bg-gray-50 rounded-lg px-4 py-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">은행</span>
-                <span className="text-sm font-medium text-gray-900">농협</span>
+                <span className="text-sm font-medium text-gray-900">카카오뱅크</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">계좌번호</span>
-                <span className="text-sm font-medium text-gray-900">106-02-303742</span>
+                <span className="text-sm font-medium text-gray-900">3333-15-0302437</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">예금주</span>

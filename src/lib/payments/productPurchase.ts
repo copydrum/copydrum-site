@@ -85,8 +85,8 @@ export const startSheetPurchase = async ({
 
     // 고정 계좌 정보 반환
     const bankInfo: VirtualAccountInfo = {
-      bankName: '농협',
-      accountNumber: '106-02-303742',
+      bankName: '카카오뱅크',
+      accountNumber: '3333-15-0302437',
       accountHolder: '강만수',
       depositor: '강만수',
       expectedDepositor: trimmedDepositorName ?? undefined,

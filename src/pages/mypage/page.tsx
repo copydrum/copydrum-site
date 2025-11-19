@@ -2318,11 +2318,11 @@ export default function MyPage() {
                     <h4 className="text-xs font-semibold text-gray-900 mb-2">{t('mypage.cashCharge.bankTransferInfo.title')}</h4>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-600">{t('mypage.cashCharge.bankTransferInfo.bank')}</span>
-                      <span className="text-xs font-medium text-gray-900">농협</span>
+                      <span className="text-xs font-medium text-gray-900">카카오뱅크</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-600">{t('mypage.cashCharge.bankTransferInfo.accountNumber')}</span>
-                      <span className="text-xs font-medium text-gray-900">106-02-303742</span>
+                      <span className="text-xs font-medium text-gray-900">3333-15-0302437</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-600">{t('mypage.cashCharge.bankTransferInfo.accountHolder')}</span>

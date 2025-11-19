@@ -357,11 +357,11 @@ export default function MobileCashChargeModal({
                     <h3 className="text-xs font-semibold text-gray-900 mb-2">{t('mobile.cash.bankAccountInfo')}</h3>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-600">{t('mobile.cash.bank')}</span>
-                      <span className="text-xs font-medium text-gray-900">농협</span>
+                      <span className="text-xs font-medium text-gray-900">카카오뱅크</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-600">{t('mobile.cash.accountNumber')}</span>
-                      <span className="text-xs font-medium text-gray-900">106-02-303742</span>
+                      <span className="text-xs font-medium text-gray-900">3333-15-0302437</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-600">{t('mobile.cash.accountHolder')}</span>

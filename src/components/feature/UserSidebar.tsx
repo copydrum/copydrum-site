@@ -840,11 +840,11 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                   <div className="bg-gray-50 rounded-lg px-4 py-3 space-y-2 border border-gray-200">
                     <div className="flex items-center justify-between text-xs text-gray-600">
                       <span>{t('sidebar.bank')}</span>
-                      <span className="font-semibold text-gray-900">농협</span>
+                      <span className="font-semibold text-gray-900">카카오뱅크</span>
                     </div>
                     <div className="flex items-center justify-between text-xs text-gray-600">
                       <span>{t('sidebar.accountNumber')}</span>
-                      <span className="font-semibold text-gray-900">106-02-303742</span>
+                      <span className="font-semibold text-gray-900">3333-15-0302437</span>
                     </div>
                     <div className="flex items-center justify-between text-xs text-gray-600">
                       <span>{t('sidebar.accountHolder')}</span>
