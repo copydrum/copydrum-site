@@ -13,18 +13,18 @@ interface BankTransferInfoModalProps {
 export const BankTransferInfoModal = ({
   open,
   amount,
-  userName,
+  userName: _userName, // 사용하지 않음
   onConfirm,
   onClose,
 }: BankTransferInfoModalProps) => {
-  const [depositorName, setDepositorName] = useState(userName || '');
+  const [depositorName, setDepositorName] = useState(''); // 자동 입력 제거
   const { i18n } = useTranslation();
 
   useEffect(() => {
     if (open) {
-      setDepositorName(userName || '');
+      setDepositorName(''); // 모달 열릴 때마다 초기화
     }
-  }, [open, userName]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -64,7 +64,19 @@ export const BankTransferInfoModal = ({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">계좌번호</span>
-                <span className="text-sm font-medium text-gray-900">3333-15-0302437</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-900">3333-15-0302437</span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText('3333-15-0302437');
+                      alert('계좌번호가 복사되었습니다.');
+                    }}
+                    className="text-blue-600 hover:text-blue-800"
+                    title="계좌번호 복사"
+                  >
+                    <i className="ri-file-copy-line"></i>
+                  </button>
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">예금주</span>

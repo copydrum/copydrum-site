@@ -21,16 +21,18 @@ interface CreatePendingOrderParams {
   paymentStatus?: PaymentStatus;
   metadata?: Record<string, unknown>;
   orderType?: 'product' | 'cash'; // 주문 타입 추가
+  depositorName?: string; // 입금자명 추가
 }
 
 export const createPendingOrder = async ({
   userId,
   amount,
   paymentMethod,
-  description,
+  description: _description,
   paymentStatus = 'pending',
   metadata = {},
   orderType, // 주문 타입 추가
+  depositorName, // 입금자명 추가
 }: CreatePendingOrderParams) => {
   const orderNumber = generateOrderNumber();
   const normalizedAmount = Math.max(0, Math.round(amount));
@@ -48,6 +50,7 @@ export const createPendingOrder = async ({
         raw_status: paymentStatus,
         metadata,
         order_type: orderType, // 주문 타입 추가
+        depositor_name: depositorName, // 입금자명 저장
       },
     ])
     .select('id, order_number')
@@ -83,6 +86,7 @@ export const createOrderWithItems = async ({
   paymentStatus = 'pending',
   metadata = {},
   orderType = 'product', // 주문 타입 추가 (기본값: product)
+  depositorName, // 입금자명 추가
 }: CreateOrderWithItemsParams) => {
   const { orderId, orderNumber } = await createPendingOrder({
     userId,
@@ -95,13 +99,14 @@ export const createOrderWithItems = async ({
       itemCount: items.length,
     },
     orderType, // 주문 타입 추가
+    depositorName, // 입금자명 전달
   });
 
   if (items.length > 0) {
     const orderItems = items.map((item) => ({
       order_id: orderId,
       drum_sheet_id: item.sheetId,
-      sheet_title: item.sheetTitle ?? '제목 미확인',
+      sheet_title: item.title ?? '제목 미확인',
       price: Math.max(0, Math.round(item.price)),
     }));
 

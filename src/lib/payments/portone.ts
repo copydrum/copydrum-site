@@ -1,4 +1,6 @@
 import { DEFAULT_USD_RATE } from '../priceFormatter';
+import { loadPaymentUI } from '@portone/browser-sdk/v2';
+import { isEnglishHost } from '../../i18n/languages';
 
 // 포트원 스크립트 URL (최신 버전 사용)
 const PORTONE_SCRIPT_URL = 'https://cdn.iamport.kr/js/iamport.payment-1.2.0.js';
@@ -146,52 +148,138 @@ export interface RequestPayPalPaymentResult {
   error_msg?: string;
 }
 
-// PayPal 결제 요청 함수 (PortOne을 사용하지 않고 직접 PayPal API 사용)
+// PayPal 결제 요청 함수
 export const requestPayPalPayment = async (
   params: RequestPayPalPaymentParams,
 ): Promise<RequestPayPalPaymentResult> => {
-  // PortOne을 사용하지 않고 직접 PayPal API를 사용
-  // paypal.ts의 함수들을 사용하도록 import 필요
-  const { createPayPalPaymentIntent, getPayPalReturnUrl } = await import('./paypal');
+  // 영문 사이트에서만 포트원 V2 SDK 사용
+  const isEnglish = typeof window !== 'undefined' && isEnglishHost(window.location.host);
 
-  console.log('[paypal] PayPal 결제 요청 (PortOne 미사용)', {
+  if (!isEnglish) {
+    // 한국어 사이트는 기존 로직 유지 (PayPal 직접 API 사용)
+    const { createPayPalPaymentIntent, getPayPalReturnUrl } = await import('./paypal');
+
+    console.log('[paypal] PayPal 결제 요청 (PortOne 미사용 - 한국어 사이트)', {
+      orderId: params.orderId,
+      amount: params.amount,
+    });
+
+    try {
+      // PayPal 결제 Intent 생성 (Edge Function 호출)
+      const intent = await createPayPalPaymentIntent({
+        userId: params.userId,
+        orderId: params.orderId,
+        amount: params.amount,
+        description: params.description,
+        buyerEmail: params.buyerEmail,
+        buyerName: params.buyerName,
+        returnUrl: params.returnUrl || getPayPalReturnUrl(),
+      });
+
+      // sessionStorage에 주문 정보 저장 (리다이렉트 페이지에서 사용)
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('paypal_order_id', params.orderId);
+        sessionStorage.setItem('paypal_paypal_order_id', intent.paypalOrderId);
+      }
+
+      // PayPal 승인 URL로 리다이렉트
+      if (intent.approvalUrl) {
+        window.location.href = intent.approvalUrl;
+      } else {
+        throw new Error('PayPal 승인 URL을 받지 못했습니다.');
+      }
+
+      // 리다이렉트되므로 여기서는 성공으로 반환
+      // 실제 결제 완료는 리다이렉트 페이지에서 처리
+      return {
+        success: true,
+        merchant_uid: params.orderId,
+      };
+    } catch (error) {
+      console.error('[paypal] PayPal 결제 요청 오류', error);
+      return {
+        success: false,
+        error_msg: error instanceof Error ? error.message : 'PayPal 결제 요청 중 오류가 발생했습니다.',
+      };
+    }
+  }
+
+  // 영문 사이트: 포트원 V2 SDK 사용
+  console.log('[portone-paypal] PayPal 결제 요청 (PortOne V2 SDK 사용)', {
     orderId: params.orderId,
     amount: params.amount,
   });
 
   try {
-    // PayPal 결제 Intent 생성 (Edge Function 호출)
-    const intent = await createPayPalPaymentIntent({
-      userId: params.userId,
-      orderId: params.orderId,
-      amount: params.amount,
-      description: params.description,
-      buyerEmail: params.buyerEmail,
-      buyerName: params.buyerName,
-      returnUrl: params.returnUrl || getPayPalReturnUrl(),
+    if (typeof window === 'undefined') {
+      throw new Error('포트원은 브라우저 환경에서만 사용할 수 있습니다.');
+    }
+
+    // 환경 변수 확인
+    const storeId = import.meta.env.VITE_PORTONE_STORE_ID;
+    const channelKey = import.meta.env.VITE_PORTONE_PAYPAL_CHANNEL_KEY;
+
+    if (!storeId || !channelKey) {
+      throw new Error('포트원 환경 변수가 설정되지 않았습니다. VITE_PORTONE_STORE_ID와 VITE_PORTONE_PAYPAL_CHANNEL_KEY를 확인하세요.');
+    }
+
+    // KRW를 USD로 변환 (PayPal은 USD 사용)
+    const usdAmount = convertKRWToUSD(params.amount);
+    // USD는 센트 단위로 변환
+    const totalAmountInCents = Math.round(usdAmount * 100);
+
+    // 리턴 URL 설정
+    const returnUrl = params.returnUrl || getPortOneReturnUrl();
+
+    // 포트원 V2 SDK로 PayPal 결제 UI 로드
+    const paymentUI = loadPaymentUI({
+      uiType: 'PAYPAL_SPB',
+      storeId,
+      channelKey,
     });
 
-    // sessionStorage에 주문 정보 저장 (리다이렉트 페이지에서 사용)
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('paypal_order_id', params.orderId);
-      sessionStorage.setItem('paypal_paypal_order_id', intent.paypalOrderId);
-    }
-
-    // PayPal 승인 URL로 리다이렉트
-    if (intent.approvalUrl) {
-      window.location.href = intent.approvalUrl;
-    } else {
-      throw new Error('PayPal 승인 URL을 받지 못했습니다.');
-    }
-
-    // 리다이렉트되므로 여기서는 성공으로 반환
-    // 실제 결제 완료는 리다이렉트 페이지에서 처리
-    return {
-      success: true,
-      merchant_uid: params.orderId,
-    };
+    // 결제 요청
+    // 포트원 V2 SDK는 리다이렉트 방식으로 동작하므로,
+    // 리다이렉트 후 리턴 페이지에서 Edge Function을 호출하여 DB 업데이트 처리
+    return new Promise<RequestPayPalPaymentResult>((resolve) => {
+      paymentUI.requestPayment({
+        paymentId: params.orderId, // 고유한 결제 ID (주문 ID 사용)
+        orderName: params.description,
+        totalAmount: totalAmountInCents, // USD 센트 단위
+        currency: 'USD',
+        customer: {
+          fullName: params.buyerName,
+          email: params.buyerEmail,
+          phoneNumber: params.buyerTel,
+        },
+        redirectUrl: returnUrl,
+        onSuccess: (paymentResult) => {
+          // 프론트에서는 성공 UX만 처리
+          // 실제 DB 업데이트는 리다이렉트 후 리턴 페이지에서 Edge Function을 통해 처리
+          console.log('[portone-paypal] 결제 성공 - 리다이렉트 예정', paymentResult);
+          
+          // 리다이렉트되므로 여기서는 성공으로 반환
+          // 실제 결제 완료는 리턴 페이지에서 처리
+          resolve({
+            success: true,
+            imp_uid: paymentResult.paymentId || paymentResult.transactionId,
+            merchant_uid: params.orderId,
+            paid_amount: paymentResult.totalAmount ? paymentResult.totalAmount / 100 : undefined,
+          });
+        },
+        onError: (error) => {
+          console.error('[portone-paypal] 결제 실패', error);
+          resolve({
+            success: false,
+            error_code: error.code,
+            error_msg: error.message || 'PayPal 결제가 실패했습니다.',
+            merchant_uid: params.orderId,
+          });
+        },
+      });
+    });
   } catch (error) {
-    console.error('[paypal] PayPal 결제 요청 오류', error);
+    console.error('[portone-paypal] PayPal 결제 요청 오류', error);
     return {
       success: false,
       error_msg: error instanceof Error ? error.message : 'PayPal 결제 요청 중 오류가 발생했습니다.',

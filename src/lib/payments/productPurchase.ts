@@ -65,12 +65,16 @@ export const startSheetPurchase = async ({
     amount,
     paymentMethod,
     description,
-    items,
+    items: items.map(item => ({
+      ...item,
+      title: item.sheetTitle,
+    })),
     paymentStatus: paymentMethod === 'bank_transfer' ? 'awaiting_deposit' : 'pending',
     metadata: {
       type: 'sheet_purchase',
       sheetIds: items.map((item) => item.sheetId),
     },
+    depositorName: trimmedDepositorName, // 입금자명 전달
     orderType: 'product', // 주문 타입 추가
   });
 

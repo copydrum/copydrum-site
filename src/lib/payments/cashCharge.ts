@@ -8,7 +8,6 @@ import {
 import { requestPayPalPayment } from './portone';
 import type { PaymentIntentResponse, PaymentStatus, VirtualAccountInfo } from './types';
 import { updateOrderPaymentStatus } from './paymentService';
-import { supabase } from '../supabase';
 
 type SupportedChargeMethod = 'card' | 'bank_transfer' | 'paypal';
 
@@ -62,6 +61,7 @@ export const startCashCharge = async ({
       bonusAmount,
     },
     orderType: 'cash', // 주문 타입 추가
+    depositorName: trimmedDepositorName, // 입금자명 전달
   });
 
   if (paymentMethod === 'bank_transfer') {
@@ -153,7 +153,7 @@ export const startCashCharge = async ({
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('inicis_order_id', orderId);
     }
-    
+
     await ensureInicisSdkLoaded();
     submitInicisPaymentForm(intent.requestForm);
   }

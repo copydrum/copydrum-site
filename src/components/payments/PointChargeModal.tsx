@@ -158,7 +158,7 @@ export default function PointChargeModal({
           bonusAmount: selectedOption.bonus ?? 0,
           paymentMethod: 'paypal',
           description,
-          buyerName: getUserDisplayName(profile, user.email || null) ?? null,
+          buyerName: getUserDisplayName(profile as any, user.email || null) ?? null,
           buyerEmail: user.email ?? null,
         });
         // PayPal은 리다이렉트되므로 알림 불필요
@@ -274,7 +274,19 @@ export default function PointChargeModal({
                 </div>
                 <div className="flex items-center justify-between text-xs text-gray-600">
                   <span>{t('sidebar.accountNumber')}</span>
-                  <span className="font-semibold text-gray-900">3333-15-0302437</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-gray-900">3333-15-0302437</span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText('3333-15-0302437');
+                        alert(t('sidebar.accountNumberCopied') || '계좌번호가 복사되었습니다.');
+                      }}
+                      className="text-blue-600 hover:text-blue-800"
+                      title={t('sidebar.copyAccountNumber') || '계좌번호 복사'}
+                    >
+                      <i className="ri-file-copy-line"></i>
+                    </button>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between text-xs text-gray-600">
                   <span>{t('sidebar.accountHolder')}</span>
@@ -423,8 +435,8 @@ export default function PointChargeModal({
                           key={index}
                           onClick={() => setChargeAmount(option.amount)}
                           className={`relative p-4 border rounded-xl text-left transition-all duration-200 ${chargeAmount === option.amount
-                              ? 'border-blue-500 bg-blue-50 shadow-md ring-1 ring-blue-500'
-                              : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                            ? 'border-blue-500 bg-blue-50 shadow-md ring-1 ring-blue-500'
+                            : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
                             }`}
                         >
                           <div className="flex items-center justify-between mb-2">
