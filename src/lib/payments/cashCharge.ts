@@ -67,10 +67,14 @@ export const startCashCharge = async ({
   if (paymentMethod === 'bank_transfer') {
     // 페이액션 연동 제거, 간단한 무통장 입금 처리
     // depositor_name 추가 - 입금자명 저장
-    if (trimmedDepositorName) {
+    // depositorName이 전달되었고 빈 문자열이 아닐 때 저장
+    if (depositorName !== undefined && depositorName !== null && trimmedDepositorName) {
+      console.log('[startCashCharge] 입금자명 저장:', { depositorName, trimmedDepositorName, orderId });
       await updateOrderPaymentStatus(orderId, 'awaiting_deposit', {
         depositorName: trimmedDepositorName,
       });
+    } else {
+      console.warn('[startCashCharge] 입금자명이 저장되지 않음:', { depositorName, trimmedDepositorName, orderId });
     }
 
     // 고정 계좌 정보 반환

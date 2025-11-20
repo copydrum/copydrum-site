@@ -759,9 +759,9 @@ export default function SheetDetailPage() {
                       <span className={`text-3xl font-bold ${eventDiscount && eventIsActive ? 'text-red-500' : 'text-blue-600'}`}>
                         {formatCurrency(displayPrice)}
                       </span>
-                      {isKoreanSite && pointPrice > 0 && (
+                      {pointPrice > 0 && (
                         <span className="text-sm text-gray-600 mt-1">
-                          {t('payment.pointPrice', { price: pointPrice.toLocaleString('ko-KR') })}
+                          {t('payment.pointPrice', { price: pointPrice.toLocaleString(isKoreanSite ? 'ko-KR' : 'en-US') })}
                         </span>
                       )}
                       {eventDiscount && !eventIsActive && (
