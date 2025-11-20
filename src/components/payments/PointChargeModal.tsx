@@ -60,7 +60,7 @@ export default function PointChargeModal({
     (value: number) => new Intl.NumberFormat(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US').format(value),
     [i18n.language],
   );
-  
+
   // 포인트 포맷 함수 (숫자 + P)
   const formatPoints = useCallback(
     (value: number) => `${value.toLocaleString('en-US')} P`,
@@ -75,13 +75,16 @@ export default function PointChargeModal({
   const chargeOptions = useMemo<ChargeOption[]>(() => {
     if (isEnglishSite) {
       // 영문 사이트: 달러 단위
+      // 포인트는 100단위로 반올림하여 깔끔하게 표시
+      const roundTo100 = (val: number) => Math.round(val / 100) * 100;
+
       return [
-        { amount: convertUSDToKRW(3), bonus: 0, label: '$3', amountUSD: 3, bonusUSD: 0 },
-        { amount: convertUSDToKRW(5), bonus: convertUSDToKRW(0.5), label: '$5', amountUSD: 5, bonusUSD: 0.5 },
-        { amount: convertUSDToKRW(10), bonus: convertUSDToKRW(1), label: '$10', amountUSD: 10, bonusUSD: 1 },
-        { amount: convertUSDToKRW(30), bonus: convertUSDToKRW(6), label: '$30', amountUSD: 30, bonusUSD: 6 },
-        { amount: convertUSDToKRW(50), bonus: convertUSDToKRW(11), label: '$50', amountUSD: 50, bonusUSD: 11 },
-        { amount: convertUSDToKRW(100), bonus: convertUSDToKRW(25), label: '$100', amountUSD: 100, bonusUSD: 25 },
+        { amount: roundTo100(convertUSDToKRW(3)), bonus: 0, label: '$3', amountUSD: 3, bonusUSD: 0 },
+        { amount: roundTo100(convertUSDToKRW(5)), bonus: roundTo100(convertUSDToKRW(0.5)), label: '$5', amountUSD: 5, bonusUSD: 0.5 },
+        { amount: roundTo100(convertUSDToKRW(10)), bonus: roundTo100(convertUSDToKRW(1)), label: '$10', amountUSD: 10, bonusUSD: 1 },
+        { amount: roundTo100(convertUSDToKRW(30)), bonus: roundTo100(convertUSDToKRW(6)), label: '$30', amountUSD: 30, bonusUSD: 6 },
+        { amount: roundTo100(convertUSDToKRW(50)), bonus: roundTo100(convertUSDToKRW(11)), label: '$50', amountUSD: 50, bonusUSD: 11 },
+        { amount: roundTo100(convertUSDToKRW(100)), bonus: roundTo100(convertUSDToKRW(25)), label: '$100', amountUSD: 100, bonusUSD: 25 },
       ];
     }
     // 한국어 사이트: 원화 단위
@@ -367,83 +370,87 @@ export default function PointChargeModal({
                     const bonusPercent = option.bonus && option.amount > 0
                       ? Math.round((option.bonus / option.amount) * 100)
                       : 0;
-                    
+
                     // 한국 사이트와 영문 사이트 분기 처리
                     if (isEnglishSite && 'amountUSD' in option) {
                       // 영문 사이트: USD 기반 UI 유지
                       const paymentAmount = `$${option.amountUSD}`;
                       const formattedTotalPoints = formatPoints(totalPoints);
                       const formattedBonusPoints = option.bonus ? formatPoints(option.bonus) : '0 P';
-                      
+
                       return (
                         <button
                           key={index}
                           onClick={() => setChargeAmount(option.amount)}
-                          className={`relative p-3 border rounded-lg text-left transition-colors ${
-                            chargeAmount === option.amount
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
+                          className={`relative p-4 border rounded-xl text-left transition-all duration-200 ${chargeAmount === option.amount
+                            ? 'border-blue-500 bg-blue-50 shadow-md ring-1 ring-blue-500'
+                            : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                            }`}
                         >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-base font-bold text-gray-900">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-lg font-bold text-gray-900">
                               {t('sidebar.totalPoints', { amount: formattedTotalPoints })}
                             </span>
-                            <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
+                            <div className={`w-5 h-5 border-2 rounded-full flex items-center justify-center transition-colors ${chargeAmount === option.amount ? 'border-blue-500' : 'border-gray-300'
+                              }`}>
                               {chargeAmount === option.amount && (
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div>
                               )}
                             </div>
                           </div>
-                          {option.bonus && option.bonus > 0 ? (
-                            <p className="text-xs text-gray-600 mt-1">
-                              {t('sidebar.payAndBonus', {
-                                payment: paymentAmount,
-                                bonus: formattedBonusPoints.replace(' P', ''),
-                                percent: bonusPercent
-                              })}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-gray-600 mt-1">
-                              {paymentAmount} payment
-                            </p>
-                          )}
+
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600 font-medium">
+                              {t('sidebar.payAndBonus', { payment: paymentAmount })}
+                            </span>
+
+                            {option.bonus && option.bonus > 0 && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r from-purple-100 to-blue-100 text-blue-700 border border-blue-100">
+                                <i className="ri-gift-2-fill mr-1 text-purple-500"></i>
+                                +{formattedBonusPoints.replace(' P', '')} P ({bonusPercent}%)
+                              </span>
+                            )}
+                          </div>
                         </button>
                       );
                     } else {
                       // 한국 사이트: KRW 기반 UI
                       const amountKRW = formatNumber(option.amount);
                       const bonusPoints = option.bonus ? formatPoints(option.bonus) : '0 P';
-                      
+
                       return (
                         <button
                           key={index}
                           onClick={() => setChargeAmount(option.amount)}
-                          className={`relative p-3 border rounded-lg text-left transition-colors ${
-                            chargeAmount === option.amount
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
+                          className={`relative p-4 border rounded-xl text-left transition-all duration-200 ${chargeAmount === option.amount
+                              ? 'border-blue-500 bg-blue-50 shadow-md ring-1 ring-blue-500'
+                              : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                            }`}
                         >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-base font-bold text-gray-900">
-                              총 {formatPoints(totalPoints)}
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-lg font-bold text-gray-900">
+                              {t('sidebar.totalPoints', { amount: formatPoints(totalPoints) })}
                             </span>
-                            <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
+                            <div className={`w-5 h-5 border-2 rounded-full flex items-center justify-center transition-colors ${chargeAmount === option.amount ? 'border-blue-500' : 'border-gray-300'
+                              }`}>
                               {chargeAmount === option.amount && (
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div>
                               )}
                             </div>
                           </div>
-                          {option.bonus && option.bonus > 0 ? (
-                            <p className="text-xs text-gray-600 mt-1">
-                              {amountKRW}원 결제 · 보너스 +{bonusPoints} ({bonusPercent}%)
-                            </p>
-                          ) : (
-                            <p className="text-xs text-gray-600 mt-1">
-                              {amountKRW}원 결제
-                            </p>
-                          )}
+
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600 font-medium">
+                              {t('sidebar.payAndBonus', { payment: amountKRW })}
+                            </span>
+
+                            {option.bonus && option.bonus > 0 && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r from-purple-100 to-blue-100 text-blue-700 border border-blue-100">
+                                <i className="ri-gift-2-fill mr-1 text-purple-500"></i>
+                                +{bonusPoints.replace(' P', '')} P ({bonusPercent}%)
+                              </span>
+                            )}
+                          </div>
                         </button>
                       );
                     }
@@ -472,23 +479,22 @@ export default function PointChargeModal({
                           setSelectedPayment(method.id);
                         }}
                         disabled={isDisabled}
-                        className={`p-3 border rounded-lg text-left transition-colors ${
-                          isSelected
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        } ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                        className={`p-3 border rounded-lg text-left transition-colors ${isSelected
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                          } ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
                             <i className={`${method.icon} ${method.color} text-lg mr-2`}></i>
                             <span className="text-sm font-medium">
-                              {method.id === 'card' 
-                                ? t('sidebar.creditCard') 
-                                : method.id === 'kakaopay' 
-                                ? t('sidebar.kakaoPay') 
-                                : method.id === 'paypal'
-                                ? t('payment.paypal')
-                                : t('sidebar.bankTransfer')}
+                              {method.id === 'card'
+                                ? t('sidebar.creditCard')
+                                : method.id === 'kakaopay'
+                                  ? t('sidebar.kakaoPay')
+                                  : method.id === 'paypal'
+                                    ? t('payment.paypal')
+                                    : t('sidebar.bankTransfer')}
                             </span>
                           </div>
                           <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
@@ -530,9 +536,8 @@ export default function PointChargeModal({
               <button
                 onClick={handleChargeConfirm}
                 disabled={chargeProcessing}
-                className={`w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-lg font-bold text-sm transition-colors ${
-                  chargeProcessing ? 'opacity-70 cursor-not-allowed' : 'hover:from-blue-700 hover:to-purple-700'
-                }`}
+                className={`w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-lg font-bold text-sm transition-colors ${chargeProcessing ? 'opacity-70 cursor-not-allowed' : 'hover:from-blue-700 hover:to-purple-700'
+                  }`}
               >
                 {chargeProcessing ? t('sidebar.processing') : t('sidebar.charge')}
               </button>

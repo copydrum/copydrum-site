@@ -116,7 +116,7 @@ export const initPortOne = async (merchantCode?: string): Promise<void> => {
 
   // merchant code가 제공되지 않으면 환경 변수에서 가져오기 (검사 없이)
   const code = merchantCode || getPortOneMerchantCode();
-  
+
   if (code) {
     window.IMP.init(code);
     console.log('[portone] 초기화 완료', { merchantCode: code });
@@ -153,7 +153,7 @@ export const requestPayPalPayment = async (
   // PortOne을 사용하지 않고 직접 PayPal API를 사용
   // paypal.ts의 함수들을 사용하도록 import 필요
   const { createPayPalPaymentIntent, getPayPalReturnUrl } = await import('./paypal');
-  
+
   console.log('[paypal] PayPal 결제 요청 (PortOne 미사용)', {
     orderId: params.orderId,
     amount: params.amount,
@@ -320,7 +320,7 @@ export const getPortOneReturnUrl = (): string => {
   const returnPath = '/payments/portone-paypal/return';
 
   let baseUrl = origin;
-  if (!baseUrl.startsWith('https://')) {
+  if (!baseUrl.startsWith('https://') && !baseUrl.includes('localhost')) {
     baseUrl = baseUrl.replace(/^https?:\/\//, 'https://');
   }
 

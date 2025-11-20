@@ -63,21 +63,21 @@ export default function SheetDetailPage() {
   const [insufficientCashInfo, setInsufficientCashInfo] = useState<{ currentBalance: number; requiredAmount: number } | null>(null);
   const eventIsActive = eventDiscount ? isEventActive(eventDiscount) : false;
   const displayPrice = sheet ? (eventDiscount && eventIsActive ? eventDiscount.discount_price : sheet.price) : 0;
-  
+
   // 한국어 사이트 여부 확인
   const isKoreanSite = useMemo(() => {
     if (typeof window === 'undefined') return true;
     return !isEnglishHost(window.location.host);
   }, []);
 
-  // 포인트 가격 계산 (한국어 사이트에서만 사용)
+  // 포인트 가격 계산 (모든 사이트에서 사용)
   const pointPrice = useMemo(() => {
-    if (!isKoreanSite || !displayPrice || displayPrice <= 0) return 0;
+    if (!displayPrice || displayPrice <= 0) return 0;
     return calculatePointPrice(displayPrice);
-  }, [displayPrice, isKoreanSite]);
+  }, [displayPrice]);
   const { i18n, t } = useTranslation();
-  const formatCurrency = (value: number) => formatPrice({ 
-    amountKRW: value, 
+  const formatCurrency = (value: number) => formatPrice({
+    amountKRW: value,
     language: i18n.language,
     host: typeof window !== 'undefined' ? window.location.host : undefined
   }).formatted;
@@ -89,7 +89,7 @@ export default function SheetDetailPage() {
   const getCategoryName = (categoryName: string | null | undefined): string => {
     if (!categoryName) return '';
     if (i18n.language !== 'en') return categoryName;
-    
+
     const categoryMap: Record<string, string> = {
       '가요': t('categoriesPage.categories.kpop'),
       '팝': t('categoriesPage.categories.pop'),
@@ -103,7 +103,7 @@ export default function SheetDetailPage() {
       '드럼커버': t('categoriesPage.categories.drumCover'),
       '기타': t('categoriesPage.categories.other'),
     };
-    
+
     return categoryMap[categoryName] || categoryName;
   };
 
@@ -161,7 +161,7 @@ export default function SheetDetailPage() {
         .single();
 
       if (error) throw error;
-      
+
       const normalizedCategory =
         Array.isArray((data as any)?.categories) && (data as any)?.categories.length > 0
           ? (data as any)?.categories[0]
@@ -216,10 +216,10 @@ export default function SheetDetailPage() {
 
   const getDifficultyDisplayText = (difficulty: string) => {
     if (!difficulty) return t('sheetDetail.difficulty.notSet');
-    
+
     const normalizedDifficulty = (difficulty || '').toLowerCase().trim();
     const isEnglishSiteLocal = isEnglishSite();
-    
+
     // 영문 사이트에서 한글 난이도 값을 영어로 변환
     if (isEnglishSiteLocal || i18n.language === 'en') {
       const difficultyMapEn: Record<string, string> = {
@@ -227,13 +227,13 @@ export default function SheetDetailPage() {
         '중급': 'Intermediate',
         '고급': 'Advanced',
       };
-      
+
       // 한글 값이면 영어로 변환
       if (difficultyMapEn[difficulty]) {
         return difficultyMapEn[difficulty];
       }
     }
-    
+
     // 영어 값이거나 한국어 사이트인 경우
     switch (normalizedDifficulty) {
       case 'beginner':
@@ -451,7 +451,7 @@ export default function SheetDetailPage() {
     try {
       const response = await fetch(sheet.pdf_url);
       const blob = await response.blob();
-      
+
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `${sheet.title} - ${sheet.artist}.pdf`;
@@ -481,7 +481,7 @@ export default function SheetDetailPage() {
     if (sheet.thumbnail_url) {
       return sheet.thumbnail_url;
     }
-    
+
     // 3. 기본 썸네일 생성
     return generateDefaultThumbnail(400, 400);
   };
@@ -491,10 +491,10 @@ export default function SheetDetailPage() {
     if (sheet.preview_image_url) {
       return sheet.preview_image_url;
     }
-    
+
     // 더 안정적인 이미지 생성 프롬프트
     const prompt = `Professional drum sheet music notation page with clear black musical notes on white paper background, drum symbols and rhythmic patterns, clean layout, high quality music manuscript paper, readable notation symbols, minimalist design, no text overlays, studio lighting`;
-    
+
     return `https://readdy.ai/api/search-image?query=$%7BencodeURIComponent%28prompt%29%7D&width=600&height=800&seq=preview-${sheet.id}&orientation=portrait`;
   };
 
@@ -513,7 +513,7 @@ export default function SheetDetailPage() {
     return match ? match[1] : '';
   };
 
-      if (loading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
@@ -634,231 +634,229 @@ export default function SheetDetailPage() {
                       {sheet.youtube_url ? t('sheetDetail.youtubeThumbnail') : t('sheetDetail.albumCover')}
                     </h4>
                     <p className="text-sm text-blue-700">
-                      {getThumbnailUrl() ? 
-                        (sheet.youtube_url ? 
+                      {getThumbnailUrl() ?
+                        (sheet.youtube_url ?
                           t('sheetDetail.youtubeThumbnailDescription') :
                           t('sheetDetail.albumCoverDescription')
                         ) :
                         t('sheetDetail.thumbnailNotAvailable')
-                      } 
+                      }
                       {' '}{t('sheetDetail.previewBelow')}
                     </p>
                   </div>
                 </div>
               </div>
-            
-            {/* 유튜브 링크 버튼 */}
-            {sheet.youtube_url && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+
+              {/* 유튜브 링크 버튼 */}
+              {sheet.youtube_url && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-medium text-red-800">{t('sheetDetail.watchOnYouTube')}</h4>
+                        <p className="text-sm text-red-700">{t('sheetDetail.checkPerformanceVideo')}</p>
+                      </div>
+                    </div>
+                    <a
+                      href={sheet.youtube_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 whitespace-nowrap cursor-pointer flex items-center space-x-2"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
                       </svg>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-medium text-red-800">{t('sheetDetail.watchOnYouTube')}</h4>
-                      <p className="text-sm text-red-700">{t('sheetDetail.checkPerformanceVideo')}</p>
-                    </div>
+                      <span>{t('sheetDetail.watchOnYouTubeShort')}</span>
+                    </a>
                   </div>
-                  <a
-                    href={sheet.youtube_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 whitespace-nowrap cursor-pointer flex items-center space-x-2"
-                  >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                    </svg>
-                    <span>{t('sheetDetail.watchOnYouTubeShort')}</span>
-                  </a>
                 </div>
-              </div>
-            )}
+              )}
             </div>
 
             {/* Sheet Info */}
             <div className="space-y-8">
-            <div>
-              <div className="flex items-center space-x-3 mb-4">
-                <h1 className="text-3xl font-bold text-gray-900">{sheet.title}</h1>
-                {sheet.is_featured && (
-                  <Star className="w-6 h-6 text-yellow-500 fill-current" />
-                )}
-              </div>
-              <p className="text-xl text-gray-600 mb-2">{sheet.artist}</p>
-              {sheet.album_name && (
-                <p className="text-lg text-gray-500 mb-2">{t('sheetDetail.album')}: {sheet.album_name}</p>
-              )}
-              <div className="flex items-center space-x-4 text-sm text-gray-500">
-                <span className="flex items-center space-x-1">
-                  <Music className="w-4 h-4" />
-                  <span>{getCategoryName(sheet.categories?.name)}</span>
-                </span>
-                <span className="flex items-center space-x-1">
-                  <span>{t('sheetDetail.instrumentPart')}</span>
-                </span>
-              </div>
-            </div>
-
-            {/* Difficulty Badge & Additional Info */}
-            <div className="flex items-center space-x-4 mb-4">
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getDifficultyBadgeColor(sheet.difficulty)}`}>
-                {getDifficultyDisplayText(sheet.difficulty)}
-              </span>
-              {sheet.page_count && (
-                <span className="text-sm text-gray-600">
-                  <i className="ri-file-line mr-1"></i>
-                  {sheet.page_count}{t('sheetDetail.pages')}
-                </span>
-              )}
-              {sheet.tempo && (
-                <span className="text-sm text-gray-600">
-                  <i className="ri-speed-line mr-1"></i>
-                  {sheet.tempo} BPM
-                </span>
-              )}
-            </div>
-
-            {eventDiscount && (
-              <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
-                {eventIsActive ? (
-                  <p>
-                    {t('sheetDetail.eventInProgress')}{' '}
-                    <span className="font-semibold">
-                      {new Date(eventDiscount.event_start).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')} ~ {new Date(eventDiscount.event_end).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')}
-                    </span>
-                  </p>
-                ) : eventDiscount.status === 'scheduled' ? (
-                  <p>
-                    {t('sheetDetail.eventStartsFrom', { date: new Date(eventDiscount.event_start).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US') })}
-                  </p>
-                ) : (
-                  <p>{t('sheetDetail.eventEnded')}</p>
-                )}
-              </div>
-            )}
-
-            {/* Price */}
-            <div className="bg-gray-50 rounded-lg p-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-2">
-                  {eventDiscount && (
-                    <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600">
-                      <span>🔥</span>
-                      {eventIsActive ? t('sheetDetail.eventDiscountSheet') : eventDiscount.status === 'scheduled' ? t('sheetDetail.eventScheduled') : t('sheetDetail.eventEndedBadge')}
-                    </span>
+              <div>
+                <div className="flex items-center space-x-3 mb-4">
+                  <h1 className="text-3xl font-bold text-gray-900">{sheet.title}</h1>
+                  {sheet.is_featured && (
+                    <Star className="w-6 h-6 text-yellow-500 fill-current" />
                   )}
-                  <div className="flex flex-col">
-                    {eventDiscount && eventIsActive && (
-                      <span className="text-sm text-gray-400 line-through">
-                        {formatCurrency(sheet.price)}
+                </div>
+                <p className="text-xl text-gray-600 mb-2">{sheet.artist}</p>
+                {sheet.album_name && (
+                  <p className="text-lg text-gray-500 mb-2">{t('sheetDetail.album')}: {sheet.album_name}</p>
+                )}
+                <div className="flex items-center space-x-4 text-sm text-gray-500">
+                  <span className="flex items-center space-x-1">
+                    <Music className="w-4 h-4" />
+                    <span>{getCategoryName(sheet.categories?.name)}</span>
+                  </span>
+                  <span className="flex items-center space-x-1">
+                    <span>{t('sheetDetail.instrumentPart')}</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Difficulty Badge & Additional Info */}
+              <div className="flex items-center space-x-4 mb-4">
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getDifficultyBadgeColor(sheet.difficulty)}`}>
+                  {getDifficultyDisplayText(sheet.difficulty)}
+                </span>
+                {sheet.page_count && (
+                  <span className="text-sm text-gray-600">
+                    <i className="ri-file-line mr-1"></i>
+                    {sheet.page_count}{t('sheetDetail.pages')}
+                  </span>
+                )}
+                {sheet.tempo && (
+                  <span className="text-sm text-gray-600">
+                    <i className="ri-speed-line mr-1"></i>
+                    {sheet.tempo} BPM
+                  </span>
+                )}
+              </div>
+
+              {eventDiscount && (
+                <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
+                  {eventIsActive ? (
+                    <p>
+                      {t('sheetDetail.eventInProgress')}{' '}
+                      <span className="font-semibold">
+                        {new Date(eventDiscount.event_start).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')} ~ {new Date(eventDiscount.event_end).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')}
+                      </span>
+                    </p>
+                  ) : eventDiscount.status === 'scheduled' ? (
+                    <p>
+                      {t('sheetDetail.eventStartsFrom', { date: new Date(eventDiscount.event_start).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US') })}
+                    </p>
+                  ) : (
+                    <p>{t('sheetDetail.eventEnded')}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Price */}
+              <div className="bg-gray-50 rounded-lg p-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    {eventDiscount && (
+                      <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600">
+                        <span>🔥</span>
+                        {eventIsActive ? t('sheetDetail.eventDiscountSheet') : eventDiscount.status === 'scheduled' ? t('sheetDetail.eventScheduled') : t('sheetDetail.eventEndedBadge')}
                       </span>
                     )}
-                    <span className={`text-3xl font-bold ${eventDiscount && eventIsActive ? 'text-red-500' : 'text-blue-600'}`}>
-                      {formatCurrency(displayPrice)}
-                    </span>
-                    {isKoreanSite && pointPrice > 0 && (
-                      <span className="text-sm text-gray-600 mt-1">
-                        {t('payment.pointPrice', { price: pointPrice.toLocaleString('ko-KR') })}
+                    <div className="flex flex-col">
+                      {eventDiscount && eventIsActive && (
+                        <span className="text-sm text-gray-400 line-through">
+                          {formatCurrency(sheet.price)}
+                        </span>
+                      )}
+                      <span className={`text-3xl font-bold ${eventDiscount && eventIsActive ? 'text-red-500' : 'text-blue-600'}`}>
+                        {formatCurrency(displayPrice)}
                       </span>
-                    )}
-                    {eventDiscount && !eventIsActive && (
-                      <span className="text-xs text-gray-500 mt-1">
-                        {eventDiscount.status === 'scheduled'
-                          ? t('sheetDetail.eventStartsFromPrice', { date: new Date(eventDiscount.event_start).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US') })
-                          : t('sheetDetail.eventEndedPrice')}
-                      </span>
-                    )}
+                      {isKoreanSite && pointPrice > 0 && (
+                        <span className="text-sm text-gray-600 mt-1">
+                          {t('payment.pointPrice', { price: pointPrice.toLocaleString('ko-KR') })}
+                        </span>
+                      )}
+                      {eventDiscount && !eventIsActive && (
+                        <span className="text-xs text-gray-500 mt-1">
+                          {eventDiscount.status === 'scheduled'
+                            ? t('sheetDetail.eventStartsFromPrice', { date: new Date(eventDiscount.event_start).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US') })
+                            : t('sheetDetail.eventEndedPrice')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-gray-500 mb-2">{t('sheetDetail.instantDownload')}</p>
+                    <p className="text-sm text-gray-500">{t('sheetDetail.pdfFormat')}</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-500 mb-2">{t('sheetDetail.instantDownload')}</p>
-                  <p className="text-sm text-gray-500">{t('sheetDetail.pdfFormat')}</p>
-                </div>
               </div>
-            </div>
 
-            {/* Action Buttons */}
-            <div className="space-y-4">
-              <div className="flex justify-end">
+              {/* Action Buttons */}
+              <div className="space-y-4">
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleToggleFavorite}
+                    disabled={favoriteProcessing}
+                    className={`flex h-11 w-11 items-center justify-center rounded-full border transition-colors ${isFavoriteSheet
+                        ? 'border-red-200 bg-red-50 text-red-500'
+                        : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                      } ${favoriteProcessing ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    aria-label={isFavoriteSheet ? t('sheetDetail.removeFromFavorites') : t('sheetDetail.addToFavorites')}
+                  >
+                    <i className={`ri-heart-${isFavoriteSheet ? 'fill' : 'line'} text-xl`} />
+                  </button>
+                </div>
                 <button
-                  type="button"
-                  onClick={handleToggleFavorite}
-                  disabled={favoriteProcessing}
-                  className={`flex h-11 w-11 items-center justify-center rounded-full border transition-colors ${
-                    isFavoriteSheet
-                      ? 'border-red-200 bg-red-50 text-red-500'
-                      : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
-                  } ${favoriteProcessing ? 'opacity-60 cursor-not-allowed' : ''}`}
-                  aria-label={isFavoriteSheet ? t('sheetDetail.removeFromFavorites') : t('sheetDetail.addToFavorites')}
+                  onClick={handlePurchase}
+                  disabled={purchasing || paymentProcessing}
+                  className="w-full bg-blue-600 text-white py-4 px-6 rounded-lg hover:bg-blue-700 font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer transition-colors"
                 >
-                  <i className={`ri-heart-${isFavoriteSheet ? 'fill' : 'line'} text-xl`} />
+                  {paymentProcessing
+                    ? t('categories.paymentPreparing')
+                    : purchasing
+                      ? t('categories.processing')
+                      : eventDiscount && eventIsActive
+                        ? t('categories.eventBuyNow')
+                        : t('categories.buyNow')}
+                </button>
+
+                <button
+                  onClick={handleAddToCart}
+                  disabled={!user || isInCart(sheet.id)}
+                  className={`w-full py-3 px-6 rounded-lg font-medium flex items-center justify-center space-x-2 whitespace-nowrap cursor-pointer transition-colors ${isInCart(sheet.id)
+                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                      : 'bg-gray-900 text-white hover:bg-gray-800'
+                    }`}
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                  <span>{isInCart(sheet.id) ? t('categories.alreadyInCart') : t('categories.addToCart')}</span>
+                </button>
+
+                <button
+                  onClick={() => setShowPreviewModal(true)}
+                  className="w-full bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 font-medium flex items-center justify-center space-x-2 whitespace-nowrap cursor-pointer transition-colors"
+                >
+                  <Eye className="w-5 h-5" />
+                  <span>{t('categories.previewSheet')}</span>
                 </button>
               </div>
-              <button
-                onClick={handlePurchase}
-                disabled={purchasing || paymentProcessing}
-                className="w-full bg-blue-600 text-white py-4 px-6 rounded-lg hover:bg-blue-700 font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer transition-colors"
-              >
-                {paymentProcessing
-                  ? t('categories.paymentPreparing')
-                  : purchasing
-                  ? t('categories.processing')
-                  : eventDiscount && eventIsActive
-                  ? t('categories.eventBuyNow')
-                  : t('categories.buyNow')}
-              </button>
-              
-              <button
-                onClick={handleAddToCart}
-                disabled={!user || isInCart(sheet.id)}
-                className={`w-full py-3 px-6 rounded-lg font-medium flex items-center justify-center space-x-2 whitespace-nowrap cursor-pointer transition-colors ${
-                  isInCart(sheet.id) 
-                    ? 'bg-gray-400 text-white cursor-not-allowed' 
-                    : 'bg-gray-900 text-white hover:bg-gray-800'
-                }`}
-              >
-                <ShoppingCart className="w-5 h-5" />
-                <span>{isInCart(sheet.id) ? t('categories.alreadyInCart') : t('categories.addToCart')}</span>
-              </button>
-              
-              <button
-                onClick={() => setShowPreviewModal(true)}
-                className="w-full bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 font-medium flex items-center justify-center space-x-2 whitespace-nowrap cursor-pointer transition-colors"
-              >
-                <Eye className="w-5 h-5" />
-                <span>{t('categories.previewSheet')}</span>
-              </button>
-            </div>
 
-            {/* Features */}
-            <div className="bg-gray-50 rounded-lg p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">{t('sheetDetail.includes')}</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                  <span>{t('sheetDetail.highQualityPdf')}</span>
-                </li>
-                <li className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                  <span>{t('sheetDetail.printableFormat')}</span>
-                </li>
-                <li className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                  <span>{t('sheetDetail.instantDownloadFeature')}</span>
-                </li>
-                <li className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                  <span>{t('sheetDetail.lifetimeAccess')}</span>
-                </li>
-                <li className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                  <span>{t('sheetDetail.noLyrics')}</span>
-                </li>
-              </ul>
-            </div>
+              {/* Features */}
+              <div className="bg-gray-50 rounded-lg p-6">
+                <h3 className="font-semibold text-gray-900 mb-4">{t('sheetDetail.includes')}</h3>
+                <ul className="space-y-2 text-sm text-gray-600">
+                  <li className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                    <span>{t('sheetDetail.highQualityPdf')}</span>
+                  </li>
+                  <li className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                    <span>{t('sheetDetail.printableFormat')}</span>
+                  </li>
+                  <li className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                    <span>{t('sheetDetail.instantDownloadFeature')}</span>
+                  </li>
+                  <li className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                    <span>{t('sheetDetail.lifetimeAccess')}</span>
+                  </li>
+                  <li className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                    <span>{t('sheetDetail.noLyrics')}</span>
+                  </li>
+                </ul>
+              </div>
 
             </div>
           </div>
@@ -868,7 +866,7 @@ export default function SheetDetailPage() {
             <div className="bg-white rounded-lg shadow-lg p-6 mb-8 mt-12">
               <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center space-x-2">
                 <svg className="w-6 h-6 text-red-600" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
                 </svg>
                 <span>{t('sheetDetail.performanceVideo')}</span>
               </h3>
@@ -891,7 +889,7 @@ export default function SheetDetailPage() {
                   className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 whitespace-nowrap cursor-pointer flex items-center space-x-2"
                 >
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
                   </svg>
                   <span>{t('sheetDetail.watchOnYouTube')}</span>
                 </a>
@@ -911,10 +909,10 @@ export default function SheetDetailPage() {
                   onClick={() => setShowPreviewModal(true)}
                   onError={handlePreviewImageError}
                 />
-                
+
                 {/* 하단 흐림 효과 */}
                 <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-white/90 via-white/60 to-transparent"></div>
-                
+
                 {/* 미리보기 안내 */}
                 <div className="absolute bottom-4 left-4 right-4 text-center">
                   <p className="text-sm text-gray-700 font-medium bg-white/80 rounded px-3 py-2">
@@ -922,7 +920,7 @@ export default function SheetDetailPage() {
                   </p>
                 </div>
               </div>
-              
+
               <button
                 onClick={() => setShowPreviewModal(true)}
                 className="mt-4 w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap cursor-pointer"

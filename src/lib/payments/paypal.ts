@@ -79,7 +79,7 @@ export const createPayPalPaymentIntent = async (
 ): Promise<PayPalPaymentIntentResponse> => {
   // KRW를 USD로 변환
   const usdAmount = convertKRWToUSD(payload.amount);
-  
+
   const paypalPayload = {
     ...payload,
     amountUSD: usdAmount,
@@ -105,15 +105,15 @@ export const getPayPalReturnUrl = (): string => {
   if (typeof window === 'undefined') {
     return '';
   }
-  
+
   const origin = window.location.origin;
   const returnPath = '/payments/paypal/return';
-  
+
   let baseUrl = origin;
-  if (!baseUrl.startsWith('https://')) {
+  if (!baseUrl.startsWith('https://') && !baseUrl.includes('localhost')) {
     baseUrl = baseUrl.replace(/^https?:\/\//, 'https://');
   }
-  
+
   return `${baseUrl}${returnPath}`;
 };
 
@@ -122,15 +122,15 @@ export const getPayPalCancelUrl = (): string => {
   if (typeof window === 'undefined') {
     return '';
   }
-  
+
   const origin = window.location.origin;
   const cancelPath = '/payments/paypal/cancel';
-  
+
   let baseUrl = origin;
-  if (!baseUrl.startsWith('https://')) {
+  if (!baseUrl.startsWith('https://') && !baseUrl.includes('localhost')) {
     baseUrl = baseUrl.replace(/^https?:\/\//, 'https://');
   }
-  
+
   return `${baseUrl}${cancelPath}`;
 };
 

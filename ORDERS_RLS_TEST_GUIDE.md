@@ -310,3 +310,5 @@ CREATE INDEX IF NOT EXISTS idx_orders_user_id
   - `src/pages/mypage/page.tsx` (490-529줄)
   - `src/pages/my-orders/page.tsx` (155-194줄)
 
+
+

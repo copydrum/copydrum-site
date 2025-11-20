@@ -118,3 +118,5 @@ const RefundPolicyPage: React.FC = () => {
 
 export default RefundPolicyPage;
 
+
+

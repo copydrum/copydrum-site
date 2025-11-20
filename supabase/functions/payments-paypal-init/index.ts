@@ -159,11 +159,11 @@ serve(async (req: Request) => {
 
     return new Response(
 
-      JSON.stringify({ 
+      JSON.stringify({
 
         success: false,
 
-        error: { message: "userId, orderId, amount are required" } 
+        error: { message: "userId, orderId, amount are required" }
 
       }),
 
@@ -215,11 +215,11 @@ serve(async (req: Request) => {
 
     console.error(`[paypal-init] Order not found - orderId: ${orderId}, userId: ${userId}`);
 
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
 
       success: false,
 
-      error: { message: "Order not found" } 
+      error: { message: "Order not found" }
 
     }), {
 
@@ -255,15 +255,15 @@ serve(async (req: Request) => {
 
     console.error(`[paypal-init] Failed to get PayPal token:`, error);
 
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
 
       success: false,
 
-      error: { 
+      error: {
 
-        message: error instanceof Error ? error.message : "Failed to get PayPal access token" 
+        message: error instanceof Error ? error.message : "Failed to get PayPal access token"
 
-      } 
+      }
 
     }), {
 
@@ -314,22 +314,13 @@ serve(async (req: Request) => {
       }],
 
       application_context: {
-
         brand_name: "CopyDrum",
-
         user_action: "PAY_NOW",
-
-        return_url: "https://en.copydrum.com/paypal/return",
-
-        cancel_url: "https://en.copydrum.com/paypal/cancel",
-
+        return_url: body.returnUrl ?? "https://en.copydrum.com/paypal/return",
+        cancel_url: body.cancelUrl ?? "https://en.copydrum.com/paypal/cancel",
       },
-
     }),
-
   });
-
-
 
   const paypalOrder = await paypalRes.json();
 
@@ -339,17 +330,17 @@ serve(async (req: Request) => {
 
     console.error(`[paypal-init] PayPal order creation failed - status: ${paypalRes.status}, body:`, JSON.stringify(paypalOrder));
 
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
 
       success: false,
 
-      error: { 
+      error: {
 
         message: `PayPal order creation failed: ${paypalRes.status}`,
 
-        details: paypalOrder 
+        details: paypalOrder
 
-      } 
+      }
 
     }), {
 
@@ -375,15 +366,15 @@ serve(async (req: Request) => {
 
     console.error(`[paypal-init] Approval URL not found in PayPal order response`);
 
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
 
       success: false,
 
-      error: { 
+      error: {
 
-        message: "PayPal approval URL not found" 
+        message: "PayPal approval URL not found"
 
-      } 
+      }
 
     }), {
 

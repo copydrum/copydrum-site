@@ -136,3 +136,5 @@ const { data } = await supabase
 - `ADD_ORDERS_SELECT_RLS_POLICY.sql` - RLS 정책 SQL
 - `ADD_ORDERS_ADMIN_UPDATE_POLICY.sql` - 기존 UPDATE 정책 (참고용)
 
+
+

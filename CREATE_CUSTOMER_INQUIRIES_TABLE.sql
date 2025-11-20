@@ -24,3 +24,5 @@ CREATE INDEX IF NOT EXISTS idx_customer_inquiries_status_created_at
 
 
 
+
+

@@ -20,3 +20,5 @@ CREATE INDEX IF NOT EXISTS idx_orders_order_type ON public.orders (order_type);
 -- 4. 주석 추가
 COMMENT ON COLUMN public.orders.order_type IS '주문 타입: product(악보 구매), cash(캐시 충전)';
 
+
+

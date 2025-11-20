@@ -83,8 +83,21 @@ export default function LanguageSelector({ variant = 'desktop', className = '' }
 
     // 호스트 변경이 필요한 경우 (영어 <-> 한국어)
     if ((isCurrentlyEnglish && wantsKorean) || (!isCurrentlyEnglish && wantsEnglish)) {
+      // 로컬 환경에서는 도메인 변경 대신 쿼리 파라미터 사용
+      if (currentHost.includes('localhost') || currentHost.includes('127.0.0.1')) {
+        const searchParams = new URLSearchParams(window.location.search);
+        if (wantsEnglish) {
+          searchParams.set('lang', 'en');
+        } else {
+          searchParams.delete('lang');
+          searchParams.delete('en');
+        }
+        window.location.search = searchParams.toString();
+        return;
+      }
+
       let targetHost: string;
-      
+
       if (wantsEnglish) {
         // 한국어 사이트에서 영어 사이트로 이동
         targetHost = currentHost.replace(/^(www\.)?copydrum\.com$/, 'en.copydrum.com');
@@ -104,7 +117,7 @@ export default function LanguageSelector({ variant = 'desktop', className = '' }
       // 프로토콜 포함 전체 URL 생성
       const protocol = window.location.protocol;
       const targetUrl = `${protocol}//${targetHost}${currentPath}`;
-      
+
       // 호스트 변경하여 리다이렉트
       window.location.href = targetUrl;
       return;
@@ -141,9 +154,8 @@ export default function LanguageSelector({ variant = 'desktop', className = '' }
             <button
               key={lang.code}
               onClick={() => handleLanguageChange(lang.code)}
-              className={`w-full flex items-center space-x-3 px-4 py-2 hover:bg-blue-50 transition-colors duration-150 ${
-                currentLanguage.code === lang.code ? 'bg-blue-100 text-blue-700' : 'text-gray-700'
-              }`}
+              className={`w-full flex items-center space-x-3 px-4 py-2 hover:bg-blue-50 transition-colors duration-150 ${currentLanguage.code === lang.code ? 'bg-blue-100 text-blue-700' : 'text-gray-700'
+                }`}
             >
               <span className="flex items-center gap-2">
                 {renderFlag(lang.flagCode, lang.flagEmoji, 20)}
