@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/stores/authStore';
+import { supabase } from '../../lib/supabase';
+import { useAuthStore } from '../../stores/authStore';
 
 type StatusOptionValue = 'pending' | 'quoted' | 'payment_confirmed' | 'in_progress' | 'completed' | 'cancelled';
 
@@ -204,78 +204,58 @@ export default function CustomOrderDetail({ orderId, onClose, onUpdated }: Custo
     }
   };
 
-  const handleStatusSave = async () => {
+  const handleStatusChange = async () => {
     if (!order || !selectedStatus) return;
+    if (selectedStatus === order.status) return;
 
     setIsSavingStatus(true);
     try {
-      const { error: statusError } = await supabase
+      const { error: updateError } = await supabase
         .from('custom_orders')
-        .update({
-          status: selectedStatus,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ status: selectedStatus })
         .eq('id', order.id);
 
-      if (statusError) {
-        throw statusError;
+      if (updateError) {
+        throw updateError;
       }
 
-      setOrder((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: selectedStatus,
-              updated_at: new Date().toISOString(),
-            }
-          : prev
-      );
+      setOrder((prev) => (prev ? { ...prev, status: selectedStatus } : prev));
+      alert('상태가 변경되었습니다.');
       onUpdated?.();
-      alert('주문 상태가 업데이트되었습니다.');
-    } catch (statusError: any) {
-      console.error('상태 업데이트 실패:', statusError);
-      alert(statusError?.message ?? '상태를 업데이트하지 못했습니다.');
+    } catch (err: any) {
+      console.error('상태 변경 실패:', err);
+      alert(err?.message ?? '상태 변경 중 오류가 발생했습니다.');
     } finally {
       setIsSavingStatus(false);
     }
   };
 
-  const parsedEstimatedPrice = useMemo(() => {
-    const value = Number(estimatedPrice.replace(/[^0-9]/g, ''));
-    return Number.isFinite(value) ? value : 0;
-  }, [estimatedPrice]);
-
-  const handlePriceSave = async () => {
+  const handlePriceChange = async () => {
     if (!order) return;
+
+    const priceNum = parseInt(estimatedPrice.replace(/,/g, ''), 10);
+    if (Number.isNaN(priceNum)) {
+      alert('유효한 금액을 입력해주세요.');
+      return;
+    }
 
     setIsSavingPrice(true);
     try {
-      const { error: priceError } = await supabase
+      const { error: updateError } = await supabase
         .from('custom_orders')
-        .update({
-          estimated_price: parsedEstimatedPrice || null,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ estimated_price: priceNum })
         .eq('id', order.id);
 
-      if (priceError) {
-        throw priceError;
+      if (updateError) {
+        throw updateError;
       }
 
-      setOrder((prev) =>
-        prev
-          ? {
-              ...prev,
-              estimated_price: parsedEstimatedPrice || null,
-              updated_at: new Date().toISOString(),
-            }
-          : prev
-      );
-      onUpdated?.();
+      setOrder((prev) => (prev ? { ...prev, estimated_price: priceNum } : prev));
       alert('견적 금액이 저장되었습니다.');
-    } catch (priceError: any) {
-      console.error('견적 금액 저장 실패:', priceError);
-      alert(priceError?.message ?? '견적 금액을 저장하지 못했습니다.');
+      onUpdated?.();
+    } catch (err: any) {
+      console.error('금액 저장 실패:', err);
+      alert(err?.message ?? '금액 저장 중 오류가 발생했습니다.');
     } finally {
       setIsSavingPrice(false);
     }
@@ -285,6 +265,13 @@ export default function CustomOrderDetail({ orderId, onClose, onUpdated }: Custo
     event.preventDefault();
     if (!order || !pdfFile) return;
 
+    // Client-side file size validation (max 20MB)
+    const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB in bytes
+    if (pdfFile.size > MAX_FILE_SIZE) {
+      alert('파일 크기는 20MB를 초과할 수 없습니다.');
+      return;
+    }
+
     setIsUploadingPdf(true);
     try {
       const fileExt = pdfFile.name.split('.').pop() ?? 'pdf';
@@ -292,35 +279,24 @@ export default function CustomOrderDetail({ orderId, onClose, onUpdated }: Custo
 
       const { error: uploadError } = await supabase.storage
         .from('custom-orders')
-        .upload(filePath, pdfFile, {
-          cacheControl: '3600',
-          upsert: true,
-          contentType: pdfFile.type || 'application/pdf',
-        });
+        .upload(filePath, pdfFile);
 
       if (uploadError) {
         throw uploadError;
       }
 
-      const { data: publicData } = supabase.storage.from('custom-orders').getPublicUrl(filePath);
-      const publicUrl = publicData?.publicUrl ?? null;
+      const { data: publicUrlData } = supabase.storage
+        .from('custom-orders')
+        .getPublicUrl(filePath);
 
-      if (!publicUrl) {
-        throw new Error('업로드된 파일 URL을 가져오지 못했습니다.');
-      }
-
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 30);
+      const publicUrl = publicUrlData.publicUrl;
 
       const { error: updateError } = await supabase
         .from('custom_orders')
         .update({
           completed_pdf_url: publicUrl,
           completed_pdf_filename: pdfFile.name,
-          download_count: 0,
-          max_download_count: order.max_download_count ?? null,
-          download_expires_at: expiresAt.toISOString(),
-          updated_at: new Date().toISOString(),
+          status: 'completed', // PDF 업로드 시 자동으로 완료 상태로 변경
         })
         .eq('id', order.id);
 
@@ -331,310 +307,309 @@ export default function CustomOrderDetail({ orderId, onClose, onUpdated }: Custo
       setOrder((prev) =>
         prev
           ? {
-              ...prev,
-              completed_pdf_url: publicUrl,
-              completed_pdf_filename: pdfFile.name,
-              download_count: 0,
-              max_download_count: prev.max_download_count ?? null,
-              download_expires_at: expiresAt.toISOString(),
-              updated_at: new Date().toISOString(),
-            }
+            ...prev,
+            completed_pdf_url: publicUrl,
+            completed_pdf_filename: pdfFile.name,
+            status: 'completed',
+          }
           : prev
       );
+      setSelectedStatus('completed');
       setPdfFile(null);
+      alert('악보 파일이 업로드되었습니다.');
       onUpdated?.();
-      alert('완료된 악보 파일이 업로드되었습니다.');
-    } catch (uploadError: any) {
-      console.error('PDF 업로드 실패:', uploadError);
-      alert(uploadError?.message ?? 'PDF 파일을 업로드하지 못했습니다.');
+    } catch (err: any) {
+      console.error('PDF 업로드 실패:', err);
+      alert(err?.message ?? '파일 업로드 중 오류가 발생했습니다.');
     } finally {
       setIsUploadingPdf(false);
     }
   };
 
+  const handleResetDownloadCount = async () => {
+    if (!order) return;
+    if (!confirm('다운로드 횟수를 초기화하시겠습니까? (횟수 0, 최대 20회로 설정됩니다)')) return;
+
+    try {
+      const { error: updateError } = await supabase
+        .from('custom_orders')
+        .update({
+          download_count: 0,
+          max_download_count: 20,
+        })
+        .eq('id', order.id);
+
+      if (updateError) throw updateError;
+
+      setOrder((prev) =>
+        prev
+          ? {
+            ...prev,
+            download_count: 0,
+            max_download_count: 20,
+          }
+          : prev
+      );
+      alert('다운로드 횟수가 초기화되었습니다.');
+    } catch (err: any) {
+      console.error('초기화 실패:', err);
+      alert('초기화 중 오류가 발생했습니다.');
+    }
+  };
+
   if (loading) {
     return (
-      <div className="p-10 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 rounded-full border-b-2 border-blue-600 animate-spin" />
-          <p className="text-sm text-gray-500">주문 정보를 불러오는 중입니다...</p>
-        </div>
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
       </div>
     );
   }
 
   if (error || !order) {
     return (
-      <div className="p-8">
-        <p className="text-sm text-red-500">{error ?? '주문 정보를 찾을 수 없습니다.'}</p>
-        <button
-          type="button"
-          className="mt-4 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold"
-          onClick={onClose}
-        >
+      <div className="flex h-64 flex-col items-center justify-center gap-4 text-red-600">
+        <p>{error ?? '주문 정보를 불러올 수 없습니다.'}</p>
+        <button onClick={onClose} className="text-sm text-gray-500 underline">
           닫기
         </button>
       </div>
     );
   }
 
-  const statusMeta = getStatusMeta(order.status);
-  const downloadUsageText = (() => {
-    const usedCount = order.download_count ?? 0;
-    const limit = order.max_download_count;
-    if (typeof limit === 'number' && limit > 0) {
-      return `다운로드 ${usedCount}/${limit}회 사용`;
-    }
-    return `다운로드 ${usedCount}회 사용 (무제한)`;
-  })();
+  const statusMeta = getStatusMeta(selectedStatus);
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-start justify-between border-b border-gray-200 px-6 py-4">
+    <div className="flex h-full flex-col bg-white">
+      <header className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
         <div>
-          <p className="text-xs text-gray-400">주문번호</p>
-          <h2 className="text-xl font-bold text-gray-900">{order.song_title}</h2>
-          <p className="text-sm text-gray-600">{order.artist}</p>
-          <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600">
-            {statusMeta.label}
-            <span className="text-blue-400">·</span>
-            <span>{statusMeta.description}</span>
-          </div>
+          <h2 className="text-lg font-bold text-gray-900">주문 상세 정보</h2>
+          <p className="text-sm text-gray-500">ID: {order.id}</p>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-gray-400">신청일</p>
-          <p className="text-sm text-gray-700">{formatDateTime(order.created_at)}</p>
-          <p className="mt-1 text-xs text-gray-400">최근 업데이트</p>
-          <p className="text-sm text-gray-700">{formatDateTime(order.updated_at)}</p>
-          <button
-            type="button"
-            className="mt-4 inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-            onClick={onClose}
-          >
-            닫기
-          </button>
-        </div>
+        <button onClick={onClose} className="rounded-md p-2 hover:bg-gray-100">
+          <i className="ri-close-line text-xl" />
+        </button>
       </header>
 
-      <div className="flex flex-1 flex-col overflow-y-auto px-6 py-4 gap-6">
-        <section className="grid gap-4 rounded-xl border border-gray-200 bg-white p-4 md:grid-cols-2">
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">신청자</p>
-              <p className="text-sm text-gray-900">
-                {order.profiles?.name ?? order.profiles?.email ?? '이름 미확인'}
-              </p>
-              <p className="text-xs text-gray-500">{order.profiles?.email}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">요청사항</p>
-              <p className="mt-1 whitespace-pre-wrap rounded-md bg-gray-50 p-3 text-sm text-gray-700">
-                {order.requirements?.trim() || '요청사항이 없습니다.'}
-              </p>
-            </div>
-          </div>
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">참고 링크</p>
-              {order.song_url ? (
-                <a
-                  href={order.song_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-1 inline-flex items-center gap-2 text-sm text-blue-600 hover:underline"
-                >
-                  {order.song_url}
-                  <i className="ri-external-link-line" />
-                </a>
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="grid gap-8 lg:grid-cols-2">
+          {/* Left Column: Order Info & Status */}
+          <div className="space-y-6">
+            <section className="rounded-lg border border-gray-200 p-4">
+              <h3 className="mb-4 font-semibold text-gray-900">기본 정보</h3>
+              <dl className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">신청자</dt>
+                  <dd className="font-medium text-gray-900">
+                    {order.profiles?.name} ({order.profiles?.email})
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">곡 제목</dt>
+                  <dd className="font-medium text-gray-900">{order.song_title}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">아티스트</dt>
+                  <dd className="font-medium text-gray-900">{order.artist}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">신청일시</dt>
+                  <dd className="text-gray-700">{formatDateTime(order.created_at)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">참고 링크</dt>
+                  <dd>
+                    {order.song_url ? (
+                      <a
+                        href={order.song_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        링크 열기
+                      </a>
+                    ) : (
+                      '-'
+                    )}
+                  </dd>
+                </div>
+              </dl>
+              <div className="mt-4">
+                <p className="mb-1 text-xs font-medium text-gray-500">요청사항</p>
+                <div className="rounded bg-gray-50 p-3 text-sm text-gray-700">
+                  {order.requirements || '없음'}
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-lg border border-gray-200 p-4">
+              <h3 className="mb-4 font-semibold text-gray-900">상태 관리</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    진행 상태
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={selectedStatus}
+                      onChange={(e) => setSelectedStatus(e.target.value as StatusOptionValue)}
+                      className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    >
+                      {STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={handleStatusChange}
+                      disabled={selectedStatus === order.status || isSavingStatus}
+                      className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
+                    >
+                      변경
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">{statusMeta.description}</p>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    견적 금액 (원)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={estimatedPrice}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, '');
+                        setEstimatedPrice(Number(val).toLocaleString());
+                      }}
+                      placeholder="0"
+                      className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    />
+                    <button
+                      onClick={handlePriceChange}
+                      disabled={isSavingPrice}
+                      className="rounded-md bg-gray-800 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:bg-gray-400"
+                    >
+                      저장
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-lg border border-gray-200 p-4">
+              <h3 className="mb-4 font-semibold text-gray-900">파일 업로드</h3>
+              {order.completed_pdf_url ? (
+                <div className="mb-4 rounded bg-green-50 p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-green-800">
+                        파일이 등록되어 있습니다
+                      </p>
+                      <a
+                        href={order.completed_pdf_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-green-600 hover:underline"
+                      >
+                        {order.completed_pdf_filename}
+                      </a>
+                    </div>
+                    <div className="text-right text-xs text-gray-500">
+                      <p>다운로드: {order.download_count ?? 0} / {order.max_download_count ?? '무제한'}</p>
+                      <button
+                        onClick={handleResetDownloadCount}
+                        className="mt-1 text-blue-600 underline hover:text-blue-800"
+                      >
+                        횟수 초기화
+                      </button>
+                    </div>
+                  </div>
+                </div>
               ) : (
-                <p className="mt-1 text-sm text-gray-500">등록된 링크가 없습니다.</p>
+                <p className="mb-4 text-sm text-gray-500">
+                  작업이 완료되면 악보 PDF 파일을 업로드해주세요.
+                </p>
               )}
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">견적 금액</p>
-              <div className="mt-1 flex items-center gap-2">
+
+              <form onSubmit={handlePdfUpload} className="space-y-3">
                 <input
-                  type="text"
-                  className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  value={estimatedPrice}
-                  onChange={(event) => setEstimatedPrice(event.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="예: 50000"
-                  inputMode="numeric"
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)}
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-full file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
                 />
                 <button
-                  type="button"
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
-                  onClick={handlePriceSave}
-                  disabled={isSavingPrice}
+                  type="submit"
+                  disabled={!pdfFile || isUploadingPdf}
+                  className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
                 >
-                  {isSavingPrice ? '저장 중...' : '견적 저장'}
+                  {isUploadingPdf ? '업로드 중...' : 'PDF 파일 등록'}
                 </button>
-              </div>
-              <p className="mt-1 text-xs text-gray-500">
-                고객에게 안내할 견적 금액을 숫자만 입력하세요. (단위: 원)
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h3 className="text-base font-semibold text-gray-900">주문 상태 관리</h3>
-              <p className="text-xs text-gray-500">
-                진행 상황에 맞게 상태를 변경하면 고객에게 안내됩니다.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 md:flex-row md:items-center">
-              <select
-                className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                value={selectedStatus}
-                onChange={(event) => setSelectedStatus(event.target.value as StatusOptionValue)}
-              >
-                {STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
-                onClick={handleStatusSave}
-                disabled={isSavingStatus}
-              >
-                {isSavingStatus ? '저장 중...' : '상태 저장'}
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-semibold text-gray-900">완료된 악보 파일</h3>
-                <p className="text-xs text-gray-500">
-                  작업이 완료되면 PDF 파일을 업로드하고 고객에게 다운로드 권한을 부여하세요.
-                </p>
-              </div>
-            </div>
-
-            {order.completed_pdf_url && (
-              <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-                <div className="flex flex-col gap-1 text-sm text-green-800 md:flex-row md:items-center md:justify-between">
-                  <div className="flex items-center gap-2">
-                    <i className="ri-file-pdf-line text-lg" />
-                    <div>
-                      <p className="font-semibold">{order.completed_pdf_filename}</p>
-                      <p className="text-xs text-green-700">
-                        {downloadUsageText} · 만료 {formatDateTime(order.download_expires_at)}
-                      </p>
-                    </div>
-                  </div>
-                  <a
-                    href={order.completed_pdf_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 inline-flex items-center gap-1 rounded-md bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700 md:mt-0"
-                  >
-                    <i className="ri-external-link-line" />
-                    파일 열기
-                  </a>
-                </div>
-              </div>
-            )}
-
-            {(order.status === 'in_progress' || order.status === 'completed') && (
-              <form className="rounded-lg border border-gray-200 bg-gray-50 p-4" onSubmit={handlePdfUpload}>
-                <div className="flex flex-col gap-3">
-                  <label className="text-sm font-semibold text-gray-700">
-                    PDF 파일 업로드 (최대 20MB)
-                  </label>
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] ?? null;
-                      setPdfFile(file);
-                    }}
-                    className="block w-full text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white file:hover:bg-blue-700"
-                  />
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <i className="ri-information-line" />
-                    업로드 후 자동으로 다운로드 횟수가 초기화되고, 만료일은 30일 뒤로 설정됩니다.
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={!pdfFile || isUploadingPdf}
-                    className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
-                  >
-                    {isUploadingPdf ? '업로드 중...' : 'PDF 업로드'}
-                  </button>
-                </div>
               </form>
-            )}
+            </section>
           </div>
-        </section>
 
-        <section className="flex flex-1 flex-col rounded-xl border border-gray-200 bg-white">
-          <header className="border-b border-gray-200 px-4 py-3">
-            <h3 className="text-base font-semibold text-gray-900">대화 내역</h3>
-            <p className="text-xs text-gray-500">관리자와 고객이 주고받은 메시지를 확인하세요.</p>
-          </header>
-
-          <div className="flex-1 overflow-y-auto px-4 py-3">
-            {messages.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-gray-500">
-                아직 대화가 없습니다. 첫 메시지를 남겨보세요.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {messages.map((message) => {
-                  const isAdmin = message.sender_type === 'admin';
-                  return (
-                    <div
-                      key={message.id}
-                      className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}
-                    >
+          {/* Right Column: Messages */}
+          <div className="flex flex-col rounded-lg border border-gray-200 bg-gray-50">
+            <div className="border-b border-gray-200 bg-white px-4 py-3">
+              <h3 className="font-semibold text-gray-900">대화 내역</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4" style={{ minHeight: '400px' }}>
+              {messages.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                  대화 내역이 없습니다.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {messages.map((msg) => {
+                    const isAdmin = msg.sender_type === 'admin';
+                    return (
                       <div
-                        className={`max-w-md rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                          isAdmin
-                            ? 'bg-blue-600 text-white rounded-br-sm'
-                            : 'bg-gray-100 text-gray-800 rounded-bl-sm'
-                        }`}
+                        key={msg.id}
+                        className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}
                       >
-                        <div className="flex items-center gap-2 text-xs opacity-80">
-                          <span>{isAdmin ? '관리자' : '고객'}</span>
-                          <span>{formatDateTime(message.created_at)}</span>
+                        <div
+                          className={`max-w-[80%] rounded-lg px-4 py-2 text-sm shadow-sm ${isAdmin
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white text-gray-800 border border-gray-200'
+                            }`}
+                        >
+                          <p className="whitespace-pre-wrap">{msg.message}</p>
+                          <p
+                            className={`mt-1 text-xs ${isAdmin ? 'text-blue-100' : 'text-gray-400'
+                              }`}
+                          >
+                            {formatDateTime(msg.created_at)}
+                          </p>
                         </div>
-                        <p className="mt-1 whitespace-pre-wrap">{message.message}</p>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="border-t border-gray-200 bg-white p-4">
+              <form onSubmit={handleSendMessage} className="flex gap-2">
+                <input
+                  type="text"
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  placeholder="메시지를 입력하세요..."
+                  className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={!messageInput.trim() || isSendingMessage}
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
+                >
+                  전송
+                </button>
+              </form>
+            </div>
           </div>
-
-          <footer className="border-t border-gray-200 bg-gray-50 px-4 py-3">
-            <form className="flex flex-col gap-2 md:flex-row" onSubmit={handleSendMessage}>
-              <textarea
-                className="min-h-[80px] flex-1 resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                placeholder="관리자 답변을 입력하세요. 고객에게 바로 전달됩니다."
-                value={messageInput}
-                onChange={(event) => setMessageInput(event.target.value)}
-              />
-              <button
-                type="submit"
-                disabled={!messageInput.trim() || isSendingMessage}
-                className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
-              >
-                {isSendingMessage ? '전송 중...' : '답변 전송'}
-              </button>
-            </form>
-          </footer>
-        </section>
+        </div>
       </div>
     </div>
   );

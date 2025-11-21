@@ -4,8 +4,10 @@ import { supabase } from '../../lib/supabase';
 import { startCashCharge } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import type { VirtualAccountInfo } from '../../lib/payments';
-import { formatPrice, convertUSDToKRW, convertKRWToUSD } from '../../lib/priceFormatter';
+import { formatPrice, convertUSDToKRW } from '../../lib/priceFormatter';
 import { isEnglishHost } from '../../i18n/languages';
+
+import PayPalPaymentModal from '../payments/PayPalPaymentModal';
 
 interface MobileCashChargeModalProps {
   isOpen: boolean;
@@ -13,23 +15,23 @@ interface MobileCashChargeModalProps {
   user: User | null;
 }
 
-type PaymentSelection = 'card' | 'bank' | 'paypal';
-
 interface ChargeOption {
   amount: number;
   bonus?: number;
   bonusPercent?: string;
+  label?: string;
+  amountUSD?: number;
+  bonusUSD?: number;
 }
 
-interface PaymentMethodConfig {
-  id: PaymentSelection;
-  nameKey: string;
+interface PaymentMethod {
+  id: 'card' | 'kakaopay' | 'bank' | 'paypal';
+  name: string;
   icon: string;
   color: string;
   disabled?: boolean;
+  badge?: string;
 }
-
-// chargeOptions는 컴포넌트 내부에서 동적으로 생성
 
 export default function MobileCashChargeModal({
   isOpen,
@@ -37,17 +39,21 @@ export default function MobileCashChargeModal({
   user,
 }: MobileCashChargeModalProps) {
   const { t, i18n } = useTranslation();
+  const [userCash, setUserCash] = useState(0);
+  const [cashLoading, setCashLoading] = useState(false);
+
   const formatCurrency = useCallback(
     (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
     [i18n.language],
   );
-  const formatPoints = useCallback(
-    (value: number) => `${value.toLocaleString('en-US')} P`,
-    [],
-  );
   const formatNumber = useCallback(
     (value: number) => new Intl.NumberFormat(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US').format(value),
     [i18n.language],
+  );
+
+  const formatPoints = useCallback(
+    (value: number) => `${value.toLocaleString('en-US')} P`,
+    [],
   );
 
   const isEnglishSite = useMemo(() => {
@@ -55,96 +61,67 @@ export default function MobileCashChargeModal({
     return isEnglishHost(window.location.host);
   }, []);
 
-  // 캐시 표시용 포맷 함수 (영문 사이트는 USD, 한국어 사이트는 KRW)
-  const formatCash = useCallback(
-    (value: number) => {
-      return formatPrice({ 
-        amountKRW: value, 
-        language: i18n.language,
-        host: typeof window !== 'undefined' ? window.location.host : undefined
-      }).formatted;
-    },
-    [i18n.language],
-  );
+  const chargeOptions = useMemo<ChargeOption[]>(() => {
+    if (isEnglishSite) {
+      const roundTo100 = (val: number) => Math.round(val / 100) * 100;
 
-  const paymentMethodConfigs = useMemo<PaymentMethodConfig[]>(() => {
-    // 영문 사이트: PayPal만 표시
+      return [
+        { amount: roundTo100(convertUSDToKRW(3)), bonus: 0, label: '$3', amountUSD: 3, bonusUSD: 0 },
+        { amount: roundTo100(convertUSDToKRW(5)), bonus: roundTo100(convertUSDToKRW(0.5)), label: '$5', amountUSD: 5, bonusUSD: 0.5 },
+        { amount: roundTo100(convertUSDToKRW(10)), bonus: roundTo100(convertUSDToKRW(1)), label: '$10', amountUSD: 10, bonusUSD: 1 },
+        { amount: roundTo100(convertUSDToKRW(30)), bonus: roundTo100(convertUSDToKRW(6)), label: '$30', amountUSD: 30, bonusUSD: 6 },
+        { amount: roundTo100(convertUSDToKRW(50)), bonus: roundTo100(convertUSDToKRW(11)), label: '$50', amountUSD: 50, bonusUSD: 11 },
+        { amount: roundTo100(convertUSDToKRW(100)), bonus: roundTo100(convertUSDToKRW(25)), label: '$100', amountUSD: 100, bonusUSD: 25 },
+      ];
+    }
+    return [
+      { amount: 3000, bonus: 0, label: '3천원' },
+      { amount: 5000, bonus: 500, label: '5천원', bonusPercent: '10%' },
+      { amount: 10000, bonus: 1500, label: '1만원', bonusPercent: '15%' },
+      { amount: 30000, bonus: 6000, label: '3만원', bonusPercent: '20%' },
+      { amount: 50000, bonus: 11000, label: '5만원', bonusPercent: '22%' },
+      { amount: 100000, bonus: 25000, label: '10만원', bonusPercent: '25%' },
+    ];
+  }, [isEnglishSite]);
+
+  const paymentMethods = useMemo<PaymentMethod[]>(() => {
     if (isEnglishSite) {
       return [
         {
           id: 'paypal',
-          nameKey: 'payment.paypal',
+          name: t('payment.paypal'),
           icon: 'ri-paypal-line',
           color: 'text-blue-700',
           disabled: false,
         },
       ];
     }
-
-    // 한국 사이트: 무통장 입금만 표시 (포트원 카드/카카오페이는 심사 진행 중)
     return [
       {
         id: 'bank',
-        nameKey: 'payment.bank',
+        name: t('sidebar.bankTransfer'),
         icon: 'ri-bank-line',
         color: 'text-green-600',
+        disabled: false,
       },
     ];
-  }, [isEnglishSite]);
+  }, [isEnglishSite, t]);
 
-  const chargeOptions = useMemo<ChargeOption[]>(() => {
-    if (isEnglishSite) {
-      // 영문 사이트: 달러 단위
-      return [
-        { amount: convertUSDToKRW(3), bonus: 0, bonusPercent: undefined },
-        { amount: convertUSDToKRW(5), bonus: convertUSDToKRW(0.5), bonusPercent: undefined },
-        { amount: convertUSDToKRW(10), bonus: convertUSDToKRW(1), bonusPercent: undefined },
-        { amount: convertUSDToKRW(30), bonus: convertUSDToKRW(6), bonusPercent: undefined },
-        { amount: convertUSDToKRW(50), bonus: convertUSDToKRW(11), bonusPercent: undefined },
-        { amount: convertUSDToKRW(100), bonus: convertUSDToKRW(25), bonusPercent: undefined },
-      ];
-    }
-    // 한국어 사이트: 원화 단위
-    return [
-      { amount: 3000 },
-      { amount: 5000, bonus: 500, bonusPercent: '10%' },
-      { amount: 10000, bonus: 1500, bonusPercent: '15%' },
-      { amount: 30000, bonus: 6000, bonusPercent: '20%' },
-      { amount: 50000, bonus: 11000, bonusPercent: '22%' },
-      { amount: 100000, bonus: 25000, bonusPercent: '25%' },
-    ];
-  }, [isEnglishSite]);
-
-  const [selectedAmount, setSelectedAmount] = useState<number>(chargeOptions[2].amount);
-  const [selectedPayment, setSelectedPayment] = useState<PaymentSelection>(isEnglishSite ? 'paypal' : 'bank');
-  const [agreementChecked, setAgreementChecked] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [userCash, setUserCash] = useState(0);
+  const [chargeAmount, setChargeAmount] = useState<number>(chargeOptions[2].amount);
+  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank' | 'paypal'>(isEnglishSite ? 'paypal' : 'bank');
+  const [chargeAgreementChecked, setChargeAgreementChecked] = useState(false);
+  const [chargeProcessing, setChargeProcessing] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
   const [showDepositorInput, setShowDepositorInput] = useState(false);
   const [depositorName, setDepositorName] = useState('');
-
-  const selectedOption = useMemo(
-    () => chargeOptions.find((option) => option.amount === selectedAmount) ?? chargeOptions[0],
-    [selectedAmount, chargeOptions],
-  );
-
-  const resetState = useCallback(() => {
-    setSelectedAmount(chargeOptions[2].amount);
-    setSelectedPayment(isEnglishSite ? 'paypal' : 'bank');
-    setAgreementChecked(false);
-    setIsProcessing(false);
-    setBankTransferInfo(null);
-    setShowDepositorInput(false);
-    setDepositorName('');
-  }, [chargeOptions, isEnglishSite]);
+  const [showPayPalModal, setShowPayPalModal] = useState(false);
 
   const loadUserCash = useCallback(async () => {
     if (!user) {
       setUserCash(0);
       return;
     }
-
+    setCashLoading(true);
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -152,83 +129,73 @@ export default function MobileCashChargeModal({
         .eq('id', user.id)
         .single();
 
-      if (error) {
-        console.error('모바일 캐쉬 조회 오류:', error);
-        setUserCash(0);
-        return;
-      }
-
+      if (error) throw error;
       setUserCash(data?.credits ?? 0);
     } catch (error) {
       console.error('모바일 캐쉬 로드 오류:', error);
-      setUserCash(0);
+    } finally {
+      setCashLoading(false);
     }
   }, [user]);
 
   useEffect(() => {
     if (isOpen) {
       loadUserCash();
-      setAgreementChecked(false);
-      setIsProcessing(false);
-    } else {
-      resetState();
+      setChargeAgreementChecked(false);
+      setChargeProcessing(false);
+      setBankTransferInfo(null);
+      setShowDepositorInput(false);
+      setDepositorName('');
+      setChargeAmount(chargeOptions[2].amount);
+      setSelectedPayment(isEnglishSite ? 'paypal' : 'bank');
+      setShowPayPalModal(false);
     }
-  }, [isOpen, loadUserCash, resetState]);
+  }, [isOpen, loadUserCash, chargeOptions, isEnglishSite]);
 
-  if (!isOpen) {
-    return null;
-  }
-
-  const handleClose = () => {
-    resetState();
-    onClose();
-  };
-
-  const handleConfirm = async () => {
+  const handleChargeConfirm = async () => {
     if (!user) {
       alert(t('auth.loginRequired'));
-      handleClose();
       return;
     }
 
-    if (!agreementChecked) {
+    if (!chargeAgreementChecked) {
       alert(t('mobile.cash.agreementRequired'));
       return;
     }
 
-    if (selectedPayment === 'paypal') {
-      // PayPal 결제 처리 (PortOne) - 영문 사이트 전용
-      setIsProcessing(true);
-      try {
-        await startCashCharge({
-          userId: user.id,
-          amount: selectedOption.amount,
-          bonusAmount: selectedOption.bonus ?? 0,
-          paymentMethod: 'paypal',
-          description: `${t('mobile.cash.title')} ${formatCurrency(selectedOption.amount)}`,
-          buyerName: user.email ?? null,
-          buyerEmail: user.email ?? null,
-          // returnUrl은 startCashCharge에서 자동으로 Edge Function URL 사용
-        });
+    const selectedOption = chargeOptions.find((option) => option.amount === chargeAmount);
+    if (!selectedOption) {
+      alert('선택한 충전 금액을 확인할 수 없습니다.');
+      return;
+    }
 
-        // PayPal은 리다이렉트되므로 알림 불필요
-        // 포트원이 자동으로 결제 창을 열고 처리
-      } catch (error) {
-        console.error('모바일 캐쉬 충전 오류:', error);
-        alert(error instanceof Error ? error.message : t('mobile.cash.error'));
-        setIsProcessing(false);
-      }
+    if (selectedPayment === 'paypal') {
+      setShowPayPalModal(true);
       return;
     }
 
     if (selectedPayment === 'bank') {
-      // 무통장 입금 - 한국 사이트 전용
       setShowDepositorInput(true);
-      return;
+      setBankTransferInfo(null);
     }
+  };
 
-    // legacy: 카드 결제는 현재 비활성화 (포트원 심사 진행 중)
-    // if (selectedPayment === 'card') { ... }
+  const handlePayPalPayment = async (elementId: string) => {
+    if (!user) return;
+    const selectedOption = chargeOptions.find((option) => option.amount === chargeAmount);
+    if (!selectedOption) return;
+
+    const description = `${selectedOption.label || formatCurrency(selectedOption.amount)}`;
+    await startCashCharge({
+      userId: user.id,
+      amount: selectedOption.amount,
+      bonusAmount: selectedOption.bonus ?? 0,
+      paymentMethod: 'paypal',
+      description,
+      buyerName: user.email ?? null,
+      buyerEmail: user.email ?? null,
+      elementId,
+    });
   };
 
   const handleBankTransferConfirm = async () => {
@@ -239,15 +206,19 @@ export default function MobileCashChargeModal({
       return;
     }
 
-    setIsProcessing(true);
+    const selectedOption = chargeOptions.find((option) => option.amount === chargeAmount);
+    if (!selectedOption) return;
+
+    setChargeProcessing(true);
 
     try {
+      const description = `${selectedOption.label || formatCurrency(selectedOption.amount)}`;
       const result = await startCashCharge({
         userId: user.id,
         amount: selectedOption.amount,
         bonusAmount: selectedOption.bonus ?? 0,
         paymentMethod: 'bank_transfer',
-        description: `${t('mobile.cash.title')} ${formatCurrency(selectedOption.amount)}`,
+        description,
         buyerName: user.email ?? null,
         buyerEmail: user.email ?? null,
         depositorName: depositorName.trim(),
@@ -259,346 +230,359 @@ export default function MobileCashChargeModal({
       await loadUserCash();
       alert(t('mobile.cash.bankTransferRequested'));
     } catch (error) {
-      console.error('모바일 캐쉬 충전 오류:', error);
+      console.error('캐쉬 충전 오류:', error);
       alert(error instanceof Error ? error.message : t('mobile.cash.error'));
     } finally {
-      setIsProcessing(false);
+      setChargeProcessing(false);
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-[70] flex items-stretch justify-end bg-black/40 md:items-center md:justify-center">
-      <div
-        className="absolute inset-0"
-        aria-hidden="true"
-        onClick={handleClose}
-      />
+    <>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
+        <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          {/* 헤더 */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-200">
+            <h2 className="text-lg font-bold text-gray-900">{t('sidebar.cashChargeTitle')}</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+              <i className="ri-close-line text-xl"></i>
+            </button>
+          </div>
 
-      <div className="relative ml-auto flex h-full w-full max-w-md flex-col bg-white shadow-2xl md:ml-0 md:h-auto md:max-h-[90vh] md:rounded-2xl md:shadow-2xl">
-        <header className="flex items-center justify-between border-b border-gray-100 px-4 py-4">
-          <p className="text-base font-bold text-gray-900">{t('mobile.cash.title')}</p>
-          <button
-            type="button"
-            onClick={handleClose}
-            aria-label={t('mobile.cash.close')}
-            className="flex h-10 w-10 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100"
-          >
-            <i className="ri-close-line text-xl" />
-          </button>
-        </header>
+          <div className="p-4">
+            {/* 현재 포인트 */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6 flex items-center">
+              <i className="ri-coins-line text-yellow-600 text-lg mr-2"></i>
+              <span className="text-sm text-gray-700">{t('sidebar.currentCash')}</span>
+              {cashLoading ? (
+                <span className="ml-auto font-bold text-yellow-400 animate-pulse">로딩 중...</span>
+              ) : (
+                <span className="ml-auto font-bold text-yellow-600">{formatNumber(userCash)} P</span>
+              )}
+            </div>
 
-        <main className="flex-1 overflow-y-auto px-4 py-5">
-          {user ? (
-            <>
-              <div className="flex items-center justify-between rounded-xl bg-blue-50 px-4 py-3">
-                <div>
-                  <p className="text-xs text-blue-700">{t('mobile.cash.currentBalance')}</p>
-                  <p className="text-2xl font-extrabold text-blue-900">
-                    {formatCash(userCash)}
+            {showDepositorInput ? (
+              <div className="space-y-5">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-700">{t('sidebar.amountToDeposit')}</span>
+                    <span className="text-lg font-bold text-blue-600">
+                      {formatCurrency(chargeAmount)}
+                    </span>
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded-lg px-4 py-3 space-y-2 border border-gray-200">
+                  <div className="flex items-center justify-between text-xs text-gray-600">
+                    <span>{t('sidebar.bank')}</span>
+                    <span className="font-semibold text-gray-900">카카오뱅크</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-600">
+                    <span>{t('sidebar.accountNumber')}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-900">3333-15-0302437</span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText('3333-15-0302437');
+                          alert(t('sidebar.accountNumberCopied') || '계좌번호가 복사되었습니다.');
+                        }}
+                        className="text-blue-600 hover:text-blue-800"
+                        title={t('sidebar.copyAccountNumber') || '계좌번호 복사'}
+                      >
+                        <i className="ri-file-copy-line"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-600">
+                    <span>{t('sidebar.accountHolder')}</span>
+                    <span className="font-semibold text-gray-900">강만수</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-900">
+                    {t('sidebar.depositorName')} <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={depositorName}
+                    onChange={(event) => setDepositorName(event.target.value)}
+                    placeholder={t('sidebar.depositorNamePlaceholder')}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-500">
+                    {t('sidebar.depositorNote')}
                   </p>
                 </div>
-                <i className="ri-wallet-3-line text-3xl text-blue-500" />
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 text-xs text-gray-700 space-y-1">
+                  <p>{t('sidebar.chargeNotice1')}</p>
+                  <p>{t('sidebar.chargeNotice2')}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setShowDepositorInput(false);
+                      setDepositorName('');
+                    }}
+                    className="flex-1 border border-gray-300 text-gray-700 py-2.5 px-4 rounded-lg hover:bg-gray-50 font-medium text-sm transition-colors"
+                  >
+                    {t('sidebar.previous')}
+                  </button>
+                  <button
+                    onClick={handleBankTransferConfirm}
+                    disabled={chargeProcessing}
+                    className="flex-1 bg-blue-600 text-white py-2.5 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-70 font-medium text-sm transition-colors"
+                  >
+                    {chargeProcessing ? t('sidebar.processing') : t('sidebar.confirm')}
+                  </button>
+                </div>
               </div>
-
-              {bankTransferInfo ? (
-                <section className="mt-5 space-y-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-4">
-                  <h2 className="text-sm font-semibold text-blue-900">{t('mobile.cash.bankGuideTitle')}</h2>
-                  <ul className="space-y-2 text-sm text-blue-800">
+            ) : bankTransferInfo ? (
+              <div className="space-y-5">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-blue-800 mb-3">{t('sidebar.bankTransferInfo')}</h3>
+                  <ul className="space-y-2 text-sm text-gray-700">
                     <li>
-                      <span className="font-medium text-blue-900">{t('mobile.cash.bank')}</span>{' '}
-                      {bankTransferInfo.bankName}
+                      <span className="font-medium text-gray-900">{t('sidebar.bank')}</span> {bankTransferInfo.bankName}
                     </li>
                     <li>
-                      <span className="font-medium text-blue-900">{t('mobile.cash.accountNumber')}</span>{' '}
+                      <span className="font-medium text-gray-900">{t('sidebar.accountNumber')}</span>{' '}
                       {bankTransferInfo.accountNumber}
                     </li>
                     <li>
-                      <span className="font-medium text-blue-900">{t('mobile.cash.accountHolder')}</span>{' '}
-                      {bankTransferInfo.depositor}
+                      <span className="font-medium text-gray-900">{t('sidebar.accountHolder')}</span> {bankTransferInfo.depositor}
                     </li>
                     <li>
-                      <span className="font-medium text-blue-900">{t('mobile.cash.amount')}</span>{' '}
-                      {formatCurrency(bankTransferInfo.amount ?? selectedOption.amount)}
+                      <span className="font-medium text-gray-900">{t('sidebar.depositAmount')}</span>{' '}
+                      {formatCurrency(bankTransferInfo.amount ?? chargeAmount)}
                     </li>
                     {bankTransferInfo.expectedDepositor ? (
                       <li>
-                        <span className="font-medium text-blue-900">{t('mobile.cash.depositor')}</span>{' '}
-                        <span className="font-semibold text-blue-700">
+                        <span className="font-medium text-gray-900">{t('sidebar.depositorName')}</span>{' '}
+                        <span className="text-blue-600 font-semibold">
                           {bankTransferInfo.expectedDepositor}
                         </span>
                       </li>
                     ) : null}
                   </ul>
                   {bankTransferInfo.message ? (
-                    <p className="rounded-lg bg-white/60 px-3 py-2 text-xs text-blue-800">
-                      {bankTransferInfo.message}
-                    </p>
+                    <p className="mt-4 text-xs text-gray-600">{bankTransferInfo.message}</p>
                   ) : null}
-                  <button
-                    type="button"
-                    onClick={handleClose}
-                    className="w-full rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-                  >
-                    {t('button.confirm')}
-                  </button>
-                </section>
-              ) : showDepositorInput ? (
-                <section className="mt-5 space-y-4">
-                  <h2 className="text-sm font-semibold text-gray-900">{t('mobile.cash.bankTransferInfo')}</h2>
+                </div>
 
-                  <div className="bg-blue-50 rounded-lg px-4 py-3 border border-blue-200">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">{t('mobile.cash.transferAmount')}</span>
-                      <span className="text-lg font-bold text-blue-600">
-                        {formatCurrency(selectedOption.amount)}
-                      </span>
-                    </div>
-                  </div>
+                <button
+                  onClick={onClose}
+                  className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 font-bold text-sm transition-colors"
+                >
+                  {t('sidebar.confirm')}
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* 포인트 패키지 선택 */}
+                <div className="mb-6">
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">{t('sidebar.pointPackage')}</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {chargeOptions.map((option, index) => {
+                      const totalPoints = option.amount + (option.bonus ?? 0);
+                      const bonusPercent = option.bonus && option.amount > 0
+                        ? Math.round((option.bonus / option.amount) * 100)
+                        : 0;
 
-                  <div className="bg-gray-50 rounded-lg px-4 py-3 space-y-2">
-                    <h3 className="text-xs font-semibold text-gray-900 mb-2">{t('mobile.cash.bankAccountInfo')}</h3>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-600">{t('mobile.cash.bank')}</span>
-                      <span className="text-xs font-medium text-gray-900">카카오뱅크</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-600">{t('mobile.cash.accountNumber')}</span>
-                      <span className="text-xs font-medium text-gray-900">3333-15-0302437</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-600">{t('mobile.cash.accountHolder')}</span>
-                      <span className="text-xs font-medium text-gray-900">강만수</span>
-                    </div>
-                  </div>
+                      if (isEnglishSite && 'amountUSD' in option) {
+                        const paymentAmount = `$${option.amountUSD}`;
+                        const formattedTotalPoints = formatPoints(totalPoints);
+                        const formattedBonusPoints = option.bonus ? formatPoints(option.bonus) : '0 P';
 
-                  <div className="space-y-2">
-                    <label htmlFor="mobile-depositor-name" className="block text-sm font-semibold text-gray-900">
-                      {t('mobile.cash.depositor')} <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      id="mobile-depositor-name"
-                      type="text"
-                      value={depositorName}
-                      onChange={(e) => setDepositorName(e.target.value)}
-                      placeholder={t('mobile.cash.depositorPlaceholder')}
-                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <p className="text-xs text-gray-500">{t('mobile.cash.depositorNote')}</p>
-                  </div>
-
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
-                    <div className="flex gap-2">
-                      <i className="ri-information-line text-yellow-600 text-base flex-shrink-0 mt-0.5"></i>
-                      <div className="text-xs text-gray-700 space-y-1">
-                        <p className="font-semibold text-gray-900">{t('mobile.cash.noticeTitle')}</p>
-                        <p>{t('mobile.cash.notice1')}</p>
-                        <p>{t('mobile.cash.notice2')}</p>
-                        <p>{t('mobile.cash.notice3')}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowDepositorInput(false)}
-                      className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                    >
-                      {t('button.previous')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleBankTransferConfirm}
-                      disabled={isProcessing}
-                      className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-70"
-                    >
-                      {isProcessing ? t('mobile.cash.processing') : t('button.confirm')}
-                    </button>
-                  </div>
-                </section>
-              ) : (
-                <>
-                  <section className="mt-6">
-                    <h2 className="text-sm font-semibold text-gray-900">{t('mobile.cash.pointPackage')}</h2>
-                    <div className="mt-3 grid grid-cols-2 gap-3">
-                      {chargeOptions.map((option) => {
-                        const isSelected = selectedAmount === option.amount;
-                        const totalPoints = option.amount + (option.bonus ?? 0);
-                        const bonusPercent = option.bonus && option.amount > 0
-                          ? Math.round((option.bonus / option.amount) * 100)
-                          : 0;
-                        
-                        // 한국 사이트와 영문 사이트 분기 처리
-                        if (isEnglishSite) {
-                          // 영문 사이트: USD 기반 UI 유지
-                          const paymentAmount = `$${convertKRWToUSD(option.amount).toFixed(2)}`;
-                          return (
-                            <button
-                              key={option.amount}
-                              type="button"
-                              onClick={() => setSelectedAmount(option.amount)}
-                              className={`rounded-xl border px-4 py-3 text-left transition-colors ${
-                                isSelected
-                                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                  : 'border-gray-200 bg-white text-gray-700 hover:border-blue-200'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between mb-1">
-                                <p className="text-base font-bold text-gray-900">
-                                  {t('mobile.cash.totalPoints', { amount: formatPoints(totalPoints) })}
-                                </p>
-                                <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center flex-shrink-0">
-                                  {isSelected && (
-                                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                  )}
-                                </div>
-                              </div>
-                              {option.bonus && option.bonus > 0 ? (
-                                <p className="text-xs text-gray-600 mt-1">
-                                  {t('mobile.cash.payAndBonus', {
-                                    payment: paymentAmount,
-                                    bonus: formatPoints(option.bonus),
-                                    percent: `${bonusPercent}%`
-                                  })}
-                                </p>
-                              ) : (
-                                <p className="text-xs text-gray-600 mt-1">
-                                  {paymentAmount} payment
-                                </p>
-                              )}
-                            </button>
-                          );
-                        } else {
-                          // 한국 사이트: KRW 기반 UI
-                          const amountKRW = formatNumber(option.amount);
-                          const bonusPoints = option.bonus ? formatPoints(option.bonus) : '0 P';
-                          
-                          return (
-                            <button
-                              key={option.amount}
-                              type="button"
-                              onClick={() => setSelectedAmount(option.amount)}
-                              className={`rounded-xl border px-4 py-3 text-left transition-colors ${
-                                isSelected
-                                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                  : 'border-gray-200 bg-white text-gray-700 hover:border-blue-200'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between mb-1">
-                                <p className="text-base font-bold text-gray-900">
-                                  총 {formatPoints(totalPoints)}
-                                </p>
-                                <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center flex-shrink-0">
-                                  {isSelected && (
-                                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                  )}
-                                </div>
-                              </div>
-                              {option.bonus && option.bonus > 0 ? (
-                                <p className="text-xs text-gray-600 mt-1">
-                                  {amountKRW}원 결제 · 보너스 +{bonusPoints} ({bonusPercent}%)
-                                </p>
-                              ) : (
-                                <p className="text-xs text-gray-600 mt-1">
-                                  {amountKRW}원 결제
-                                </p>
-                              )}
-                            </button>
-                          );
-                        }
-                      })}
-                    </div>
-                  </section>
-
-                  <section className="mt-6">
-                    <h2 className="text-sm font-semibold text-gray-900">{t('payment.method')}</h2>
-                    <div className="mt-3 grid grid-cols-2 gap-3">
-                      {paymentMethodConfigs.map((method) => {
-                        const isSelected = method.id === selectedPayment;
-                        const isDisabled = method.disabled;
-                        const label = t(method.nameKey);
                         return (
                           <button
-                            key={method.id}
-                            type="button"
-                            onClick={() => {
-                              if (isDisabled) {
-                                alert(t('mobile.cash.paymentUnavailable'));
-                                return;
-                              }
-                              setSelectedPayment(method.id);
-                            }}
-                            disabled={isDisabled}
-                            className={`rounded-xl border px-4 py-3 text-left transition-colors ${
-                              isSelected
-                                ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                : isDisabled
-                                ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
-                                : 'border-gray-200 bg-white text-gray-700 hover:border-blue-200'
-                            }`}
+                            key={index}
+                            onClick={() => setChargeAmount(option.amount)}
+                            className={`relative p-4 border rounded-xl text-left transition-all duration-200 ${chargeAmount === option.amount
+                              ? 'border-blue-500 bg-blue-50 shadow-md ring-1 ring-blue-500'
+                              : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                              }`}
                           >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-lg font-bold text-gray-900">
+                                {t('sidebar.totalPoints', { amount: formattedTotalPoints })}
+                              </span>
+                              <div className={`w-5 h-5 border-2 rounded-full flex items-center justify-center transition-colors ${chargeAmount === option.amount ? 'border-blue-500' : 'border-gray-300'
+                                }`}>
+                                {chargeAmount === option.amount && (
+                                  <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div>
+                                )}
+                              </div>
+                            </div>
+
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <i className={`${method.icon} ${isDisabled ? 'text-gray-400' : method.color} text-lg`} />
-                                <p className="text-sm font-semibold">{label}</p>
-                              </div>
-                              <div className="h-4 w-4 rounded-full border-2 border-current flex items-center justify-center">
-                                {isSelected ? (
-                                  <span className="h-2 w-2 rounded-full bg-current" />
-                                ) : null}
-                              </div>
+                              <span className="text-sm text-gray-600 font-medium">
+                                {t('sidebar.payAndBonus', { payment: paymentAmount })}
+                              </span>
+
+                              {option.bonus && option.bonus > 0 && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r from-purple-100 to-blue-100 text-blue-700 border border-blue-100">
+                                  <i className="ri-gift-2-fill mr-1 text-purple-500"></i>
+                                  +{formattedBonusPoints.replace(' P', '')} P ({bonusPercent}%)
+                                </span>
+                              )}
                             </div>
                           </button>
                         );
-                      })}
-                    </div>
-                  </section>
+                      } else {
+                        const amountKRW = formatNumber(option.amount);
+                        const bonusPoints = option.bonus ? formatPoints(option.bonus) : '0 P';
 
-                  <section className="mt-6">
-                    <label className="flex items-start gap-3 text-xs text-gray-600">
-                      <input
-                        type="checkbox"
-                        checked={agreementChecked}
-                        onChange={(event) => setAgreementChecked(event.target.checked)}
-                        className="mt-[2px] h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span>{t('mobile.cash.agreementText')}</span>
-                    </label>
-                  </section>
-                </>
-              )}
-            </>
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center text-center">
-              <i className="ri-user-3-line text-5xl text-gray-300" />
-              <p className="mt-4 text-base font-semibold text-gray-700">
-                {t('auth.loginRequired')}
-              </p>
-              <p className="mt-2 text-sm text-gray-500">
-                {t('mobile.cash.loginDescription')}
-              </p>
-            </div>
-          )}
-        </main>
+                        return (
+                          <button
+                            key={index}
+                            onClick={() => setChargeAmount(option.amount)}
+                            className={`relative p-4 border rounded-xl text-left transition-all duration-200 ${chargeAmount === option.amount
+                              ? 'border-blue-500 bg-blue-50 shadow-md ring-1 ring-blue-500'
+                              : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                              }`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-lg font-bold text-gray-900">
+                                {t('sidebar.totalPoints', { amount: formatPoints(totalPoints) })}
+                              </span>
+                              <div className={`w-5 h-5 border-2 rounded-full flex items-center justify-center transition-colors ${chargeAmount === option.amount ? 'border-blue-500' : 'border-gray-300'
+                                }`}>
+                                {chargeAmount === option.amount && (
+                                  <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div>
+                                )}
+                              </div>
+                            </div>
 
-        {user && !bankTransferInfo && !showDepositorInput ? (
-          <footer className="border-t border-gray-100 px-4 py-4">
-            <button
-              type="button"
-              onClick={handleConfirm}
-              disabled={isProcessing}
-              className={`w-full rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 py-3 text-sm font-semibold text-white transition-all ${
-                isProcessing
-                  ? 'opacity-70'
-                  : 'hover:from-blue-700 hover:to-purple-700 active:scale-[0.99]'
-              }`}
-            >
-            {isProcessing ? t('mobile.cash.processing') : t('button.next')}
-            </button>
-          </footer>
-        ) : null}
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-gray-600 font-medium">
+                                {t('sidebar.payAndBonus', { payment: amountKRW })}
+                              </span>
+
+                              {option.bonus && option.bonus > 0 && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r from-purple-100 to-blue-100 text-blue-700 border border-blue-100">
+                                  <i className="ri-gift-2-fill mr-1 text-purple-500"></i>
+                                  +{bonusPoints.replace(' P', '')} P ({bonusPercent}%)
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      }
+                    })}
+                  </div>
+                </div>
+
+                {/* 결제방법 */}
+                <div className="mb-6">
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">
+                    {isEnglishSite ? t('sidebar.paymentMethod') : t('sidebar.paymentMethodLabel')}
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {paymentMethods.map((method) => {
+                      const isSelected = selectedPayment === method.id;
+                      const isDisabled = method.disabled;
+                      return (
+                        <button
+                          key={method.id}
+                          type="button"
+                          onClick={() => {
+                            if (isDisabled) {
+                              alert(t('mobile.cash.paymentUnavailable'));
+                              return;
+                            }
+                            setSelectedPayment(method.id);
+                          }}
+                          disabled={isDisabled}
+                          className={`p-3 border rounded-lg text-left transition-colors ${isSelected
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                            } ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <i className={`${method.icon} ${method.color} text-lg mr-2`}></i>
+                              <span className="text-sm font-medium">
+                                {method.id === 'card'
+                                  ? t('sidebar.creditCard')
+                                  : method.id === 'kakaopay'
+                                    ? t('sidebar.kakaoPay')
+                                    : method.id === 'paypal'
+                                      ? t('payment.paypal')
+                                      : t('sidebar.bankTransfer')}
+                              </span>
+                            </div>
+                            <div className="w-4 h-4 border-2 rounded-full flex items-center justify-center">
+                              {isSelected && <div className="w-2 h-2 bg-blue-500 rounded-full"></div>}
+                            </div>
+                          </div>
+                          {method.badge ? (
+                            <div className="mt-1">
+                              <span className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded">
+                                {t('sidebar.preparing')}
+                              </span>
+                            </div>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 약관 동의 */}
+                <div className="mb-6">
+                  <label className="flex items-start cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={chargeAgreementChecked}
+                      onChange={(event) => setChargeAgreementChecked(event.target.checked)}
+                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                    />
+                    <span className="ml-2 text-xs text-gray-600 leading-relaxed">
+                      {t('sidebar.agreement')}
+                      <button type="button" className="text-blue-600 hover:text-blue-800 ml-1">
+                        <i className="ri-arrow-down-s-line"></i>
+                      </button>
+                    </span>
+                  </label>
+                </div>
+
+                {/* 충전하기 버튼 */}
+                <button
+                  onClick={handleChargeConfirm}
+                  disabled={chargeProcessing}
+                  className={`w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-lg font-bold text-sm transition-colors ${chargeProcessing ? 'opacity-70 cursor-not-allowed' : 'hover:from-blue-700 hover:to-purple-700'
+                    }`}
+                >
+                  {chargeProcessing ? t('sidebar.processing') : t('sidebar.charge')}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       </div>
-    </div>
+
+      <PayPalPaymentModal
+        open={showPayPalModal}
+        amount={chargeAmount}
+        orderTitle={chargeOptions.find(o => o.amount === chargeAmount)?.label || 'Cash Charge'}
+        onClose={() => setShowPayPalModal(false)}
+        onSuccess={(response) => {
+          console.log('PayPal payment success:', response);
+          // 성공 시 처리 (예: 완료 메시지, 새로고침 등)
+          // 실제 처리는 리다이렉트 페이지에서 이루어지지만, SPB는 리다이렉트 없이도 콜백이 올 수 있음
+          // 여기서는 모달 닫고 완료 알림
+          setShowPayPalModal(false);
+          alert(t('mobile.cash.chargeComplete') || 'Payment completed successfully.');
+          loadUserCash();
+        }}
+        onError={(error) => {
+          console.error('PayPal payment error:', error);
+          // 에러 처리는 모달 내부에서 표시되거나 여기서 추가 처리
+        }}
+        initiatePayment={handlePayPalPayment}
+      />
+    </>
   );
 }
 

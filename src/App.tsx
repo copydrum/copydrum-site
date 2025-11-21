@@ -1,5 +1,4 @@
-
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, useLocation } from 'react-router-dom';
 import { AppRoutes } from './router';
 import { useEffect, Suspense, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
@@ -15,6 +14,71 @@ import HreflangTags from './components/common/HreflangTags';
 import MaintenanceNotice from './components/common/MaintenanceNotice';
 
 console.log('VITE_MAINTENANCE_MODE =', import.meta.env.VITE_MAINTENANCE_MODE);
+
+interface AppInnerProps {
+  user: User | null;
+  isMobileMenuOpen: boolean;
+  setIsMobileMenuOpen: (v: boolean) => void;
+  isMobileSearchOpen: boolean;
+  setIsMobileSearchOpen: (v: boolean) => void;
+  isCashModalOpen: boolean;
+  setIsCashModalOpen: (v: boolean) => void;
+}
+
+function AppInner({
+  user,
+  isMobileMenuOpen,
+  setIsMobileMenuOpen,
+  isMobileSearchOpen,
+  setIsMobileSearchOpen,
+  isCashModalOpen,
+  setIsCashModalOpen,
+}: AppInnerProps) {
+  const location = useLocation();
+  const isAdminPage = location.pathname.startsWith('/admin');
+
+  return (
+    <Suspense fallback={<div>로딩 중...</div>}>
+      <RouteErrorBoundary>
+        {/* SEO: hreflang 태그 */}
+        <HreflangTags />
+
+        {!isAdminPage && (
+          <MobileHeader
+            user={user}
+            onMenuToggle={() => setIsMobileMenuOpen(true)}
+            onSearchToggle={() => setIsMobileSearchOpen(true)}
+          />
+        )}
+        <MobileMenuSidebar
+          user={user ?? null}
+          isOpen={isMobileMenuOpen}
+          onClose={() => setIsMobileMenuOpen(false)}
+        />
+        <MobileSearchOverlay
+          isOpen={isMobileSearchOpen}
+          onClose={() => setIsMobileSearchOpen(false)}
+        />
+        <MobileCashChargeModal
+          isOpen={isCashModalOpen}
+          onClose={() => setIsCashModalOpen(false)}
+          user={user ?? null}
+        />
+        <div
+          className={`min-h-screen bg-white pb-[80px] md:pb-0 ${isAdminPage ? '' : 'pt-[112px]'
+            } md:pt-0`}
+        >
+          <AppRoutes />
+        </div>
+        <MobileBottomNav
+          user={user ?? null}
+          onSearchToggle={() => setIsMobileSearchOpen(true)}
+          onCashChargeToggle={() => setIsCashModalOpen(true)}
+        />
+      </RouteErrorBoundary>
+    </Suspense>
+  );
+}
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -34,9 +98,14 @@ function App() {
 
     // 비밀번호 재설정 관련 hash fragment가 있고, 아직 reset-password 페이지가 아닌 경우 리디렉션
     const hasRecoveryToken = hash.includes('access_token') && hash.includes('type=recovery');
-    const hasRecoveryError = hash.includes('error') && (hash.includes('otp_expired') || hash.includes('access_denied'));
+    const hasRecoveryError =
+      hash.includes('error') && (hash.includes('otp_expired') || hash.includes('access_denied'));
 
-    if ((hasRecoveryToken || hasRecoveryError) && !pathname.includes('/auth/reset-password') && !hasConfirmationUrl) {
+    if (
+      (hasRecoveryToken || hasRecoveryError) &&
+      !pathname.includes('/auth/reset-password') &&
+      !hasConfirmationUrl
+    ) {
       // 비밀번호 재설정 토큰 또는 에러가 있으면 재설정 페이지로 리다이렉트
       // search params는 유지하지 않음 (confirmation_url 제거)
       window.location.replace('/auth/reset-password' + hash);
@@ -95,40 +164,15 @@ function App() {
 
   return (
     <BrowserRouter basename={__BASE_PATH__}>
-      <Suspense fallback={<div>로딩 중...</div>}>
-        <RouteErrorBoundary>
-          {/* SEO: hreflang 태그 */}
-          <HreflangTags />
-
-          <MobileHeader
-            user={user}
-            onMenuToggle={() => setIsMobileMenuOpen(true)}
-            onSearchToggle={() => setIsMobileSearchOpen(true)}
-          />
-          <MobileMenuSidebar
-            user={user ?? null}
-            isOpen={isMobileMenuOpen}
-            onClose={() => setIsMobileMenuOpen(false)}
-          />
-          <MobileSearchOverlay
-            isOpen={isMobileSearchOpen}
-            onClose={() => setIsMobileSearchOpen(false)}
-          />
-          <MobileCashChargeModal
-            isOpen={isCashModalOpen}
-            onClose={() => setIsCashModalOpen(false)}
-            user={user ?? null}
-          />
-          <div className="min-h-screen bg-white pb-[80px] md:pb-0 pt-[112px] md:pt-0">
-            <AppRoutes />
-          </div>
-          <MobileBottomNav
-            user={user ?? null}
-            onSearchToggle={() => setIsMobileSearchOpen(true)}
-            onCashChargeToggle={() => setIsCashModalOpen(true)}
-          />
-        </RouteErrorBoundary>
-      </Suspense>
+      <AppInner
+        user={user}
+        isMobileMenuOpen={isMobileMenuOpen}
+        setIsMobileMenuOpen={setIsMobileMenuOpen}
+        isMobileSearchOpen={isMobileSearchOpen}
+        setIsMobileSearchOpen={setIsMobileSearchOpen}
+        isCashModalOpen={isCashModalOpen}
+        setIsCashModalOpen={setIsCashModalOpen}
+      />
     </BrowserRouter>
   );
 }

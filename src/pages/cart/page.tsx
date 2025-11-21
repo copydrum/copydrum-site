@@ -12,6 +12,7 @@ import { openCashChargeModal } from '../../lib/cashChargeModal';
 import { useTranslation } from 'react-i18next';
 import { formatPrice as formatPriceWithCurrency } from '../../lib/priceFormatter';
 import { calculatePointPrice } from '../../lib/pointPrice';
+import PayPalPaymentModal from '../../components/payments/PayPalPaymentModal';
 
 type PendingCartPurchase = {
   targetItemIds: string[];
@@ -34,6 +35,7 @@ export default function CartPage() {
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [showBankTransferModal, setShowBankTransferModal] = useState(false);
+  const [showPayPalModal, setShowPayPalModal] = useState(false);
   const navigate = useNavigate();
   const { i18n, t } = useTranslation();
   const formatPriceValue = useCallback(
@@ -69,8 +71,8 @@ export default function CartPage() {
   };
 
   const handleSelectItem = (itemId: string) => {
-    setSelectedItems(prev => 
-      prev.includes(itemId) 
+    setSelectedItems(prev =>
+      prev.includes(itemId)
         ? prev.filter(id => id !== itemId)
         : [...prev, itemId]
     );
@@ -239,6 +241,41 @@ export default function CartPage() {
     }
   };
 
+  const handlePayPalPayment = async (elementId: string) => {
+    if (!user || !pendingPurchase) return;
+
+    await startSheetPurchase({
+      userId: user.id,
+      items: pendingPurchase.items,
+      amount: pendingPurchase.amount,
+      paymentMethod: 'paypal',
+      description: pendingPurchase.description,
+      buyerName: user.email ?? null,
+      buyerEmail: user.email ?? null,
+      elementId,
+    });
+  };
+
+  const handlePayPalSuccess = async (response: any) => {
+    console.log('PayPal payment success:', response);
+    setShowPayPalModal(false);
+
+    if (!pendingPurchase) return;
+
+    const removed = await removeSelectedItems(pendingPurchase.targetItemIds);
+    if (!removed) {
+      console.warn(t('cartPage.console.cartUpdateAfterPaymentError'));
+    }
+
+    setSelectedItems(prev =>
+      prev.filter(id => !pendingPurchase.targetItemIds.includes(id)),
+    );
+
+    alert(t('cartPage.purchaseComplete'));
+    navigate('/my-orders');
+    setPendingPurchase(null);
+  };
+
   const handlePaymentMethodSelect = async (method: PaymentMethod) => {
     if (!user || !pendingPurchase) return;
 
@@ -266,7 +303,7 @@ export default function CartPage() {
         if (!cashResult.success) {
           if (cashResult.reason === 'INSUFFICIENT_CREDIT') {
             alert(
-              t('cartPage.insufficientCash', { 
+              t('cartPage.insufficientCash', {
                 amount: cashResult.currentCredits.toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')
               }),
             );
@@ -290,13 +327,13 @@ export default function CartPage() {
       }
 
       if (method === 'paypal') {
-        await completeOnlinePurchase('paypal');
+        setShowPayPalModal(true);
         return;
       }
 
       // legacy: 카드 결제는 현재 비활성화 (포트원 심사 진행 중)
       // await completeOnlinePurchase('card');
-      
+
       // 한국 사이트에서는 무통장 입금만 가능
       alert(t('cartPage.bankTransferOnly') || '현재 무통장 입금만 가능합니다.');
     } catch (error) {
@@ -436,7 +473,7 @@ export default function CartPage() {
                       onChange={() => handleSelectItem(item.id)}
                       className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
-                    
+
                     <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
                       {item.image ? (
                         <img src={item.image} alt={item.title} className="w-full h-full object-cover rounded-lg" />
@@ -483,7 +520,7 @@ export default function CartPage() {
                     </span>
                   </div>
                 </div>
-                
+
                 <div className="flex space-x-3">
                   <button
                     onClick={handlePurchaseSelected}
@@ -534,6 +571,18 @@ export default function CartPage() {
           }}
           onSelect={handlePaymentMethodSelect}
           context="buyNow"
+        />
+
+        <PayPalPaymentModal
+          open={showPayPalModal}
+          amount={pendingPurchase?.amount ?? 0}
+          orderTitle={pendingPurchase?.description || 'Product Purchase'}
+          onClose={() => setShowPayPalModal(false)}
+          onSuccess={handlePayPalSuccess}
+          onError={(error) => {
+            console.error('PayPal payment error:', error);
+          }}
+          initiatePayment={handlePayPalPayment}
         />
       </div>
     </div>

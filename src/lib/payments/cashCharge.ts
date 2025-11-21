@@ -22,6 +22,7 @@ interface StartCashChargeParams {
   buyerTel?: string | null;
   depositorName?: string;
   returnUrl?: string;
+  elementId?: string; // PayPal SPB 렌더링을 위한 컨테이너 ID
 }
 
 interface StartCashChargeResult {
@@ -47,6 +48,7 @@ export const startCashCharge = async ({
   buyerTel,
   depositorName,
   returnUrl,
+  elementId,
 }: StartCashChargeParams): Promise<StartCashChargeResult> => {
   const trimmedDepositorName = depositorName?.trim();
 
@@ -109,10 +111,11 @@ export const startCashCharge = async ({
         buyerTel: buyerTel ?? undefined,
         description,
         returnUrl: returnUrl, // returnUrl이 없으면 requestPayPalPayment 내부에서 자동 생성
+        elementId, // PayPal SPB 렌더링을 위한 컨테이너 ID 전달
       });
 
       if (result.success) {
-        // PayPal 승인 URL로 리다이렉트됨
+        // PayPal 승인 URL로 리다이렉트됨 (또는 SPB 버튼 렌더링 완료)
         // 실제 결제 완료는 리다이렉트 페이지(/payments/paypal/return)에서 처리
         return {
           orderId,

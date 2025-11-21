@@ -8,6 +8,7 @@ import type { VirtualAccountInfo } from '../../lib/payments';
 import { isEnglishHost } from '../../i18n/languages';
 import { getUserDisplayName } from '../../utils/userDisplayName';
 import type { Profile } from '../../lib/supabase';
+import PayPalPaymentModal from './PayPalPaymentModal';
 
 // ProfileInfo는 Profile의 일부 필드만 포함하는 타입일 수 있으므로, 유연하게 처리
 type ProfileLike = Profile | { id: string; email?: string | null; name?: string | null; display_name?: string | null; phone?: string | null } | null;
@@ -129,6 +130,7 @@ export default function PointChargeModal({
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
   const [showDepositorInput, setShowDepositorInput] = useState(false);
   const [depositorName, setDepositorName] = useState('');
+  const [showPayPalModal, setShowPayPalModal] = useState(false);
 
   const handleChargeConfirm = async () => {
     if (!user) {
@@ -148,25 +150,7 @@ export default function PointChargeModal({
     }
 
     if (selectedPayment === 'paypal') {
-      // PayPal 결제 처리
-      setChargeProcessing(true);
-      try {
-        const description = `${selectedOption.label || formatCurrency(selectedOption.amount)}`;
-        await startCashCharge({
-          userId: user.id,
-          amount: selectedOption.amount,
-          bonusAmount: selectedOption.bonus ?? 0,
-          paymentMethod: 'paypal',
-          description,
-          buyerName: getUserDisplayName(profile as any, user.email || null) ?? null,
-          buyerEmail: user.email ?? null,
-        });
-        // PayPal은 리다이렉트되므로 알림 불필요
-      } catch (error) {
-        console.error('캐쉬 충전 오류:', error);
-        alert(error instanceof Error ? error.message : '캐쉬 충전 중 오류가 발생했습니다.');
-        setChargeProcessing(false);
-      }
+      setShowPayPalModal(true);
       return;
     }
 
@@ -174,6 +158,24 @@ export default function PointChargeModal({
       setShowDepositorInput(true);
       setBankTransferInfo(null);
     }
+  };
+
+  const handlePayPalPayment = async (elementId: string) => {
+    if (!user) return;
+    const selectedOption = chargeOptions.find((option) => option.amount === chargeAmount);
+    if (!selectedOption) return;
+
+    const description = `${selectedOption.label || formatCurrency(selectedOption.amount)}`;
+    await startCashCharge({
+      userId: user.id,
+      amount: selectedOption.amount,
+      bonusAmount: selectedOption.bonus ?? 0,
+      paymentMethod: 'paypal',
+      description,
+      buyerName: getUserDisplayName(profile as any, user.email || null) ?? null,
+      buyerEmail: user.email ?? null,
+      elementId,
+    });
   };
 
   const handleBankTransferConfirm = async () => {
@@ -228,6 +230,7 @@ export default function PointChargeModal({
     setBankTransferInfo(null);
     setShowDepositorInput(false);
     setDepositorName('');
+    setShowPayPalModal(false);
   };
 
   if (!open) return null;
@@ -557,6 +560,22 @@ export default function PointChargeModal({
           )}
         </div>
       </div>
+      <PayPalPaymentModal
+        open={showPayPalModal}
+        amount={chargeAmount}
+        orderTitle={chargeOptions.find(o => o.amount === chargeAmount)?.label || 'Cash Charge'}
+        onClose={() => setShowPayPalModal(false)}
+        onSuccess={(response) => {
+          console.log('PayPal payment success:', response);
+          setShowPayPalModal(false);
+          alert(t('mobile.cash.chargeComplete') || 'Payment completed successfully.');
+          onCashUpdate?.();
+        }}
+        onError={(error) => {
+          console.error('PayPal payment error:', error);
+        }}
+        initiatePayment={handlePayPalPayment}
+      />
     </div>
   );
 }

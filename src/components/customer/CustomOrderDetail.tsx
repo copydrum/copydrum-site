@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/stores/authStore';
+import { supabase } from '../../lib/supabase';
+import { useAuthStore } from '../../stores/authStore';
 import { useTranslation } from 'react-i18next';
-import { formatPrice } from '@/lib/priceFormatter';
+import { formatPrice } from '../../lib/priceFormatter';
 
 type StatusValue = 'pending' | 'quoted' | 'payment_confirmed' | 'in_progress' | 'completed';
 
@@ -274,41 +274,68 @@ export default function CustomOrderDetail({ orderId }: CustomOrderDetailProps) {
 
     setIsDownloading(true);
     try {
-      const { error: updateError } = await supabase
-        .from('custom_orders')
-        .update({
-          download_count: (order.download_count ?? 0) + 1,
-        })
-        .eq('id', order.id)
-        .eq('user_id', user.id);
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-      if (updateError) {
-        throw updateError;
-      }
+      if (isMobile) {
+        // Mobile: Open directly in new tab to avoid blob issues
+        const { error: updateError } = await supabase
+          .from('custom_orders')
+          .update({
+            download_count: (order.download_count ?? 0) + 1,
+          })
+          .eq('id', order.id)
+          .eq('user_id', user.id);
 
-      const response = await fetch(order.completed_pdf_url);
-      if (!response.ok) {
-        throw new Error('파일 다운로드에 실패했습니다.');
-      }
+        if (updateError) throw updateError;
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = order.completed_pdf_filename || `${order.song_title}_악보.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(link);
+        window.open(order.completed_pdf_url, '_blank');
 
-      setOrder((prev) =>
-        prev
-          ? {
+        setOrder((prev) =>
+          prev
+            ? {
               ...prev,
               download_count: (prev.download_count ?? 0) + 1,
             }
-          : prev
-      );
+            : prev
+        );
+      } else {
+        // PC: Fetch blob to force download with correct filename
+        const response = await fetch(order.completed_pdf_url);
+        if (!response.ok) {
+          throw new Error('파일 다운로드에 실패했습니다.');
+        }
+
+        const blob = await response.blob();
+
+        // Increment count ONLY after successful fetch
+        const { error: updateError } = await supabase
+          .from('custom_orders')
+          .update({
+            download_count: (order.download_count ?? 0) + 1,
+          })
+          .eq('id', order.id)
+          .eq('user_id', user.id);
+
+        if (updateError) throw updateError;
+
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = order.completed_pdf_filename || `${order.song_title}_악보.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+
+        setOrder((prev) =>
+          prev
+            ? {
+              ...prev,
+              download_count: (prev.download_count ?? 0) + 1,
+            }
+            : prev
+        );
+      }
     } catch (downloadError: any) {
       console.error('다운로드 실패:', downloadError);
       alert(downloadError?.message ?? '다운로드 중 오류가 발생했습니다.');
@@ -474,11 +501,10 @@ export default function CustomOrderDetail({ orderId }: CustomOrderDetailProps) {
                     className={`flex ${isCustomer ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-md rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                        isCustomer
+                      className={`max-w-md rounded-2xl px-4 py-3 text-sm shadow-sm ${isCustomer
                           ? 'bg-blue-600 text-white rounded-br-sm'
                           : 'bg-gray-100 text-gray-800 rounded-bl-sm'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-2 text-xs opacity-80">
                         <span>{isCustomer ? '나' : '관리자'}</span>
