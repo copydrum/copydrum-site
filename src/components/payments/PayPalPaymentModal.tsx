@@ -48,6 +48,12 @@ export default function PayPalPaymentModal({
             // DOM 렌더링 확보를 위한 지연
             await new Promise(resolve => setTimeout(resolve, 0));
 
+            console.log('[PayPalPaymentModal] Props on open:', {
+                amount,
+                orderTitle,
+                open,
+            });
+
             const container = document.querySelector('.portone-ui-container');
             console.log('[PayPalPaymentModal] Container check:', {
                 containerId,

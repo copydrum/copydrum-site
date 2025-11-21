@@ -209,6 +209,12 @@ export default function CartPage() {
       price: item.price,
     }));
 
+    console.log('[cart-paypal] Setting pendingPurchase:', {
+      totalPriceKrw: totalPrice,
+      itemCount: purchaseItems.length,
+      description,
+    });
+
     setPendingPurchase({
       targetItemIds,
       items: purchaseItems,
@@ -269,10 +275,13 @@ export default function CartPage() {
   };
 
   const handlePayPalSuccess = async (response: any) => {
-    console.log('PayPal payment success:', response);
+    console.log('[cart-paypal] PayPal payment success:', response);
     setShowPayPalModal(false);
 
-    if (!pendingPurchase) return;
+    if (!pendingPurchase) {
+      console.warn('[cart-paypal] pendingPurchase is null after success');
+      return;
+    }
 
     const removed = await removeSelectedItems(pendingPurchase.targetItemIds);
     if (!removed) {
@@ -285,7 +294,10 @@ export default function CartPage() {
 
     alert(t('cartPage.purchaseComplete'));
     navigate('/my-orders');
+    // PayPal 결제 완료 후에만 pendingPurchase를 null로 설정
     setPendingPurchase(null);
+    setProcessing(false);
+    setPaymentProcessing(false);
   };
 
   const handlePaymentMethodSelect = async (method: PaymentMethod) => {
@@ -339,7 +351,12 @@ export default function CartPage() {
       }
 
       if (method === 'paypal') {
+        // PayPal 모달을 열기 전에 pendingPurchase를 유지해야 함
+        // 모달이 닫힐 때까지 pendingPurchase를 유지
         setShowPayPalModal(true);
+        setProcessing(false);
+        setPaymentProcessing(false);
+        // pendingPurchase는 PayPal 결제 완료 후에만 null로 설정
         return;
       }
 
@@ -352,9 +369,12 @@ export default function CartPage() {
       console.error(t('cartPage.console.paymentProcessingError'), error);
       alert(error instanceof Error ? error.message : t('cartPage.paymentError'));
     } finally {
-      setProcessing(false);
-      setPaymentProcessing(false);
-      setPendingPurchase(null);
+      // PayPal이 아닌 경우에만 pendingPurchase를 null로 설정
+      if (method !== 'paypal') {
+        setProcessing(false);
+        setPaymentProcessing(false);
+        setPendingPurchase(null);
+      }
     }
   };
 
@@ -585,17 +605,23 @@ export default function CartPage() {
           context="buyNow"
         />
 
-        <PayPalPaymentModal
-          open={showPayPalModal}
-          amount={pendingPurchase?.amount ?? 0}
-          orderTitle={pendingPurchase?.description || 'Product Purchase'}
-          onClose={() => setShowPayPalModal(false)}
-          onSuccess={handlePayPalSuccess}
-          onError={(error) => {
-            console.error('PayPal payment error:', error);
-          }}
-          initiatePayment={handlePayPalPayment}
-        />
+        {showPayPalModal && pendingPurchase && (
+          <PayPalPaymentModal
+            open={showPayPalModal}
+            amount={pendingPurchase.amount}
+            orderTitle={pendingPurchase.description}
+            onClose={() => {
+              setShowPayPalModal(false);
+              // 모달이 닫힐 때 pendingPurchase를 유지 (사용자가 다시 열 수 있도록)
+            }}
+            onSuccess={handlePayPalSuccess}
+            onError={(error) => {
+              console.error('[cart-paypal] PayPal payment error:', error);
+              setShowPayPalModal(false);
+            }}
+            initiatePayment={handlePayPalPayment}
+          />
+        )}
       </div>
     </div>
   );
