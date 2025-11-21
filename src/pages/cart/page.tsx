@@ -26,6 +26,7 @@ type PendingCartPurchase = {
 };
 
 export default function CartPage() {
+  // 모든 훅을 최상단에 모아서 항상 동일한 순서로 호출되도록 함
   const { cartItems, loading, removeFromCart, removeSelectedItems, clearCart, getTotalPrice } = useCart();
   const { user } = useAuthStore();
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -38,9 +39,12 @@ export default function CartPage() {
   const [showPayPalModal, setShowPayPalModal] = useState(false);
   const navigate = useNavigate();
   const { t } = useTranslation();
+  
+  // 계산된 값들 (훅이 아님)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
   const currency = getSiteCurrency(hostname);
 
+  // useCallback도 훅이므로 최상단에 위치
   const formatPriceValue = useCallback(
     (price: number) => {
       const converted = convertFromKrw(price, currency);
@@ -49,6 +53,23 @@ export default function CartPage() {
     [currency],
   );
 
+  // useCallback도 훅이므로 최상단에 위치
+  const handlePayPalPayment = useCallback(async (elementId: string) => {
+    if (!user || !pendingPurchase) return;
+
+    await startSheetPurchase({
+      userId: user.id,
+      items: pendingPurchase.items,
+      amount: pendingPurchase.amount,
+      paymentMethod: 'paypal',
+      description: pendingPurchase.description,
+      buyerName: user.email ?? null,
+      buyerEmail: user.email ?? null,
+      elementId,
+    });
+  }, [user, pendingPurchase]);
+
+  // early return은 모든 훅 호출 후에만 허용
   if (!user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -246,21 +267,6 @@ export default function CartPage() {
       alert(t('cartPage.paymentWindowOpen'));
     }
   };
-
-  const handlePayPalPayment = useCallback(async (elementId: string) => {
-    if (!user || !pendingPurchase) return;
-
-    await startSheetPurchase({
-      userId: user.id,
-      items: pendingPurchase.items,
-      amount: pendingPurchase.amount,
-      paymentMethod: 'paypal',
-      description: pendingPurchase.description,
-      buyerName: user.email ?? null,
-      buyerEmail: user.email ?? null,
-      elementId,
-    });
-  }, [user, pendingPurchase]);
 
   const handlePayPalSuccess = async (response: any) => {
     console.log('PayPal payment success:', response);
