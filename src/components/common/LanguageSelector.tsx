@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { languages, getLanguageByCode } from '../../i18n/languages';
 import { isGlobalSiteHost } from '../../config/hostType';
+import { getLocaleFromHost } from '../../i18n/getLocaleFromHost';
 
 interface LanguageSelectorProps {
   variant?: 'desktop' | 'mobile';
@@ -77,10 +78,16 @@ export default function LanguageSelector({ variant = 'desktop', className = '' }
     }
 
     const currentHost = window.location.host;
+    const currentHostname = window.location.hostname.toLowerCase();
     const currentPath = location.pathname + location.search;
     const isCurrentlyGlobal = isGlobalSiteHost(currentHost);
+    const currentDomainLang = getLocaleFromHost(currentHost);
     const wantsEnglish = langCode === 'en';
     const wantsKorean = langCode === 'ko';
+    const wantsJapanese = langCode === 'ja';
+    
+    // 현재 도메인이 일본어 도메인인지 확인 (jp. 또는 ja. 서브도메인)
+    const isJapaneseDomain = currentHostname.startsWith('jp.') || currentHostname.startsWith('ja.');
 
     // 로컬 환경에서는 도메인 변경 대신 쿼리 파라미터 사용
     if (currentHost.includes('localhost') || currentHost.includes('127.0.0.1')) {
@@ -99,31 +106,30 @@ export default function LanguageSelector({ variant = 'desktop', className = '' }
       return;
     }
 
-    // 호스트 변경이 필요한 경우 (영어 <-> 한국어 등 도메인 분리된 언어)
-    // 현재는 en.copydrum.com / copydrum.com / ja.copydrum.com(예정) 등
-    // 로컬이 아닌 프로덕션 환경에서의 도메인 전환 로직
+    // 도메인 기반 언어 전환 로직
+    // 현재 도메인 언어와 선택한 언어가 다르면 해당 언어 도메인으로 이동
+    const needsDomainChange = currentDomainLang !== langCode;
 
-    // TODO: 추후 ja.copydrum.com 등 서브도메인이 실제 운영되면 해당 로직 추가 필요
-    // 현재는 영어/한국어 전환만 도메인 이동으로 처리하고, 나머지는 i18n.changeLanguage로 처리하거나
-    // 아직 도메인이 없으므로 동작하지 않게 둠.
-
-    if ((isCurrentlyGlobal && wantsKorean) || (!isCurrentlyGlobal && wantsEnglish)) {
+    if (needsDomainChange) {
       let targetHost: string;
 
       if (wantsEnglish) {
-        // 한국어 사이트에서 영어 사이트로 이동
-        targetHost = currentHost.replace(/^(www\.)?copydrum\.com$/, 'en.copydrum.com');
-        if (targetHost === currentHost) {
-          // 이미 en.copydrum.com이거나 다른 서브도메인인 경우
-          targetHost = 'en.copydrum.com';
-        }
-      } else {
-        // 영어 사이트에서 한국어 사이트로 이동
-        targetHost = currentHost.replace(/^en\.copydrum\.com$/, 'copydrum.com');
-        if (targetHost === currentHost) {
-          // 이미 copydrum.com이거나 다른 도메인인 경우
+        // 영어 도메인으로 이동
+        targetHost = 'en.copydrum.com';
+      } else if (wantsKorean) {
+        // 한국어 도메인으로 이동
+        targetHost = currentHost.replace(/^[^.]+\.copydrum\.com$/, 'copydrum.com');
+        if (targetHost === currentHost && !currentHostname.includes('copydrum.com')) {
           targetHost = 'copydrum.com';
         }
+      } else if (wantsJapanese) {
+        // 일본어 도메인으로 이동 (jp. 우선, 없으면 ja.)
+        targetHost = 'jp.copydrum.com';
+      } else {
+        // 그 외 언어는 현재 도메인 유지하고 언어만 변경
+        i18n.changeLanguage(langCode);
+        setIsOpen(false);
+        return;
       }
 
       // 프로토콜 포함 전체 URL 생성
@@ -135,7 +141,7 @@ export default function LanguageSelector({ variant = 'desktop', className = '' }
       return;
     }
 
-    // 같은 언어 그룹 내에서만 언어 변경 (예: 영어 -> 일본어)
+    // 같은 도메인 내에서 언어 변경 (예: en.copydrum.com에서 다른 언어로)
     // 주의: 도메인 기반 언어 강제 정책으로 인해 실제로는 도메인 언어로 리셋될 수 있음
     i18n.changeLanguage(langCode);
     setIsOpen(false);

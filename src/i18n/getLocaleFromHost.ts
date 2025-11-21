@@ -6,7 +6,8 @@ export function getLocaleFromHost(host: string): SupportedLanguage {
     const normalizedHost = host.toLowerCase();
 
     if (normalizedHost.startsWith("en.")) return "en";
-    if (normalizedHost.startsWith("ja.")) return "ja";
+    // ✅ 일본어 서브도메인: jp. 또는 ja. 모두 지원
+    if (normalizedHost.startsWith("jp.") || normalizedHost.startsWith("ja.")) return "ja";
     if (normalizedHost.startsWith("vi.")) return "vi";
 
     // Add other languages as needed
