@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { formatPrice } from '../../lib/priceFormatter';
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 
 interface PayPalPaymentModalProps {
     open: boolean;
@@ -28,8 +28,13 @@ export default function PayPalPaymentModal({
     const containerId = 'portone-ui-container';
     const initializedRef = useRef(false);
 
-    const formatCurrency = (value: number) =>
-        formatPrice({ amountKRW: value, language: i18n.language }).formatted;
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+    const currency = useMemo(() => getSiteCurrency(hostname), [hostname]);
+
+    const formatCurrency = useCallback((value: number) => {
+        const converted = convertFromKrw(value, currency);
+        return formatCurrencyUtil(converted, currency);
+    }, [currency]);
 
     const loadPayPalButtons = useCallback(async () => {
         if (!open || initializedRef.current) return;

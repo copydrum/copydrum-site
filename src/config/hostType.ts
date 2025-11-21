@@ -35,3 +35,8 @@ export function isGlobalSiteHost(hostname: string): boolean {
 export function isEnglishSiteHost(hostname: string): boolean {
     return hostname === 'en.copydrum.com';
 }
+
+// 일본어 사이트인지 여부
+export function isJapaneseSiteHost(hostname: string): boolean {
+    return hostname === 'jp.copydrum.com' || hostname === 'ja.copydrum.com';
+}

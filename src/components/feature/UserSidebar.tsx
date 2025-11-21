@@ -9,13 +9,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../../hooks/useCart';
 import { useUserCashBalance } from '../../hooks/useUserCashBalance';
 import { useTranslation } from 'react-i18next';
-import { formatPrice } from '../../lib/priceFormatter';
-import { isGlobalSiteHost } from '../../config/hostType';
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import { getUserDisplayName } from '../../utils/userDisplayName';
 import PointChargeModal from '../payments/PointChargeModal';
-import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
-import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
-import { formatCurrency } from '../../lib/pricing/formatCurrency';
 
 interface UserSidebarProps {
   user: User | null;
@@ -42,32 +38,24 @@ export default function UserSidebar({ user }: UserSidebarProps) {
 
   const { cartItems } = useCart();
 
-  // 글로벌 사이트 여부 확인
-  const location = useLocation();
-  const isEnglishSite = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return isGlobalSiteHost(window.location.host);
-  }, [location.search]);
+  // 통합 통화 로직 적용
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+  const currency = useMemo(() => getSiteCurrency(hostname), [hostname]);
+  const isGlobalSite = currency !== 'KRW';
 
-
-  // ... existing imports ...
-
-  // 캐시 표시용 포맷 함수 (영문 사이트는 USD, 한국어 사이트는 KRW)
+  // 캐시 표시용 포맷 함수
+  // KRW 사이트: 통화로 표시 (예: 230,500원)
+  // EN/JP 사이트: 포인트로 표시 (예: 230,500 P)
   const formatCash = useCallback(
     (value: number) => {
-      if (i18n.language === 'ko') {
-        return formatPrice({
-          amountKRW: value,
-          language: 'ko',
-          host: typeof window !== 'undefined' ? window.location.host : undefined
-        }).formatted;
+      if (currency === 'KRW') {
+        const converted = convertFromKrw(value, currency);
+        return formatCurrencyUtil(converted, currency);
       }
-
-      const currency = getActiveCurrency();
-      const converted = convertPriceForLocale(value, i18n.language, currency);
-      return formatCurrency(converted, currency);
+      // EN/JP 사이트: 포인트로 표시
+      return `${value.toLocaleString('en-US')} P`;
     },
-    [i18n.language],
+    [currency],
   );
 
   const handleLogout = async () => {
@@ -172,7 +160,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
       // 성공 시 리다이렉트되므로 여기서는 아무것도 하지 않음
     } catch (error: any) {
       console.error('카카오 로그인 오류:', error);
-      setLoginError(error.message || '카카오 로그인에 실패했습니다.');
+      setLoginError(error.message || t('sidebar.loginError.kakaoFailed'));
       setKakaoLoading(false);
     }
   };
@@ -211,14 +199,14 @@ export default function UserSidebar({ user }: UserSidebarProps) {
       // 성공 시 리다이렉트되므로 여기서는 아무것도 하지 않음
     } catch (error: any) {
       console.error('구글 로그인 오류:', error);
-      setLoginError(error.message || '구글 로그인에 실패했습니다.');
+      setLoginError(error.message || t('sidebar.loginError.googleFailed'));
       setGoogleLoading(false);
     }
   };
 
   const handleCashCharge = () => {
     if (!user) {
-      alert('로그인이 필요합니다.');
+      alert(t('sidebar.loginRequired'));
       return;
     }
     setShowCashChargeModal(true);
@@ -445,7 +433,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
 
               <div className="mt-4 space-y-3">
                 {/* 카카오톡 로그인 버튼 (한국어 사이트에서만 표시) */}
-                {!isEnglishSite && (
+                {!isGlobalSite && (
                   <button
                     onClick={handleKakaoLogin}
                     disabled={kakaoLoading}
@@ -552,10 +540,10 @@ export default function UserSidebar({ user }: UserSidebarProps) {
           <div className="bg-white/20 rounded-lg p-3">
             <p className="text-xs text-blue-100">{t('sidebar.availableCash')}</p>
             {cashLoading ? (
-              <p className="text-xl font-bold text-blue-200 animate-pulse">로딩 중...</p>
+              <p className="text-xl font-bold text-blue-200 animate-pulse">{t('sidebar.loading')}</p>
             ) : cashError ? (
               <p className="text-sm font-bold text-red-200">
-                오류: {cashError.message}
+                {t('sidebar.error')}: {cashError.message}
               </p>
             ) : (
               <p className="text-xl font-bold">{formatCash(userCash)}</p>
@@ -597,7 +585,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
                   ) : null}
                 </button>
 
-                {item.label === t('sidebar.guide') && !isEnglishSite && (
+                {item.label === t('sidebar.guide') && !isGlobalSite && (
                   <div className="pt-2 pb-2">
                     <button
                       onClick={handleKakaoChatClick}

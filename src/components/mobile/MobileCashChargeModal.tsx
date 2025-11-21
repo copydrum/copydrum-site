@@ -5,11 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { startCashCharge } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import type { VirtualAccountInfo } from '../../lib/payments';
-import { formatPrice, convertUSDToKRW } from '../../lib/priceFormatter';
-import { isGlobalSiteHost } from '../../config/hostType';
-import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
-import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
-import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 
 import PayPalPaymentModal from '../payments/PayPalPaymentModal';
 
@@ -46,16 +42,18 @@ export default function MobileCashChargeModal({
   const [userCash, setUserCash] = useState(0);
   const [cashLoading, setCashLoading] = useState(false);
 
+  // 통합 통화 로직 적용
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+  const currency = useMemo(() => getSiteCurrency(hostname), [hostname]);
+  const isKoreanSite = currency === 'KRW';
+  const isGlobalSite = currency === 'USD' || currency === 'JPY';
+
   const formatCurrency = useCallback(
     (value: number) => {
-      if (i18n.language === 'ko') {
-        return formatPrice({ amountKRW: value, language: 'ko' }).formatted;
-      }
-      const currency = getActiveCurrency();
-      const converted = convertPriceForLocale(value, i18n.language, currency);
-      return formatCurrencyUi(converted, currency);
+      const convertedAmount = convertFromKrw(value, currency);
+      return formatCurrencyUtil(convertedAmount, currency);
     },
-    [i18n.language],
+    [currency],
   );
   const formatNumber = useCallback(
     (value: number) => new Intl.NumberFormat(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US').format(value),
@@ -67,37 +65,36 @@ export default function MobileCashChargeModal({
     [],
   );
 
-  const location = useLocation();
-  const isEnglishSite = useMemo(() => {
-    if (typeof window === 'undefined') return false;    // 글로벌 사이트 여부 확인 (PayPal 사용)
-    return isGlobalSiteHost(window.location.host);
-  }, [location.search]);
+  // KRW 기준 포인트 패키지
+  const POINT_PACKAGES_KRW = useMemo(() => [
+    { amount: 3000, bonus: 0 },
+    { amount: 5000, bonus: 500 },
+    { amount: 10000, bonus: 1500 },
+    { amount: 30000, bonus: 6000 },
+    { amount: 50000, bonus: 11000 },
+    { amount: 100000, bonus: 25000 },
+  ], []);
 
   const chargeOptions = useMemo<ChargeOption[]>(() => {
-    if (isEnglishSite) {
-      const roundTo100 = (val: number) => Math.round(val / 100) * 100;
+    return POINT_PACKAGES_KRW.map(pkg => {
+      const convertedAmount = convertFromKrw(pkg.amount, currency);
+      const label = formatCurrencyUtil(convertedAmount, currency);
 
-      return [
-        { amount: roundTo100(convertUSDToKRW(3)), bonus: 0, label: '$3', amountUSD: 3, bonusUSD: 0 },
-        { amount: roundTo100(convertUSDToKRW(5)), bonus: roundTo100(convertUSDToKRW(0.5)), label: '$5', amountUSD: 5, bonusUSD: 0.5 },
-        { amount: roundTo100(convertUSDToKRW(10)), bonus: roundTo100(convertUSDToKRW(1)), label: '$10', amountUSD: 10, bonusUSD: 1 },
-        { amount: roundTo100(convertUSDToKRW(30)), bonus: roundTo100(convertUSDToKRW(6)), label: '$30', amountUSD: 30, bonusUSD: 6 },
-        { amount: roundTo100(convertUSDToKRW(50)), bonus: roundTo100(convertUSDToKRW(11)), label: '$50', amountUSD: 50, bonusUSD: 11 },
-        { amount: roundTo100(convertUSDToKRW(100)), bonus: roundTo100(convertUSDToKRW(25)), label: '$100', amountUSD: 100, bonusUSD: 25 },
-      ];
-    }
-    return [
-      { amount: 3000, bonus: 0, label: '3천원' },
-      { amount: 5000, bonus: 500, label: '5천원', bonusPercent: '10%' },
-      { amount: 10000, bonus: 1500, label: '1만원', bonusPercent: '15%' },
-      { amount: 30000, bonus: 6000, label: '3만원', bonusPercent: '20%' },
-      { amount: 50000, bonus: 11000, label: '5만원', bonusPercent: '22%' },
-      { amount: 100000, bonus: 25000, label: '10만원', bonusPercent: '25%' },
-    ];
-  }, [isEnglishSite]);
+      // Calculate bonus percent
+      const bonusPercent = pkg.bonus > 0 ? Math.round((pkg.bonus / pkg.amount) * 100) + '%' : undefined;
+
+      return {
+        amount: pkg.amount, // Keep KRW amount for logic
+        bonus: pkg.bonus,
+        label,
+        bonusPercent,
+        displayAmount: convertedAmount
+      };
+    });
+  }, [POINT_PACKAGES_KRW, currency]);
 
   const paymentMethods = useMemo<PaymentMethod[]>(() => {
-    if (isEnglishSite) {
+    if (currency !== 'KRW') {
       return [
         {
           id: 'paypal',
@@ -108,6 +105,7 @@ export default function MobileCashChargeModal({
         },
       ];
     }
+    // 한국 사이트: 무통장 입금만 표시
     return [
       {
         id: 'bank',
@@ -117,10 +115,10 @@ export default function MobileCashChargeModal({
         disabled: false,
       },
     ];
-  }, [isEnglishSite, t]);
+  }, [currency, t]);
 
   const [chargeAmount, setChargeAmount] = useState<number>(chargeOptions[2].amount);
-  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank' | 'paypal'>(isEnglishSite ? 'paypal' : 'bank');
+  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank' | 'paypal'>(currency !== 'KRW' ? 'paypal' : 'bank');
   const [chargeAgreementChecked, setChargeAgreementChecked] = useState(false);
   const [chargeProcessing, setChargeProcessing] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
@@ -159,10 +157,10 @@ export default function MobileCashChargeModal({
       setShowDepositorInput(false);
       setDepositorName('');
       setChargeAmount(chargeOptions[2].amount);
-      setSelectedPayment(isEnglishSite ? 'paypal' : 'bank');
+      setSelectedPayment(currency !== 'KRW' ? 'paypal' : 'bank');
       setShowPayPalModal(false);
     }
-  }, [isOpen, loadUserCash, chargeOptions, isEnglishSite]);
+  }, [isOpen, loadUserCash, chargeOptions, currency]);
 
   const handleChargeConfirm = async () => {
     if (!user) {
@@ -401,86 +399,45 @@ export default function MobileCashChargeModal({
                         ? Math.round((option.bonus / option.amount) * 100)
                         : 0;
 
-                      if (isEnglishSite && 'amountUSD' in option) {
-                        const paymentAmount = `$${option.amountUSD}`;
-                        const formattedTotalPoints = formatPoints(totalPoints);
-                        const formattedBonusPoints = option.bonus ? formatPoints(option.bonus) : '0 P';
+                      const formattedTotalPoints = formatPoints(totalPoints);
+                      const formattedBonusPoints = option.bonus ? formatPoints(option.bonus) : '0 P';
+                      const paymentAmount = formatCurrency(option.amount);
 
-                        return (
-                          <button
-                            key={index}
-                            onClick={() => setChargeAmount(option.amount)}
-                            className={`relative p-4 border rounded-xl text-left transition-all duration-200 ${chargeAmount === option.amount
-                              ? 'border-blue-500 bg-blue-50 shadow-md ring-1 ring-blue-500'
-                              : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
-                              }`}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-lg font-bold text-gray-900">
-                                {t('sidebar.totalPoints', { amount: formattedTotalPoints })}
-                              </span>
-                              <div className={`w-5 h-5 border-2 rounded-full flex items-center justify-center transition-colors ${chargeAmount === option.amount ? 'border-blue-500' : 'border-gray-300'
-                                }`}>
-                                {chargeAmount === option.amount && (
-                                  <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-600 font-medium">
-                                {t('sidebar.payAndBonus', { payment: paymentAmount })}
-                              </span>
-
-                              {option.bonus && option.bonus > 0 && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r from-purple-100 to-blue-100 text-blue-700 border border-blue-100">
-                                  <i className="ri-gift-2-fill mr-1 text-purple-500"></i>
-                                  +{formattedBonusPoints.replace(' P', '')} P ({bonusPercent}%)
-                                </span>
+                      return (
+                        <button
+                          key={index}
+                          onClick={() => setChargeAmount(option.amount)}
+                          className={`relative p-4 border rounded-xl text-left transition-all duration-200 ${chargeAmount === option.amount
+                            ? 'border-blue-500 bg-blue-50 shadow-md ring-1 ring-blue-500'
+                            : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                            }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-lg font-bold text-gray-900">
+                              {t('sidebar.totalPoints', { amount: formattedTotalPoints })}
+                            </span>
+                            <div className={`w-5 h-5 border-2 rounded-full flex items-center justify-center transition-colors ${chargeAmount === option.amount ? 'border-blue-500' : 'border-gray-300'
+                              }`}>
+                              {chargeAmount === option.amount && (
+                                <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div>
                               )}
                             </div>
-                          </button>
-                        );
-                      } else {
-                        const amountKRW = formatNumber(option.amount);
-                        const bonusPoints = option.bonus ? formatPoints(option.bonus) : '0 P';
+                          </div>
 
-                        return (
-                          <button
-                            key={index}
-                            onClick={() => setChargeAmount(option.amount)}
-                            className={`relative p-4 border rounded-xl text-left transition-all duration-200 ${chargeAmount === option.amount
-                              ? 'border-blue-500 bg-blue-50 shadow-md ring-1 ring-blue-500'
-                              : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
-                              }`}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-lg font-bold text-gray-900">
-                                {t('sidebar.totalPoints', { amount: formatPoints(totalPoints) })}
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600 font-medium">
+                              {t('sidebar.payAndBonus', { payment: paymentAmount })}
+                            </span>
+
+                            {option.bonus && option.bonus > 0 && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r from-purple-100 to-blue-100 text-blue-700 border border-blue-100">
+                                <i className="ri-gift-2-fill mr-1 text-purple-500"></i>
+                                +{formattedBonusPoints.replace(' P', '')} P ({bonusPercent}%)
                               </span>
-                              <div className={`w-5 h-5 border-2 rounded-full flex items-center justify-center transition-colors ${chargeAmount === option.amount ? 'border-blue-500' : 'border-gray-300'
-                                }`}>
-                                {chargeAmount === option.amount && (
-                                  <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-600 font-medium">
-                                {t('sidebar.payAndBonus', { payment: amountKRW })}
-                              </span>
-
-                              {option.bonus && option.bonus > 0 && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r from-purple-100 to-blue-100 text-blue-700 border border-blue-100">
-                                  <i className="ri-gift-2-fill mr-1 text-purple-500"></i>
-                                  +{bonusPoints.replace(' P', '')} P ({bonusPercent}%)
-                                </span>
-                              )}
-                            </div>
-                          </button>
-                        );
-                      }
+                            )}
+                          </div>
+                        </button>
+                      );
                     })}
                   </div>
                 </div>
@@ -488,7 +445,7 @@ export default function MobileCashChargeModal({
                 {/* 결제방법 */}
                 <div className="mb-6">
                   <h3 className="text-sm font-medium text-gray-700 mb-3">
-                    {isEnglishSite ? t('sidebar.paymentMethod') : t('sidebar.paymentMethodLabel')}
+                    {t('sidebar.paymentMethod')}
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
                     {paymentMethods.map((method) => {

@@ -1,15 +1,11 @@
-import { useState, useMemo, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { useTranslation } from 'react-i18next';
-import { formatPrice } from '../../lib/priceFormatter';
-import { convertUSDToKRW } from '../../lib/priceFormatter';
 import { startCashCharge } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
-import { isGlobalSiteHost } from '../../config/hostType';
-import { getUserDisplayName } from '../../utils/userDisplayName';
 import type { Profile } from '../../lib/supabase';
 import PayPalPaymentModal from './PayPalPaymentModal';
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 
 // ProfileInfo는 Profile의 일부 필드만 포함하는 타입일 수 있으므로, 유연하게 처리
 type ProfileLike = Profile | { id: string; email?: string | null; name?: string | null; display_name?: string | null; phone?: string | null } | null;
@@ -21,6 +17,9 @@ interface ChargeOption {
   label?: string;
   amountUSD?: number;
   bonusUSD?: number;
+  amountJPY?: number;
+  bonusJPY?: number;
+  displayAmount?: number;
 }
 
 interface PaymentMethod {
@@ -54,17 +53,17 @@ export default function PointChargeModal({
   onCashUpdate,
 }: PointChargeModalProps) {
   const { i18n, t } = useTranslation();
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+  const currency = useMemo(() => getSiteCurrency(hostname), [hostname]);
+
   const formatCurrency = useCallback(
     (value: number) => {
-      // Phase 4: 일본어 사이트 UI 적용
-      if (i18n.language === 'ja') {
-        // TODO: Phase X에서 환율 변환 로직 추가 필요 (현재는 숫자 그대로 JPY 포맷)
-        return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(value);
-      }
-      return formatPrice({ amountKRW: value, language: i18n.language }).formatted;
+      const converted = convertFromKrw(value, currency);
+      return formatCurrencyUtil(converted, currency);
     },
-    [i18n.language],
+    [currency],
   );
+
   const formatNumber = useCallback(
     (value: number) => new Intl.NumberFormat(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US').format(value),
     [i18n.language],
@@ -76,40 +75,37 @@ export default function PointChargeModal({
     [],
   );
 
-  const location = useLocation();
-  const isGlobalSite = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return isGlobalSiteHost(window.location.host);
-  }, [location.search]);
+  // KRW 기준 포인트 패키지
+  const POINT_PACKAGES_KRW = useMemo(() => [
+    { amount: 3000, bonus: 0 },
+    { amount: 5000, bonus: 500 },
+    { amount: 10000, bonus: 1500 },
+    { amount: 30000, bonus: 6000 },
+    { amount: 50000, bonus: 11000 },
+    { amount: 100000, bonus: 25000 },
+  ], []);
 
   const chargeOptions = useMemo<ChargeOption[]>(() => {
-    if (isGlobalSite) {
-      // 글로벌 사이트: 달러 단위
-      // 포인트는 100단위로 반올림하여 깔끔하게 표시
-      const roundTo100 = (val: number) => Math.round(val / 100) * 100;
+    return POINT_PACKAGES_KRW.map(pkg => {
+      const convertedAmount = convertFromKrw(pkg.amount, currency);
+      const label = formatCurrencyUtil(convertedAmount, currency);
 
-      return [
-        { amount: roundTo100(convertUSDToKRW(3)), bonus: 0, label: '$3', amountUSD: 3, bonusUSD: 0 },
-        { amount: roundTo100(convertUSDToKRW(5)), bonus: roundTo100(convertUSDToKRW(0.5)), label: '$5', amountUSD: 5, bonusUSD: 0.5 },
-        { amount: roundTo100(convertUSDToKRW(10)), bonus: roundTo100(convertUSDToKRW(1)), label: '$10', amountUSD: 10, bonusUSD: 1 },
-        { amount: roundTo100(convertUSDToKRW(30)), bonus: roundTo100(convertUSDToKRW(6)), label: '$30', amountUSD: 30, bonusUSD: 6 },
-        { amount: roundTo100(convertUSDToKRW(50)), bonus: roundTo100(convertUSDToKRW(11)), label: '$50', amountUSD: 50, bonusUSD: 11 },
-        { amount: roundTo100(convertUSDToKRW(100)), bonus: roundTo100(convertUSDToKRW(25)), label: '$100', amountUSD: 100, bonusUSD: 25 },
-      ];
-    }
-    // 한국어 사이트: 원화 단위
-    return [
-      { amount: 3000, bonus: 0, label: '3천원' },
-      { amount: 5000, bonus: 500, label: '5천원', bonusPercent: '10%' },
-      { amount: 10000, bonus: 1500, label: '1만원', bonusPercent: '15%' },
-      { amount: 30000, bonus: 6000, label: '3만원', bonusPercent: '20%' },
-      { amount: 50000, bonus: 11000, label: '5만원', bonusPercent: '22%' },
-      { amount: 100000, bonus: 25000, label: '10만원', bonusPercent: '25%' },
-    ];
-  }, [isGlobalSite]);
+      // Calculate bonus percent
+      const bonusPercent = pkg.bonus > 0 ? Math.round((pkg.bonus / pkg.amount) * 100) + '%' : undefined;
+
+      return {
+        amount: pkg.amount, // Keep KRW amount for logic
+        bonus: pkg.bonus,
+        label,
+        bonusPercent,
+        // Add converted values for display if needed, but label should suffice
+        displayAmount: convertedAmount
+      };
+    });
+  }, [POINT_PACKAGES_KRW, currency]);
 
   const paymentMethods = useMemo<PaymentMethod[]>(() => {
-    if (isGlobalSite) {
+    if (currency !== 'KRW') {
       return [
         {
           id: 'paypal',
@@ -130,16 +126,23 @@ export default function PointChargeModal({
         disabled: false,
       },
     ];
-  }, [isGlobalSite, t]);
+  }, [currency, t]);
 
   const [chargeAmount, setChargeAmount] = useState<number>(chargeOptions[2].amount);
-  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank' | 'paypal'>(isGlobalSite ? 'paypal' : 'bank');
+  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank' | 'paypal'>(currency !== 'KRW' ? 'paypal' : 'bank');
   const [chargeAgreementChecked, setChargeAgreementChecked] = useState(false);
   const [chargeProcessing, setChargeProcessing] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
   const [showDepositorInput, setShowDepositorInput] = useState(false);
   const [depositorName, setDepositorName] = useState('');
   const [showPayPalModal, setShowPayPalModal] = useState(false);
+
+  // Update selected payment method when currency changes
+  useEffect(() => {
+    if (open) {
+      setSelectedPayment(currency !== 'KRW' ? 'paypal' : 'bank');
+    }
+  }, [currency, open]);
 
   const handleChargeConfirm = async () => {
     if (!user) {
@@ -395,10 +398,11 @@ export default function PointChargeModal({
                       ? Math.round((option.bonus / option.amount) * 100)
                       : 0;
 
-                    // 한국 사이트와 글로벌 사이트 분기 처리
-                    if (isGlobalSite && 'amountUSD' in option) {
-                      // 글로벌 사이트: USD 기반 UI 유지
-                      const paymentAmount = `$${option.amountUSD}`;
+                    // 한국 사이트와 글로벌/일본 사이트 분기 처리
+                    if (currency !== 'KRW') {
+                      // 글로벌/일본 사이트: 외화 기반 UI
+                      // paymentAmount는 통화로 변환된 금액을 포맷팅
+                      const paymentAmount = formatCurrency(option.amount);
                       const formattedTotalPoints = formatPoints(totalPoints);
                       const formattedBonusPoints = option.bonus ? formatPoints(option.bonus) : '0 P';
 
@@ -485,7 +489,7 @@ export default function PointChargeModal({
               {/* 결제방법 */}
               <div className="mb-6">
                 <h3 className="text-sm font-medium text-gray-700 mb-3">
-                  {isGlobalSite ? t('sidebar.paymentMethod') : t('sidebar.paymentMethodLabel')}
+                  {(currency !== 'KRW') ? t('sidebar.paymentMethod') : t('sidebar.paymentMethodLabel')}
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
                   {paymentMethods.map((method) => {

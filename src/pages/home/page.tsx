@@ -18,10 +18,7 @@ import { fetchUserFavorites, toggleFavorite } from '../../lib/favorites';
 import MainHeader from '../../components/common/MainHeader';
 import Footer from '../../components/common/Footer';
 import { useTranslation } from 'react-i18next';
-import { formatPrice } from '../../lib/priceFormatter';
-import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
-import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
-import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 
 interface DrumSheet {
   id: string;
@@ -96,26 +93,26 @@ export default function Home() {
         .select('id, name');
 
       if (error) throw error;
-      
+
       // Genre order matching category page
       const genreOrder = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
-      
+
       // Filter out drum lesson category
       const filteredCategories = (data || []).filter(cat => cat.name !== '드럼레슨');
-      
+
       // Sort by genre order
       const sortedCategories = filteredCategories.sort((a, b) => {
         const indexA = genreOrder.indexOf(a.name);
         const indexB = genreOrder.indexOf(b.name);
-        
+
         // Move items not in order to the end
         if (indexA === -1 && indexB === -1) return 0;
         if (indexA === -1) return 1;
         if (indexB === -1) return -1;
-        
+
         return indexA - indexB;
       });
-      
+
       setCategories(sortedCategories);
     } catch (error) {
       console.error(t('home.console.categoryLoadError'), error);
@@ -380,34 +377,15 @@ export default function Home() {
   // For Japanese locale (ja), display prices as JPY (¥100)
   // For Korean locale (ko), keep KRW (₩100)
   // For other locales (en, etc.), use existing behavior
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+  const currency = getSiteCurrency(hostname);
+
   const formatCurrency = useCallback(
     (value: number) => {
-      const locale = i18n.language;
-      
-      // Japanese site: use JPY formatting
-      if (locale === 'ja') {
-        const currency = getActiveCurrency();
-        const convertedPrice = convertPriceForLocale(value, locale, currency);
-        return formatCurrencyUi(convertedPrice, 'JPY');
-      }
-      
-      // Korean site: keep existing KRW behavior
-      if (locale === 'ko') {
-        return formatPrice({ 
-          amountKRW: value, 
-          language: locale,
-          host: typeof window !== 'undefined' ? window.location.host : undefined
-        }).formatted;
-      }
-      
-      // Other locales (en, etc.): use existing behavior
-      return formatPrice({ 
-        amountKRW: value, 
-        language: locale,
-        host: typeof window !== 'undefined' ? window.location.host : undefined
-      }).formatted;
+      const converted = convertFromKrw(value, currency);
+      return formatCurrencyUtil(converted, currency);
     },
-    [i18n.language],
+    [currency],
   );
   const getEventForSheet = (sheetId: string) => eventDiscounts[sheetId];
   const getDisplayPrice = (sheet: DrumSheet) => {
@@ -514,7 +492,7 @@ export default function Home() {
 
       {/* Hero Section - 전체 폭 */}
       <div className="lg:mr-64">
-        <section 
+        <section
           className="relative bg-cover bg-center bg-no-repeat h-[320px] sm:h-[380px] md:h-[480px] lg:h-[500px] bg-gray-900 overflow-hidden"
           style={{
             backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('/banner1.jpg')`,
@@ -540,7 +518,7 @@ export default function Home() {
                   <p>{t('home.banner.subtitle2')}</p>
                   <p>{t('home.banner.subtitle3')}</p>
                 </div>
-                <button 
+                <button
                   onClick={() => window.location.href = '/categories'}
                   className="inline-flex items-center justify-center bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 sm:px-8 sm:py-3 rounded-full hover:from-blue-700 hover:to-purple-700 font-semibold whitespace-nowrap cursor-pointer transition-all duration-300 shadow-lg"
                 >
@@ -562,7 +540,7 @@ export default function Home() {
                   <p>{t('home.banner.subtitle2')}</p>
                   <p>{t('home.banner.subtitle3')}</p>
                 </div>
-                <button 
+                <button
                   onClick={() => window.location.href = '/categories'}
                   className="inline-flex items-center justify-center bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-3 rounded-full hover:from-blue-700 hover:to-purple-700 font-semibold whitespace-nowrap cursor-pointer transition-all duration-300 shadow-lg"
                 >
@@ -590,7 +568,7 @@ export default function Home() {
                   {t('common.showMore')}
                 </button>
               </div>
-            <div className="flex gap-4 overflow-x-auto pb-2">
+              <div className="flex gap-4 overflow-x-auto pb-2">
                 {latestSheets.map((sheet) => {
                   const eventInfo = getEventForSheet(sheet.id);
                   const isFavorite = favoriteIds.has(sheet.id);
@@ -624,11 +602,10 @@ export default function Home() {
                             handleToggleFavorite(sheet.id);
                           }}
                           disabled={isFavoriteLoading}
-                          className={`absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-sm transition-colors ${
-                            isFavorite
-                              ? 'border-red-200 bg-red-50/90 text-red-500'
-                              : 'border-white/60 bg-black/30 text-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/80'
-                          } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          className={`absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-sm transition-colors ${isFavorite
+                            ? 'border-red-200 bg-red-50/90 text-red-500'
+                            : 'border-white/60 bg-black/30 text-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/80'
+                            } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
                           aria-label={isFavorite ? t('home.unfavorite') : t('home.favorite')}
                         >
                           <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
@@ -679,11 +656,10 @@ export default function Home() {
                           handleToggleFavorite(sheet.id);
                         }}
                         disabled={isFavoriteLoading}
-                        className={`absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-sm transition-colors ${
-                          isFavorite
-                            ? 'border-red-200 bg-red-50/90 text-red-500'
-                            : 'border-white/60 bg-black/30 text-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/80'
-                        } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        className={`absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-sm transition-colors ${isFavorite
+                          ? 'border-red-200 bg-red-50/90 text-red-500'
+                          : 'border-white/60 bg-black/30 text-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/80'
+                          } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
                         aria-label={isFavorite ? t('home.unfavorite') : t('home.favorite')}
                       >
                         <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
@@ -709,17 +685,17 @@ export default function Home() {
         <section className="py-12 md:py-16 bg-gradient-to-r from-orange-50 via-white to-orange-100 rounded-3xl md:rounded-none -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto space-y-8">
             <div className="md:hidden">
-                <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-orange-500">{t('home.eventSaleTitle')}</p>
-                    <h3 className="mt-1 text-2xl font-bold text-gray-900 leading-snug">
-                      {t('home.eventSaleSubtitle').split('\n').map((line, idx) => (
-                        <span key={idx}>
-                          {line}
-                          {idx < t('home.eventSaleSubtitle').split('\n').length - 1 && <br />}
-                        </span>
-                      ))}
-                    </h3>
+                  <h3 className="mt-1 text-2xl font-bold text-gray-900 leading-snug">
+                    {t('home.eventSaleSubtitle').split('\n').map((line, idx) => (
+                      <span key={idx}>
+                        {line}
+                        {idx < t('home.eventSaleSubtitle').split('\n').length - 1 && <br />}
+                      </span>
+                    ))}
+                  </h3>
                   <p className="mt-2 text-sm text-gray-600">
                     {t('home.eventSaleDescription')}
                   </p>
@@ -802,10 +778,10 @@ export default function Home() {
                             className={`text-xs font-semibold ${isActiveNow ? 'text-orange-600' : 'text-gray-400'}`}
                           >
                             {remaining.totalMilliseconds > 0
-                              ? t('home.remainingTime', { 
-                                  days: remaining.days > 0 ? t('home.remainingDays', { count: remaining.days }) : '',
-                                  time: formatRemainingTime(remaining)
-                                })
+                              ? t('home.remainingTime', {
+                                days: remaining.days > 0 ? t('home.remainingDays', { count: remaining.days }) : '',
+                                time: formatRemainingTime(remaining)
+                              })
                               : t('home.saleEnded')}
                           </p>
                         </div>
@@ -853,9 +829,8 @@ export default function Home() {
                       type="button"
                       onClick={handlePrevEventSlide}
                       disabled={!canSlide}
-                      className={`absolute left-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-white/80 p-3 shadow-lg transition hover:bg-white lg:block ${
-                        canSlide ? 'text-orange-500 hover:text-orange-600' : 'text-gray-300 cursor-not-allowed'
-                      }`}
+                      className={`absolute left-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-white/80 p-3 shadow-lg transition hover:bg-white lg:block ${canSlide ? 'text-orange-500 hover:text-orange-600' : 'text-gray-300 cursor-not-allowed'
+                        }`}
                       aria-label={t('home.prevSlide')}
                     >
                       <i className="ri-arrow-left-s-line text-2xl" />
@@ -916,10 +891,10 @@ export default function Home() {
                                       className={`text-sm font-semibold ${isActiveNow ? 'text-orange-600' : 'text-gray-400'}`}
                                     >
                                       {remaining.totalMilliseconds > 0
-                                        ? t('home.remainingTime', { 
-                                            days: remaining.days > 0 ? t('home.remainingDays', { count: remaining.days }) : '',
-                                            time: formatRemainingTime(remaining)
-                                          })
+                                        ? t('home.remainingTime', {
+                                          days: remaining.days > 0 ? t('home.remainingDays', { count: remaining.days }) : '',
+                                          time: formatRemainingTime(remaining)
+                                        })
                                         : t('home.saleEnded')}
                                     </p>
                                   </div>
@@ -956,9 +931,8 @@ export default function Home() {
                       type="button"
                       onClick={handleNextEventSlide}
                       disabled={!canSlide}
-                      className={`absolute right-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-white/80 p-3 shadow-lg transition hover:bg-white lg:block ${
-                        canSlide ? 'text-orange-500 hover:text-orange-600' : 'text-gray-300 cursor-not-allowed'
-                      }`}
+                      className={`absolute right-0 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-white/80 p-3 shadow-lg transition hover:bg-white lg:block ${canSlide ? 'text-orange-500 hover:text-orange-600' : 'text-gray-300 cursor-not-allowed'
+                        }`}
                       aria-label={t('home.nextSlide')}
                     >
                       <i className="ri-arrow-right-s-line text-2xl" />
@@ -971,9 +945,8 @@ export default function Home() {
                           key={index}
                           type="button"
                           onClick={() => setEventCarouselIndex(index)}
-                          className={`h-2.5 rounded-full transition-all ${
-                            eventCarouselIndex === index ? 'w-10 bg-orange-500' : 'w-2.5 bg-orange-200 hover:bg-orange-300'
-                          }`}
+                          className={`h-2.5 rounded-full transition-all ${eventCarouselIndex === index ? 'w-10 bg-orange-500' : 'w-2.5 bg-orange-200 hover:bg-orange-300'
+                            }`}
                           aria-label={t('home.slideNumber', { number: index + 1 })}
                         />
                       ))}
@@ -999,7 +972,7 @@ export default function Home() {
                   {t('home.viewAll')}
                 </button>
               </div>
-            <div className="flex gap-4 overflow-x-auto pb-2">
+              <div className="flex gap-4 overflow-x-auto pb-2">
                 {popularSheets.slice(0, 10).map((sheet) => {
                   const eventInfo = getEventForSheet(sheet.id);
                   const isFavorite = favoriteIds.has(sheet.id);
@@ -1033,11 +1006,10 @@ export default function Home() {
                             handleToggleFavorite(sheet.id);
                           }}
                           disabled={isFavoriteLoading}
-                          className={`absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border ${
-                            isFavorite
-                              ? 'border-red-200 bg-red-50 text-red-500'
-                              : 'border-white/60 bg-black/30 text-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/80'
-                          } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          className={`absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border ${isFavorite
+                            ? 'border-red-200 bg-red-50 text-red-500'
+                            : 'border-white/60 bg-black/30 text-white hover:border-red-200 hover:text-red-500 hover:bg-red-50/80'
+                            } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
                           aria-label={isFavorite ? t('home.unfavorite') : t('home.favorite')}
                         >
                           <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-base`} />
@@ -1065,11 +1037,10 @@ export default function Home() {
               <div className="mb-6 flex flex-wrap gap-2">
                 <button
                   onClick={() => setSelectedGenre('')}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                    selectedGenre === ''
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white text-gray-700 hover:bg-gray-100'
-                  }`}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${selectedGenre === ''
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                    }`}
                 >
                   {t('home.all')}
                 </button>
@@ -1088,19 +1059,18 @@ export default function Home() {
                       '드럼솔로': t('category.drumSolo'),
                       '드럼커버': t('category.drumCover'),
                     };
-                    
+
                     return genreMap[genreKo] || genreKo;
                   };
-                  
+
                   return (
                     <button
                       key={category.id}
                       onClick={() => setSelectedGenre(category.id)}
-                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                        selectedGenre === category.id
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-100'
-                      }`}
+                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${selectedGenre === category.id
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-100'
+                        }`}
                     >
                       {getGenreName(category.name)}
                     </button>
@@ -1132,9 +1102,8 @@ export default function Home() {
                             )}
                             <div className="flex h-12 w-12 items-center justify-center">
                               <span
-                                className={`text-2xl font-bold transition-colors duration-300 ${
-                                  isTop3 ? 'text-blue-600 group-hover:text-blue-700' : 'text-gray-600 group-hover:text-gray-800'
-                                }`}
+                                className={`text-2xl font-bold transition-colors duration-300 ${isTop3 ? 'text-blue-600 group-hover:text-blue-700' : 'text-gray-600 group-hover:text-gray-800'
+                                  }`}
                               >
                                 {rank}
                               </span>
@@ -1173,11 +1142,10 @@ export default function Home() {
                             handleToggleFavorite(sheet.id);
                           }}
                           disabled={isFavoriteLoading}
-                          className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
-                            isFavorite
-                              ? 'border-red-200 bg-red-50 text-red-500'
-                              : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
-                          } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${isFavorite
+                            ? 'border-red-200 bg-red-50 text-red-500'
+                            : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                            } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
                           aria-label={isFavorite ? t('home.unfavorite') : t('home.favorite')}
                         >
                           <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
@@ -1238,11 +1206,10 @@ export default function Home() {
                             handleToggleFavorite(sheet.id);
                           }}
                           disabled={isFavoriteLoading}
-                          className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
-                            isFavorite
-                              ? 'border-red-200 bg-red-50 text-red-500'
-                              : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
-                          } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${isFavorite
+                            ? 'border-red-200 bg-red-50 text-red-500'
+                            : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                            } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
                           aria-label={isFavorite ? t('home.unfavorite') : t('home.favorite')}
                         >
                           <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
@@ -1528,7 +1495,7 @@ export default function Home() {
               <p>{t('home.customOrderCTADescription')}</p>
               <p>{t('home.customOrderCTADescription2')}</p>
             </div>
-            <button 
+            <button
               onClick={() => navigate('/custom-order')}
               className="bg-white text-blue-600 px-8 py-4 rounded-lg hover:bg-gray-100 font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors shadow-lg"
             >

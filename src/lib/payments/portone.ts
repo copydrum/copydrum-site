@@ -1,7 +1,8 @@
-import { DEFAULT_USD_RATE } from '../priceFormatter';
+import { getSiteCurrency, convertFromKrw } from '../../lib/currency';
 import { loadPaymentUI } from '@portone/browser-sdk/v2';
 import { isGlobalSiteHost } from '../../config/hostType';
 import { getActiveCurrency } from './getActiveCurrency';
+import { DEFAULT_USD_RATE } from '../priceFormatter';
 
 // 포트원 스크립트 URL (최신 버전 사용)
 const PORTONE_SCRIPT_URL = 'https://cdn.iamport.kr/js/iamport.payment-1.2.0.js';
@@ -27,7 +28,7 @@ declare global {
   }
 }
 
-export interface PortOnePaymentParams {
+interface PortOnePaymentParams {
   pg: string; // 'copydrum_paypal' 또는 다른 PG사 코드
   pay_method: 'paypal' | 'card' | 'trans' | 'vbank' | 'phone' | 'samsung' | 'payco' | 'kakaopay' | 'lpay' | 'ssgpay' | 'tosspay' | 'cultureland' | 'smartculture' | 'happymoney' | 'booknlife';
   merchant_uid: string; // 주문 ID
@@ -40,7 +41,7 @@ export interface PortOnePaymentParams {
   m_redirect_url?: string; // 결제 완료 후 리다이렉트 URL
 }
 
-export interface PortOnePaymentResponse {
+interface PortOnePaymentResponse {
   success: boolean;
   imp_uid?: string; // 포트원 거래 고유번호
   merchant_uid?: string; // 주문 ID
@@ -243,18 +244,21 @@ export const requestPayPalPayment = async (
   }
 
   try {
-    // KRW를 USD로 변환 (PayPal은 USD 사용)
-    // TODO: 향후 currency가 JPY 등일 때는 해당 통화로 변환 로직 필요
-    const usdAmount = convertKRWToUSD(params.amount);
-    // USD는 센트 단위로 변환
-    const totalAmountInCents = Math.round(usdAmount * 100);
-
     // 리턴 URL 설정
     const returnUrl = params.returnUrl || getPortOneReturnUrl();
     const elementSelector = params.elementId ? `#${params.elementId}` : undefined;
 
-    // 현재 활성 통화 가져오기 (기본값 USD)
-    const currency = getActiveCurrency();
+    // 현재 활성 통화 가져오기
+    const hostname = window.location.hostname;
+    let currency = getSiteCurrency(hostname);
+
+    // 로컬 환경에서는 i18n 설정에 따름 (테스트 용이성)
+    if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
+      currency = getActiveCurrency() as any;
+    }
+
+    // KRW 금액을 타겟 통화로 변환
+    const convertedAmount = convertFromKrw(params.amount, currency);
 
     console.log('[portone-paypal] loadPaymentUI 호출', {
       storeId,
@@ -263,6 +267,8 @@ export const requestPayPalPayment = async (
       element: elementSelector,
       elementExists: elementSelector ? !!document.querySelector(elementSelector) : 'N/A',
       currency,
+      originalAmount: params.amount,
+      convertedAmount,
     });
 
     // 포트원 V2 SDK로 PayPal 결제 UI 로드
@@ -274,9 +280,9 @@ export const requestPayPalPayment = async (
       channelKey,
       paymentId: params.orderId,
       orderName: params.description,
-      totalAmount: totalAmountInCents,
+      totalAmount: convertedAmount,
       currency: currency,
-      payMethod: 'PAYPAL',
+      // payMethod: 'PAYPAL', // SDK V2에서는 uiType으로 결정됨
       // element: elementSelector, // SDK가 자동으로 portone-ui-container를 찾으므로 생략
       customer: {
         fullName: params.buyerName || 'Guest',

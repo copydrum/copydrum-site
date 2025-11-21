@@ -10,12 +10,9 @@ import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { openCashChargeModal } from '../../lib/cashChargeModal';
 import { useTranslation } from 'react-i18next';
-import { formatPrice as formatPriceWithCurrency } from '../../lib/priceFormatter';
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import { calculatePointPrice } from '../../lib/pointPrice';
 import PayPalPaymentModal from '../../components/payments/PayPalPaymentModal';
-import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
-import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
-import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
 
 type PendingCartPurchase = {
   targetItemIds: string[];
@@ -40,17 +37,16 @@ export default function CartPage() {
   const [showBankTransferModal, setShowBankTransferModal] = useState(false);
   const [showPayPalModal, setShowPayPalModal] = useState(false);
   const navigate = useNavigate();
-  const { i18n, t } = useTranslation();
+  const { t } = useTranslation();
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+  const currency = getSiteCurrency(hostname);
+
   const formatPriceValue = useCallback(
     (price: number) => {
-      if (i18n.language === 'ko') {
-        return formatPriceWithCurrency({ amountKRW: price, language: 'ko' }).formatted;
-      }
-      const currency = getActiveCurrency();
-      const converted = convertPriceForLocale(price, i18n.language, currency);
-      return formatCurrencyUi(converted, currency);
+      const converted = convertFromKrw(price, currency);
+      return formatCurrencyUtil(converted, currency);
     },
-    [i18n.language],
+    [currency],
   );
 
   if (!user) {

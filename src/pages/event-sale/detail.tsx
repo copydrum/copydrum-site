@@ -15,11 +15,8 @@ import { processCashPurchase } from '../../lib/cashPurchases';
 import MainHeader from '../../components/common/MainHeader';
 import UserSidebar from '../../components/feature/UserSidebar';
 import { hasPurchasedSheet } from '../../lib/purchaseCheck';
-import { useTranslation } from 'react-i18next';
-import { formatPrice } from '../../lib/priceFormatter';
-import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
-import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
-import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
+
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 
 const EventSaleDetailPage = () => {
   const { eventId } = useParams<{ eventId: string }>();
@@ -31,17 +28,16 @@ const EventSaleDetailPage = () => {
   const [isFavoriteSheet, setIsFavoriteSheet] = useState(false);
   const [favoriteProcessing, setFavoriteProcessing] = useState(false);
   const { user } = useAuthStore();
-  const { i18n } = useTranslation();
+
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+  const currency = getSiteCurrency(hostname);
+
   const formatCurrency = useCallback(
     (value: number) => {
-      if (i18n.language === 'ko') {
-        return formatPrice({ amountKRW: value, language: 'ko' }).formatted;
-      }
-      const currency = getActiveCurrency();
-      const converted = convertPriceForLocale(value, i18n.language, currency);
-      return formatCurrencyUi(converted, currency);
+      const converted = convertFromKrw(value, currency);
+      return formatCurrencyUtil(converted, currency);
     },
-    [i18n.language],
+    [currency],
   );
   const navigate = useNavigate();
 
@@ -323,8 +319,8 @@ const EventSaleDetailPage = () => {
                       onClick={handleToggleFavorite}
                       disabled={favoriteProcessing}
                       className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${isFavoriteSheet
-                          ? 'border-red-200 bg-red-50 text-red-500'
-                          : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                        ? 'border-red-200 bg-red-50 text-red-500'
+                        : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
                         } ${favoriteProcessing ? 'opacity-60 cursor-not-allowed' : ''}`}
                       aria-label={isFavoriteSheet ? '찜 해제' : '찜하기'}
                     >
@@ -346,8 +342,8 @@ const EventSaleDetailPage = () => {
                     onClick={handlePurchase}
                     disabled={!isActive || processing}
                     className={`w-full rounded-xl px-4 py-3 text-sm font-semibold transition ${!isActive || processing
-                        ? 'cursor-not-allowed bg-gray-200 text-gray-400'
-                        : 'bg-red-500 text-white shadow-lg hover:bg-red-600'
+                      ? 'cursor-not-allowed bg-gray-200 text-gray-400'
+                      : 'bg-red-500 text-white shadow-lg hover:bg-red-600'
                       }`}
                   >
                     {processing ? '결제 중...' : isActive ? '100원에 즉시 구매하기' : '이벤트 종료'}

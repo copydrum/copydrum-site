@@ -1,9 +1,8 @@
 import { useCallback, useMemo, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { formatPrice } from '../../lib/priceFormatter';
 import { calculatePointPrice } from '../../lib/pointPrice';
-import { isGlobalSiteHost } from '../../config/hostType';
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 
 type PaymentMethod = 'cash' | 'card' | 'bank' | 'paypal';
 
@@ -193,16 +192,19 @@ export const PaymentMethodSelector = ({
     }
   }, [open, i18nInstance]);
 
-  const formatCurrency = useCallback(
-    (value: number) => formatPrice({ amountKRW: value, language: i18nInstance.language }).formatted,
-    [i18nInstance.language],
-  );
+  // 통합 통화 로직 적용
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+  const currency = useMemo(() => getSiteCurrency(hostname), [hostname]);
+  const isKoreanSite = currency === 'KRW';
+  const isGlobalSite = currency === 'USD' || currency === 'JPY';
 
-  const location = useLocation();
-  const isGlobalSite = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return isGlobalSiteHost(window.location.host);
-  }, [location.search]);
+  const formatCurrency = useCallback(
+    (value: number) => {
+      const convertedAmount = convertFromKrw(value, currency);
+      return formatCurrencyUtil(convertedAmount, currency);
+    },
+    [currency],
+  );
 
   const siteType: 'ko' | 'global' = useMemo(() => {
     return isGlobalSite ? 'global' : 'ko';

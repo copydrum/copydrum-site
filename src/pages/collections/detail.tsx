@@ -9,10 +9,7 @@ import { processCashPurchase } from '../../lib/cashPurchases';
 import { splitPurchasedSheetIds } from '../../lib/purchaseCheck';
 import { useTranslation } from 'react-i18next';
 import { getTranslatedText } from '../../lib/translationHelpers';
-import { formatPrice } from '../../lib/priceFormatter';
-import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
-import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
-import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 
 interface Collection {
   id: string;
@@ -65,16 +62,15 @@ export default function CollectionDetailPage() {
   const [purchasing, setPurchasing] = useState(false);
   const { i18n, t } = useTranslation();
   const currentLanguage = i18n.language;
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+  const currency = getSiteCurrency(hostname);
+
   const formatCurrency = useCallback(
     (value: number) => {
-      if (currentLanguage === 'ko') {
-        return formatPrice({ amountKRW: value, language: 'ko' }).formatted;
-      }
-      const currency = getActiveCurrency();
-      const converted = convertPriceForLocale(value, currentLanguage, currency);
-      return formatCurrencyUi(converted, currency);
+      const converted = convertFromKrw(value, currency);
+      return formatCurrencyUtil(converted, currency);
     },
-    [currentLanguage],
+    [currency],
   );
 
   useEffect(() => {
@@ -181,9 +177,12 @@ export default function CollectionDetailPage() {
         }
 
         // 비활성 악보 필터링
-        const activeSheets = (sheetRows ?? []).filter(
-          (row: any) => row.drum_sheets?.is_active === true
-        );
+        const activeSheets = (sheetRows ?? [])
+          .map((row: any) => ({
+            ...row,
+            drum_sheets: Array.isArray(row.drum_sheets) ? row.drum_sheets[0] : row.drum_sheets,
+          }))
+          .filter((row: any) => row.drum_sheets?.is_active === true);
 
         setCollectionSheets(activeSheets);
       } catch (err) {

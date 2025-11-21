@@ -1,12 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { openCashChargeModal } from '../../lib/cashChargeModal';
-import { formatPrice } from '../../lib/priceFormatter';
-import { isGlobalSiteHost } from '../../config/hostType';
 import { calculatePointPrice } from '../../lib/pointPrice';
-import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
-import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
-import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 
 interface InsufficientCashModalProps {
   open: boolean;
@@ -24,21 +20,14 @@ export const InsufficientCashModal = ({
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
 
-  // 영문 사이트 여부 확인
-  const isGlobalSite = typeof window !== 'undefined' && isGlobalSiteHost(window.location.host);
+  // 통합 통화 로직 적용
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+  const currency = getSiteCurrency(hostname);
 
-  // 캐시 금액 포맷 함수 (영문 사이트는 USD, 한국어 사이트는 KRW)
+  // 캐시 금액 포맷 함수 (사이트 통화에 맞게 변환 및 포맷)
   const formatCashAmount = (amount: number) => {
-    if (i18n.language === 'ko') {
-      return formatPrice({
-        amountKRW: amount,
-        language: 'ko',
-        host: typeof window !== 'undefined' ? window.location.host : undefined
-      }).formatted;
-    }
-    const currency = getActiveCurrency();
-    const converted = convertPriceForLocale(amount, i18n.language, currency);
-    return formatCurrencyUi(converted, currency);
+    const convertedAmount = convertFromKrw(amount, currency);
+    return formatCurrencyUtil(convertedAmount, currency);
   };
 
   if (!open) return null;

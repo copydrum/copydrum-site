@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
-import { ArrowLeft, Download, Star, ShoppingCart, Music, Clock, DollarSign, ZoomIn, Eye, X } from 'lucide-react';
+import { ArrowLeft, Star, ShoppingCart, Music, Eye, X } from 'lucide-react';
 import { useCart } from '../../hooks/useCart';
 import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
 import UserSidebar from '../../components/feature/UserSidebar';
@@ -19,8 +19,7 @@ import type { PaymentMethod } from '../../components/payments';
 import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
-import { formatPrice } from '../../lib/priceFormatter';
-import { isGlobalSiteHost } from '../../config/hostType';
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import { calculatePointPrice } from '../../lib/pointPrice';
 
 interface DrumSheet {
@@ -50,7 +49,7 @@ export default function SheetDetailPage() {
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const { addToCart, isInCart, cartItems } = useCart();
+  const { addToCart, isInCart } = useCart();
   const [eventDiscount, setEventDiscount] = useState<EventDiscountSheet | null>(null);
   const [isFavoriteSheet, setIsFavoriteSheet] = useState(false);
   const [favoriteProcessing, setFavoriteProcessing] = useState(false);
@@ -61,67 +60,46 @@ export default function SheetDetailPage() {
   const [showInsufficientCashModal, setShowInsufficientCashModal] = useState(false);
   const [insufficientCashInfo, setInsufficientCashInfo] = useState<{ currentBalance: number; requiredAmount: number } | null>(null);
   const eventIsActive = eventDiscount ? isEventActive(eventDiscount) : false;
-  const displayPrice = sheet ? (eventDiscount && eventIsActive ? eventDiscount.discount_price : sheet.price) : 0;
+  const { i18n, t } = useTranslation();
 
-  // 한국어 사이트 여부 확인
-  const isKoreanSite = useMemo(() => {
-    if (typeof window === 'undefined') return true;
-    // 글로벌 사이트에서는 무통장 입금 숨김 (PayPal 등 사용)
-    // 한국 사이트에서는 무통장 입금 표시
-    return !isGlobalSiteHost(window.location.host);
-  }, []);
+  // Phase 4: 통합 통화 로직 적용 (currency를 먼저 선언)
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+  const currency = getSiteCurrency(hostname);
+  const isKoreanSite = currency === 'KRW';
+
+  const displayPrice = sheet ? (eventDiscount && eventIsActive ? eventDiscount.discount_price : sheet.price) : 0;
 
   // 포인트 가격 계산 (모든 사이트에서 사용)
   const pointPrice = useMemo(() => {
     if (!displayPrice || displayPrice <= 0) return 0;
     return calculatePointPrice(displayPrice);
   }, [displayPrice]);
-  const { i18n, t } = useTranslation();
 
-  // Phase 4: 일본어 사이트 UI 적용
-  // 기존 formatPrice는 한국어/영어 사이트용으로 유지
-  // ja 로케일일 때만 새 formatCurrency 유틸 사용
   const formatCurrency = (value: number) => {
-    if (i18n.language === 'ja') {
-      // TODO: Phase X에서 환율 변환 로직 추가 필요 (현재는 숫자 그대로 JPY 포맷)
-      // import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
-      // return formatCurrencyUi(value, 'JPY');
-
-      // 임시로 직접 구현 (import 순환 방지 및 간단 적용)
-      return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(value);
-    }
-
-    return formatPrice({
-      amountKRW: value,
-      language: i18n.language,
-      host: typeof window !== 'undefined' ? window.location.host : undefined
-    }).formatted;
+    const convertedAmount = convertFromKrw(value, currency);
+    return formatCurrencyUtil(convertedAmount, currency);
   };
 
-  // 영문 사이트 여부 확인
-  const englishSite = useMemo(() => {
-    const host = typeof window !== 'undefined' ? window.location.host : '';
-    return isGlobalSiteHost(host);
-  }, []);
-
-  // 카테고리 이름을 번역하는 함수 (영문 사이트용)
+  // 카테고리 이름을 번역하는 함수
   const getCategoryName = (categoryName: string | null | undefined): string => {
     if (!categoryName) return '';
-    if (i18n.language !== 'en') return categoryName;
 
-    const categoryMap: Record<string, string> = {
-      '가요': t('categoriesPage.categories.kpop'),
-      '팝': t('categoriesPage.categories.pop'),
-      '락': t('categoriesPage.categories.rock'),
-      'CCM': t('categoriesPage.categories.ccm'),
-      '트로트/성인가요': t('categoriesPage.categories.trot'),
-      '재즈': t('categoriesPage.categories.jazz'),
-      'J-POP': t('categoriesPage.categories.jpop'),
-      'OST': t('categoriesPage.categories.ost'),
-      '드럼솔로': t('categoriesPage.categories.drumSolo'),
-      '드럼커버': t('categoriesPage.categories.drumCover'),
-      '기타': t('categoriesPage.categories.other'),
-    };
+    if (i18n.language === 'en') {
+      const categoryMap: Record<string, string> = {
+        '가요': t('categoriesPage.categories.kpop'),
+        '팝': t('categoriesPage.categories.pop'),
+        '락': t('categoriesPage.categories.rock'),
+        'CCM': t('categoriesPage.categories.ccm'),
+        '트로트/성인가요': t('categoriesPage.categories.trot'),
+        '재즈': t('categoriesPage.categories.jazz'),
+        'J-POP': t('categoriesPage.categories.jpop'),
+        'OST': t('categoriesPage.categories.ost'),
+        '드럼솔로': t('categoriesPage.categories.drumSolo'),
+        '드럼커버': t('categoriesPage.categories.drumCover'),
+        '기타': t('categoriesPage.categories.other'),
+      };
+      return categoryMap[categoryName] || categoryName;
+    }
 
     if (i18n.language === 'ja') {
       const categoryMapJa: Record<string, string> = {
@@ -140,7 +118,7 @@ export default function SheetDetailPage() {
       return categoryMapJa[categoryName] || categoryName;
     }
 
-    return categoryMap[categoryName] || categoryName;
+    return categoryName;
   };
 
   useEffect(() => {
@@ -254,11 +232,9 @@ export default function SheetDetailPage() {
     if (!difficulty) return t('sheetDetail.difficulty.notSet');
 
     const normalizedDifficulty = (difficulty || '').toLowerCase().trim();
-    const host = typeof window !== 'undefined' ? window.location.host : '';
-    const isEnglishSiteLocal = isGlobalSiteHost(host);
 
-    // 영문 사이트에서 한글 난이도 값을 영어로 변환
-    if (isEnglishSiteLocal || i18n.language === 'en') {
+    // 영문 사이트(USD)에서 한글 난이도 값을 영어로 변환
+    if (currency === 'USD' || i18n.language === 'en') {
       const difficultyMapEn: Record<string, string> = {
         '초급': 'Beginner',
         '중급': 'Intermediate',
@@ -271,8 +247,8 @@ export default function SheetDetailPage() {
       }
     }
 
-    // 일본어 사이트
-    if (i18n.language === 'ja') {
+    // 일본어 사이트(JPY)
+    if (currency === 'JPY' || i18n.language === 'ja') {
       const difficultyMapJa: Record<string, string> = {
         '초급': t('sheetDetail.difficulty.beginner'),
         '중급': t('sheetDetail.difficulty.intermediate'),

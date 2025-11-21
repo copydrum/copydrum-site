@@ -15,13 +15,10 @@ import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
 import { buildDownloadKey, downloadFile, getDownloadFileName, requestSignedDownloadUrl } from '../../utils/downloadHelpers';
 // convertUSDToKRW is not used in this component anymore
 import { useTranslation } from 'react-i18next';
-import { isGlobalSiteHost } from '../../config/hostType';
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import { getUserDisplayName } from '../../utils/userDisplayName';
-import type { Profile } from '../../lib/supabase';
-import { formatPrice } from '../../lib/priceFormatter';
-import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
-import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
-import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
+
+import type { VirtualAccountInfo } from '../../lib/payments';
 
 type TabKey = 'profile' | 'purchases' | 'downloads' | 'favorites' | 'cash' | 'inquiries' | 'custom-orders';
 
@@ -122,12 +119,8 @@ interface CashHistoryEntry {
 
 // CASH_TYPE_META는 컴포넌트 내부에서 t()를 사용하여 동적으로 생성
 
-const formatCurrency = (value: number) => `₩${value.toLocaleString('ko-KR')}`;
 const formatDate = (value: MaybeDateString) => (value ? new Date(value).toLocaleDateString('ko-KR') : '-');
 const formatDateTime = (value: MaybeDateString) => (value ? new Date(value).toLocaleString('ko-KR') : '-');
-
-
-// Status maps and helper functions will be created inside component using t()
 
 export default function MyPage() {
   const navigate = useNavigate();
@@ -135,19 +128,16 @@ export default function MyPage() {
   const { cartItems, addToCart, isInCart } = useCart();
   const { t, i18n } = useTranslation();
 
-  const formatCash = useCallback((value: number) => {
-    if (i18n.language === 'ko') {
-      return formatPrice({
-        amountKRW: value,
-        language: 'ko',
-        host: typeof window !== 'undefined' ? window.location.host : undefined
-      }).formatted;
-    }
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+  const currency = getSiteCurrency(hostname);
 
-    const currency = getActiveCurrency();
-    const converted = convertPriceForLocale(value, i18n.language, currency);
-    return formatCurrencyUi(converted, currency);
-  }, [i18n.language]);
+  const formatCurrency = useCallback(
+    (value: number) => {
+      const converted = convertFromKrw(value, currency);
+      return formatCurrencyUtil(converted, currency);
+    },
+    [currency],
+  );
 
   // Status maps using t()
   const orderStatusStyles = useMemo(() => ({
@@ -236,12 +226,6 @@ export default function MyPage() {
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [profileForm, setProfileForm] = useState({ name: '', phone: '' });
   const [profileSaving, setProfileSaving] = useState(false);
-
-  // 글로벌 사이트 여부 확인
-  const isEnglishSite = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return isGlobalSiteHost(window.location.host);
-  }, []);
 
   // 캐시충전 모달 상태
   const [showCashChargeModal, setShowCashChargeModal] = useState(false);
@@ -1238,7 +1222,7 @@ export default function MyPage() {
                         </p>
                       ) : (
                         <p className="mt-2 text-3xl font-black text-gray-900">
-                          {formatCash(userCashBalance)}
+                          {formatCurrency(userCashBalance)}
                         </p>
                       )}
                       <p className="mt-1 text-xs text-gray-500">{t('mypage.profile.cashBalanceDescription')}</p>
@@ -1964,7 +1948,7 @@ export default function MyPage() {
                           </p>
                         ) : (
                           <p className="mt-2 text-3xl font-bold text-blue-900">
-                            {formatCash(userCashBalance)}
+                            {formatCurrency(userCashBalance)}
                           </p>
                         )}
                       </div>

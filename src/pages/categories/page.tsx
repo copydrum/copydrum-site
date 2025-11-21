@@ -18,12 +18,10 @@ import type { PaymentMethod } from '../../components/payments';
 import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
-import { formatPrice } from '../../lib/priceFormatter';
+
 import { calculatePointPrice, calculatePointPriceFromUsd } from '../../lib/pointPrice';
-import { isGlobalSiteHost } from '../../config/hostType';
-import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
-import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
-import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
+
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 
 interface Category {
   id: string;
@@ -93,12 +91,12 @@ const CategoriesPage: React.FC = () => {
   const [insufficientCashInfo, setInsufficientCashInfo] = useState<{ currentBalance: number; requiredAmount: number } | null>(null);
   const { i18n, t } = useTranslation();
 
+  // 통합 통화 로직 적용
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+  const currency = getSiteCurrency(hostname);
+
   // 한국어 사이트 여부 확인
-  const isKoreanSite = useMemo(() => {
-    if (typeof window === 'undefined') return true;
-    // 글로벌 사이트에서는 무통장 입금 숨김
-    return !isGlobalSiteHost(window.location.host);
-  }, []);
+  const isKoreanSite = currency === 'KRW';
 
   // 장르 목록 (순서대로) - 한글 원본 (한글 사이트용)
   const genreListKo = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
@@ -684,25 +682,14 @@ const CategoriesPage: React.FC = () => {
   };
 
   // Helper function to remove spaces and convert to lowercase for fuzzy search
-  const formatCurrency = useCallback(
-    (value: number) => {
-      if (i18n.language === 'ko') {
-        return formatPrice({
-          amountKRW: value,
-          language: 'ko',
-          host: typeof window !== 'undefined' ? window.location.host : undefined
-        }).formatted;
-      }
-
-      const currency = getActiveCurrency();
-      const converted = convertPriceForLocale(value, i18n.language, currency);
-      return formatCurrencyUi(converted, currency);
-    },
-    [i18n.language],
-  );
-
+  // Helper function to remove spaces and convert to lowercase for fuzzy search
   const normalizeString = (str: string): string => {
     return str.replace(/\s+/g, '').toLowerCase();
+  };
+
+  const formatCurrency = (value: number) => {
+    const convertedAmount = convertFromKrw(value, currency);
+    return formatCurrencyUtil(convertedAmount, currency);
   };
 
   const getEventForSheet = (sheetId: string) => eventDiscounts[sheetId];

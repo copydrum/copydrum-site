@@ -7,7 +7,7 @@ import MainHeader from '../../components/common/MainHeader';
 import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
 import { useTranslation } from 'react-i18next';
 import { getTranslatedText } from '../../lib/translationHelpers';
-import { formatPrice as formatPriceWithCurrency } from '../../lib/priceFormatter';
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 
 interface Collection {
   id: string;
@@ -188,13 +188,15 @@ export default function CollectionsPage() {
     return generateDefaultThumbnail(400, 400);
   };
 
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+  const currency = getSiteCurrency(hostname);
+
   const formatCurrency = useCallback(
-    (price: number): string => formatPriceWithCurrency({
-      amountKRW: price,
-      language: currentLanguage,
-      host: typeof window !== 'undefined' ? window.location.host : undefined
-    }).formatted,
-    [currentLanguage],
+    (price: number): string => {
+      const converted = convertFromKrw(price, currency);
+      return formatCurrencyUtil(converted, currency);
+    },
+    [currency],
   );
 
   // 카테고리 이름을 번역하는 함수
@@ -264,8 +266,8 @@ export default function CollectionsPage() {
                 <button
                   onClick={() => setSelectedCategory('')}
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${selectedCategory === ''
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
                     }`}
                 >
                   {t('collectionsPage.filter.all')}
@@ -275,8 +277,8 @@ export default function CollectionsPage() {
                     key={category.id}
                     onClick={() => setSelectedCategory(category.id)}
                     className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${selectedCategory === category.id
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
                       }`}
                   >
                     {getCategoryName(category.name)}
