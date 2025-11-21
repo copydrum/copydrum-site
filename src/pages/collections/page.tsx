@@ -190,6 +190,7 @@ export default function CollectionsPage() {
 
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
   const currency = getSiteCurrency(hostname);
+  const isKoreanSite = currency === 'KRW';
 
   const formatCurrency = useCallback(
     (price: number): string => {
@@ -227,6 +228,11 @@ export default function CollectionsPage() {
       collection.categories?.includes(selectedCategory)
     )
     : collections;
+
+  // 한국 사이트가 아닌 경우 drumLesson 카테고리 필터링
+  const displayCategories = isKoreanSite
+    ? categories
+    : categories.filter(category => category.name !== '드럼레슨');
 
   if (loading) {
     return (
@@ -272,7 +278,7 @@ export default function CollectionsPage() {
                 >
                   {t('collectionsPage.filter.all')}
                 </button>
-                {categories.map((category) => (
+                {displayCategories.map((category) => (
                   <button
                     key={category.id}
                     onClick={() => setSelectedCategory(category.id)}
