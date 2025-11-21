@@ -180,7 +180,7 @@ export default function MobileCashChargeModal({
     }
   };
 
-  const handlePayPalPayment = async (elementId: string) => {
+  const handlePayPalPayment = useCallback(async (elementId: string) => {
     if (!user) return;
     const selectedOption = chargeOptions.find((option) => option.amount === chargeAmount);
     if (!selectedOption) return;
@@ -196,7 +196,7 @@ export default function MobileCashChargeModal({
       buyerEmail: user.email ?? null,
       elementId,
     });
-  };
+  }, [user, chargeAmount, chargeOptions, formatCurrency]);
 
   const handleBankTransferConfirm = async () => {
     if (!user) return;

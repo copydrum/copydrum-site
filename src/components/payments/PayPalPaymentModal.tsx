@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
 
@@ -24,37 +24,55 @@ export default function PayPalPaymentModal({
     const { t, i18n } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const containerId = 'paypal-spb-container';
+    // PortOne SDK가 기본적으로 찾는 ID가 portone-ui-container일 수 있으므로 변경
+    const containerId = 'portone-ui-container';
     const initializedRef = useRef(false);
 
     const formatCurrency = (value: number) =>
         formatPrice({ amountKRW: value, language: i18n.language }).formatted;
 
-    useEffect(() => {
-        if (open && !initializedRef.current) {
-            const loadPayPalButtons = async () => {
-                setLoading(true);
-                setError(null);
-                try {
-                    await initiatePayment(containerId);
-                    initializedRef.current = true;
-                } catch (err) {
-                    console.error('PayPal initialization failed:', err);
-                    setError(err instanceof Error ? err.message : 'Failed to load PayPal buttons');
-                    onError(err);
-                } finally {
-                    setLoading(false);
-                }
-            };
+    const loadPayPalButtons = useCallback(async () => {
+        if (!open || initializedRef.current) return;
 
-            loadPayPalButtons();
-        }
+        // 초기화 시작 즉시 플래그 설정하여 중복 호출 방지
+        initializedRef.current = true;
+        setLoading(true);
+        setError(null);
 
-        // Cleanup function to reset initialization state when modal closes
-        if (!open) {
+        try {
+            // DOM 렌더링 확보를 위한 지연
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            const container = document.getElementById(containerId);
+            console.log('[PayPalPaymentModal] Container check:', {
+                containerId,
+                found: !!container,
+                innerHTML: container?.innerHTML
+            });
+
+            if (!container) {
+                throw new Error(`Container element #${containerId} not found`);
+            }
+
+            await initiatePayment(containerId);
+        } catch (err) {
+            console.error('PayPal initialization failed:', err);
+            setError(err instanceof Error ? err.message : 'Failed to load PayPal buttons');
+            onError(err);
+            // 실패 시 재시도 가능하도록 플래그 초기화
             initializedRef.current = false;
+        } finally {
+            setLoading(false);
         }
     }, [open, initiatePayment, onError]);
+
+    useEffect(() => {
+        if (open) {
+            loadPayPalButtons();
+        } else {
+            initializedRef.current = false;
+        }
+    }, [open, loadPayPalButtons]);
 
     if (!open) return null;
 
@@ -92,7 +110,8 @@ export default function PayPalPaymentModal({
                                     <p className="text-sm text-gray-500">Loading PayPal...</p>
                                 </div>
                             )}
-                            <div id={containerId} className="w-full" />
+                            {/* PortOne SDK가 찾는 컨테이너: ID와 Class 모두 설정 */}
+                            <div id={containerId} className="portone-ui-container w-full" />
                         </div>
                     )}
                 </div>

@@ -230,11 +230,11 @@ export const requestPayPalPayment = async (
     amount: params.amount,
   });
 
-  const storeId = process.env.VITE_PORTONE_STORE_ID;
-  const channelKey = process.env.VITE_PORTONE_CHANNEL_KEY_PAYPAL;
+  const storeId = import.meta.env.VITE_PORTONE_STORE_ID || 'store-21731740-b1df-492c-832a-8f38448d0ebd';
+  const channelKey = import.meta.env.VITE_PORTONE_CHANNEL_KEY_PAYPAL || 'channel-key-1530a3c5-16eb-44ff-bbb1-688cdde309af';
 
   if (!storeId || !channelKey) {
-    console.error('[portone-paypal] 환경변수 설정 오류');
+    console.error('[portone-paypal] 환경변수 설정 오류', { storeId, channelKey });
     return {
       success: false,
       error_msg: 'PayPal 결제 설정이 올바르지 않습니다.',
@@ -242,15 +242,6 @@ export const requestPayPalPayment = async (
   }
 
   try {
-    // PortOne SDK 로드 확인
-    if (typeof window !== 'undefined' && !window.PortOne) {
-      console.error('[portone-paypal] PortOne SDK가 로드되지 않음');
-      return {
-        success: false,
-        error_msg: '결제 모듈을 불러오지 못했습니다.',
-      };
-    }
-
     // KRW를 USD로 변환 (PayPal은 USD 사용)
     const usdAmount = convertKRWToUSD(params.amount);
     // USD는 센트 단위로 변환
@@ -258,11 +249,20 @@ export const requestPayPalPayment = async (
 
     // 리턴 URL 설정
     const returnUrl = params.returnUrl || getPortOneReturnUrl();
+    const elementSelector = params.elementId ? `#${params.elementId}` : undefined;
+
+    console.log('[portone-paypal] loadPaymentUI 호출', {
+      storeId,
+      channelKey,
+      paymentId: params.orderId,
+      element: elementSelector,
+      elementExists: elementSelector ? !!document.querySelector(elementSelector) : 'N/A'
+    });
 
     // 포트원 V2 SDK로 PayPal 결제 UI 로드
     // loadPaymentUI는 Promise를 반환할 수 있으므로 await 사용
     // @ts-ignore: SDK 타입 정의 불일치 회피
-    await window.PortOne!.loadPaymentUI({
+    await loadPaymentUI({
       uiType: 'PAYPAL_SPB',
       storeId,
       channelKey,
@@ -271,13 +271,14 @@ export const requestPayPalPayment = async (
       totalAmount: totalAmountInCents,
       currency: 'USD',
       payMethod: 'PAYPAL',
-      element: params.elementId ? `#${params.elementId}` : undefined, // elementId가 있으면 해당 요소에 렌더링
+      // element: elementSelector, // SDK가 자동으로 portone-ui-container를 찾으므로 생략
       customer: {
         fullName: params.buyerName || 'Guest',
         email: params.buyerEmail,
         phoneNumber: params.buyerTel,
       },
       redirectUrl: returnUrl,
+    }, {
       onPaymentSuccess: (paymentResult: any) => {
         console.log('[portone-paypal] 결제 성공', paymentResult);
         if (params.onSuccess) {

@@ -241,7 +241,7 @@ export default function CartPage() {
     }
   };
 
-  const handlePayPalPayment = async (elementId: string) => {
+  const handlePayPalPayment = useCallback(async (elementId: string) => {
     if (!user || !pendingPurchase) return;
 
     await startSheetPurchase({
@@ -254,7 +254,7 @@ export default function CartPage() {
       buyerEmail: user.email ?? null,
       elementId,
     });
-  };
+  }, [user, pendingPurchase]);
 
   const handlePayPalSuccess = async (response: any) => {
     console.log('PayPal payment success:', response);

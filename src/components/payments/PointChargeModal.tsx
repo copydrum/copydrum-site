@@ -160,7 +160,7 @@ export default function PointChargeModal({
     }
   };
 
-  const handlePayPalPayment = async (elementId: string) => {
+  const handlePayPalPayment = useCallback(async (elementId: string) => {
     if (!user) return;
     const selectedOption = chargeOptions.find((option) => option.amount === chargeAmount);
     if (!selectedOption) return;
@@ -172,11 +172,11 @@ export default function PointChargeModal({
       bonusAmount: selectedOption.bonus ?? 0,
       paymentMethod: 'paypal',
       description,
-      buyerName: getUserDisplayName(profile as any, user.email || null) ?? null,
+      buyerName: user.email ?? null,
       buyerEmail: user.email ?? null,
       elementId,
     });
-  };
+  }, [user, chargeAmount, chargeOptions, formatCurrency]);
 
   const handleBankTransferConfirm = async () => {
     if (!user) {
