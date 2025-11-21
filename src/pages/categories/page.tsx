@@ -19,7 +19,7 @@ import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 
-import { calculatePointPrice, calculatePointPriceFromUsd } from '../../lib/pointPrice';
+import { calculatePointPrice } from '../../lib/pointPrice';
 
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 
@@ -586,10 +586,7 @@ const CategoriesPage: React.FC = () => {
       }
     }
 
-    const success = await addToCart(sheetId);
-    if (success) {
-      alert(t('categoriesPage.addedToCart'));
-    }
+    await addToCart(sheetId);
   };
 
   const handleBuyNow = async (sheetId: string) => {
@@ -796,26 +793,11 @@ const CategoriesPage: React.FC = () => {
   const selectedSheetIsFavorite = selectedSheet ? favoriteIds.has(selectedSheet.id) : false;
   const selectedSheetFavoriteLoading = selectedSheet ? favoriteLoadingIds.has(selectedSheet.id) : false;
 
-  // 영문 사이트에서 포인트 가격 계산 (USD 가격을 포인트로 변환)
+  // 포인트 가격 계산 (항상 KRW 가격 기준)
   const selectedPointPrice = useMemo(() => {
     if (!selectedSheet || !selectedDisplayPrice) return 0;
-    if (isKoreanSite) {
-      // 한국어 사이트: KRW 가격을 포인트로 변환
-      return calculatePointPrice(selectedDisplayPrice);
-    } else {
-      // 영문 사이트: USD 가격을 포인트로 변환
-      const priceInfo = formatPrice({
-        amountKRW: selectedDisplayPrice,
-        language: i18n.language,
-        host: typeof window !== 'undefined' ? window.location.host : undefined
-      });
-      if (priceInfo.currency === 'USD') {
-        return calculatePointPriceFromUsd(priceInfo.amount);
-      }
-      // 혹시 KRW로 표시되는 경우를 대비
-      return calculatePointPrice(selectedDisplayPrice);
-    }
-  }, [selectedSheet, selectedDisplayPrice, isKoreanSite, i18n.language]);
+    return calculatePointPrice(selectedDisplayPrice);
+  }, [selectedSheet, selectedDisplayPrice]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
