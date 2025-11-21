@@ -1,7 +1,7 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { isEnglishHost } from '../../i18n/languages';
+import { isGlobalSiteHost } from '../../config/hostType';
 
 interface FooterLink {
   label: string;
@@ -13,32 +13,24 @@ export default function Footer() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const currentYear = new Date().getFullYear();
-  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
+  const location = useLocation();
+  const isGlobalSite = typeof window !== 'undefined' && isGlobalSiteHost(window.location.host);
 
-  // 카테고리 링크 (영어 사이트일 때 영어로 표시)
-  const categoryLinks: FooterLink[] = isEnglishSite
-    ? [
-        { label: t('category.kpop'), href: '/categories?search=가요' },
-        { label: t('category.pop'), href: '/categories?search=팝' },
-        { label: t('category.rock'), href: '/categories?search=락' },
-        { label: t('category.jazz'), href: '/categories?search=재즈' },
-        { label: t('category.jpop'), href: '/categories?search=J-POP' },
-        { label: t('category.ost'), href: '/categories?search=OST' },
-      ]
-    : [
-        { label: '가요', href: '/categories?search=가요' },
-        { label: '팝', href: '/categories?search=팝' },
-        { label: '락', href: '/categories?search=락' },
-        { label: '재즈', href: '/categories?search=재즈' },
-        { label: 'J-POP', href: '/categories?search=J-POP' },
-        { label: 'OST', href: '/categories?search=OST' },
-      ];
+  // 카테고리 링크 (i18n 사용)
+  const categoryLinks: FooterLink[] = [
+    { label: t('category.kpop'), href: '/categories?search=가요' },
+    { label: t('category.pop'), href: '/categories?search=팝' },
+    { label: t('category.rock'), href: '/categories?search=락' },
+    { label: t('category.jazz'), href: '/categories?search=재즈' },
+    { label: t('category.jpop'), href: '/categories?search=J-POP' },
+    { label: t('category.ost'), href: '/categories?search=OST' },
+  ];
 
   const supportLinks: FooterLink[] = [
     { label: t('footer.guide'), href: '/guide' },
     { label: t('footer.faq'), href: '/customer-support' },
     { label: t('footer.contact'), href: '/customer-support?tab=contact' },
-    { label: isEnglishSite ? 'Refund & Delivery Policy' : '환불정책', href: '/policy/refund' },
+    { label: t('footer.refundPolicy'), href: '/policy/refund' },
   ];
 
   const companyLinks: FooterLink[] = [
@@ -93,7 +85,7 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
-            {!isEnglishSite && (
+            {!isGlobalSite && (
               <div
                 className="text-2xl font-bold mb-4 cursor-pointer"
                 style={{ fontFamily: '"Noto Sans KR", "Malgun Gothic", sans-serif' }}
@@ -118,7 +110,7 @@ export default function Footer() {
           </div>
 
           <div>
-            <h5 className="font-semibold mb-4">{t('footer.categories')}</h5>
+            <h5 className="font-semibold mb-4">{t('footer.scoreCategoryTitle')}</h5>
             <ul className="space-y-2">
               {categoryLinks.map((link) => (
                 <li key={link.label}>{renderLink(link)}</li>
@@ -152,7 +144,14 @@ export default function Footer() {
               <p>{t('footer.telecomLicense')}</p>
               <p>{t('footer.address')}</p>
               <p>{t('footer.contactInfo')}</p>
-              <p className="pt-2 text-gray-500">© {currentYear} COPYDRUM. All rights reserved.</p>
+              <div className="mt-8 pt-8 border-t border-gray-800 text-center text-gray-400 text-sm">
+                <p>&copy; {new Date().getFullYear()} CopyDrum. All rights reserved.</p>
+                {isGlobalSite && (
+                  <p className="mt-2 text-xs text-gray-500">
+                    Global Service | English / Japanese / Vietnamese / French / German / Spanish / Portuguese
+                  </p>
+                )}
+              </div>
             </div>
             <div className="flex-shrink-0">
               <img src="/komca.jpg" alt="KOMCA" className="h-16 w-auto" />
@@ -163,4 +162,3 @@ export default function Footer() {
     </footer>
   );
 }
-

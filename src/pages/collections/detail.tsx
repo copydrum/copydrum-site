@@ -10,6 +10,9 @@ import { splitPurchasedSheetIds } from '../../lib/purchaseCheck';
 import { useTranslation } from 'react-i18next';
 import { getTranslatedText } from '../../lib/translationHelpers';
 import { formatPrice } from '../../lib/priceFormatter';
+import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
+import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
+import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
 
 interface Collection {
   id: string;
@@ -63,11 +66,14 @@ export default function CollectionDetailPage() {
   const { i18n, t } = useTranslation();
   const currentLanguage = i18n.language;
   const formatCurrency = useCallback(
-    (value: number) => formatPrice({ 
-      amountKRW: value, 
-      language: currentLanguage,
-      host: typeof window !== 'undefined' ? window.location.host : undefined
-    }).formatted,
+    (value: number) => {
+      if (currentLanguage === 'ko') {
+        return formatPrice({ amountKRW: value, language: 'ko' }).formatted;
+      }
+      const currency = getActiveCurrency();
+      const converted = convertPriceForLocale(value, currentLanguage, currency);
+      return formatCurrencyUi(converted, currency);
+    },
     [currentLanguage],
   );
 
@@ -315,10 +321,10 @@ export default function CollectionDetailPage() {
     try {
       const price = Math.max(0, finalPrice);
       const purchaseItems = sheetDetails.map((sheet) => ({
-          sheetId: sheet.id,
-          sheetTitle: sheet.title ?? t('collectionsDetail.sheetTitle'),
-          price: sheet.price ?? 0,
-        }));
+        sheetId: sheet.id,
+        sheetTitle: sheet.title ?? t('collectionsDetail.sheetTitle'),
+        price: sheet.price ?? 0,
+      }));
 
       const purchaseResult = await processCashPurchase({
         userId: user.id,
@@ -331,7 +337,7 @@ export default function CollectionDetailPage() {
       if (!purchaseResult.success) {
         if (purchaseResult.reason === 'INSUFFICIENT_CREDIT') {
           alert(
-            `${t('collectionsDetail.alerts.insufficientCredit')}\n${t('collectionsDetail.alerts.currentBalance', { amount: purchaseResult.currentCredits.toLocaleString('ko-KR') })}\n${t('collectionsDetail.alerts.chargeCash')}`,
+            `${t('collectionsDetail.alerts.insufficientCredit')}\n${t('collectionsDetail.alerts.currentBalance', { amount: formatCurrency(purchaseResult.currentCredits) })}\n${t('collectionsDetail.alerts.chargeCash')}`,
           );
         }
         return;
@@ -514,7 +520,7 @@ export default function CollectionDetailPage() {
                     >
                       {purchasing ? t('collectionsDetail.purchase.processing') : t('collectionsDetail.purchase.buyNow')}
                     </button>
-                    
+
                     <p className="text-sm text-gray-500 text-center">
                       {t('collectionsDetail.purchase.note')}
                     </p>
@@ -570,9 +576,8 @@ export default function CollectionDetailPage() {
                 type="button"
                 onClick={handlePurchase}
                 disabled={purchasing}
-                className={`flex flex-1 items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow transition ${
-                  purchasing ? 'opacity-60' : 'hover:bg-blue-700'
-                }`}
+                className={`flex flex-1 items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow transition ${purchasing ? 'opacity-60' : 'hover:bg-blue-700'
+                  }`}
               >
                 {purchasing ? t('collectionsDetail.purchase.processing') : t('collectionsDetail.purchase.buyNow')}
               </button>

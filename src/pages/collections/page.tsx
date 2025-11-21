@@ -92,12 +92,12 @@ export default function CollectionsPage() {
       const sortedCategories = (data || []).sort((a, b) => {
         const indexA = genreList.indexOf(a.name);
         const indexB = genreList.indexOf(b.name);
-        
+
         // 순서에 없는 경우 맨 뒤로
         if (indexA === -1 && indexB === -1) return 0;
         if (indexA === -1) return 1;
         if (indexB === -1) return -1;
-        
+
         return indexA - indexB;
       });
 
@@ -124,7 +124,7 @@ export default function CollectionsPage() {
           const categoryIdsFromDb = Array.isArray(collection.category_ids)
             ? collection.category_ids.filter((id: string | null) => !!id).map((id: string) => id)
             : [];
-          
+
           let categoryIds = [...categoryIdsFromDb];
 
           if (categoryIds.length === 0 && collection.category_id) {
@@ -167,8 +167,8 @@ export default function CollectionsPage() {
             }
           }
 
-          return { 
-            ...collection, 
+          return {
+            ...collection,
             sheet_count: count || 0,
             categories: categoryIds
           };
@@ -189,19 +189,41 @@ export default function CollectionsPage() {
   };
 
   const formatCurrency = useCallback(
-    (price: number): string => formatPriceWithCurrency({ 
-      amountKRW: price, 
+    (price: number): string => formatPriceWithCurrency({
+      amountKRW: price,
       language: currentLanguage,
       host: typeof window !== 'undefined' ? window.location.host : undefined
     }).formatted,
     [currentLanguage],
   );
 
+  // 카테고리 이름을 번역하는 함수
+  const getCategoryName = (categoryName: string): string => {
+    if (i18n.language === 'ko') return categoryName;
+
+    const categoryMap: Record<string, string> = {
+      '가요': t('categoriesPage.categories.kpop'),
+      '팝': t('categoriesPage.categories.pop'),
+      '락': t('categoriesPage.categories.rock'),
+      'CCM': t('categoriesPage.categories.ccm'),
+      '트로트/성인가요': t('categoriesPage.categories.trot'),
+      '재즈': t('categoriesPage.categories.jazz'),
+      'J-POP': t('categoriesPage.categories.jpop'),
+      'OST': t('categoriesPage.categories.ost'),
+      '드럼솔로': t('categoriesPage.categories.drumSolo'),
+      '드럼커버': t('categoriesPage.categories.drumCover'),
+      '드럼레슨': t('categoriesPage.categories.drumLesson'),
+      '기타': t('categoriesPage.categories.other'),
+    };
+
+    return categoryMap[categoryName] || categoryName;
+  };
+
   // 선택된 카테고리에 해당하는 모음집 필터링
   const filteredCollections = selectedCategory
-    ? collections.filter(collection => 
-        collection.categories?.includes(selectedCategory)
-      )
+    ? collections.filter(collection =>
+      collection.categories?.includes(selectedCategory)
+    )
     : collections;
 
   if (loading) {
@@ -241,11 +263,10 @@ export default function CollectionsPage() {
               <div className="flex flex-wrap gap-2 justify-center">
                 <button
                   onClick={() => setSelectedCategory('')}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                    selectedCategory === ''
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${selectedCategory === ''
                       ? 'bg-blue-600 text-white'
                       : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-                  }`}
+                    }`}
                 >
                   {t('collectionsPage.filter.all')}
                 </button>
@@ -253,13 +274,12 @@ export default function CollectionsPage() {
                   <button
                     key={category.id}
                     onClick={() => setSelectedCategory(category.id)}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                      selectedCategory === category.id
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${selectedCategory === category.id
                         ? 'bg-blue-600 text-white'
                         : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-                    }`}
+                      }`}
                   >
-                    {category.name}
+                    {getCategoryName(category.name)}
                   </button>
                 ))}
               </div>

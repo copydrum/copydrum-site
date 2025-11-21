@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
 import { convertUSDToKRW } from '../../lib/priceFormatter';
 import { startCashCharge } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
-import { isEnglishHost } from '../../i18n/languages';
+import { isGlobalSiteHost } from '../../config/hostType';
 import { getUserDisplayName } from '../../utils/userDisplayName';
 import type { Profile } from '../../lib/supabase';
 import PayPalPaymentModal from './PayPalPaymentModal';
@@ -54,7 +55,14 @@ export default function PointChargeModal({
 }: PointChargeModalProps) {
   const { i18n, t } = useTranslation();
   const formatCurrency = useCallback(
-    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
+    (value: number) => {
+      // Phase 4: 일본어 사이트 UI 적용
+      if (i18n.language === 'ja') {
+        // TODO: Phase X에서 환율 변환 로직 추가 필요 (현재는 숫자 그대로 JPY 포맷)
+        return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(value);
+      }
+      return formatPrice({ amountKRW: value, language: i18n.language }).formatted;
+    },
     [i18n.language],
   );
   const formatNumber = useCallback(
@@ -68,14 +76,15 @@ export default function PointChargeModal({
     [],
   );
 
-  const isEnglishSite = useMemo(() => {
+  const location = useLocation();
+  const isGlobalSite = useMemo(() => {
     if (typeof window === 'undefined') return false;
-    return isEnglishHost(window.location.host);
-  }, []);
+    return isGlobalSiteHost(window.location.host);
+  }, [location.search]);
 
   const chargeOptions = useMemo<ChargeOption[]>(() => {
-    if (isEnglishSite) {
-      // 영문 사이트: 달러 단위
+    if (isGlobalSite) {
+      // 글로벌 사이트: 달러 단위
       // 포인트는 100단위로 반올림하여 깔끔하게 표시
       const roundTo100 = (val: number) => Math.round(val / 100) * 100;
 
@@ -97,10 +106,10 @@ export default function PointChargeModal({
       { amount: 50000, bonus: 11000, label: '5만원', bonusPercent: '22%' },
       { amount: 100000, bonus: 25000, label: '10만원', bonusPercent: '25%' },
     ];
-  }, [isEnglishSite]);
+  }, [isGlobalSite]);
 
   const paymentMethods = useMemo<PaymentMethod[]>(() => {
-    if (isEnglishSite) {
+    if (isGlobalSite) {
       return [
         {
           id: 'paypal',
@@ -121,10 +130,10 @@ export default function PointChargeModal({
         disabled: false,
       },
     ];
-  }, [isEnglishSite, t]);
+  }, [isGlobalSite, t]);
 
   const [chargeAmount, setChargeAmount] = useState<number>(chargeOptions[2].amount);
-  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank' | 'paypal'>(isEnglishSite ? 'paypal' : 'bank');
+  const [selectedPayment, setSelectedPayment] = useState<'card' | 'kakaopay' | 'bank' | 'paypal'>(isGlobalSite ? 'paypal' : 'bank');
   const [chargeAgreementChecked, setChargeAgreementChecked] = useState(false);
   const [chargeProcessing, setChargeProcessing] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
@@ -386,9 +395,9 @@ export default function PointChargeModal({
                       ? Math.round((option.bonus / option.amount) * 100)
                       : 0;
 
-                    // 한국 사이트와 영문 사이트 분기 처리
-                    if (isEnglishSite && 'amountUSD' in option) {
-                      // 영문 사이트: USD 기반 UI 유지
+                    // 한국 사이트와 글로벌 사이트 분기 처리
+                    if (isGlobalSite && 'amountUSD' in option) {
+                      // 글로벌 사이트: USD 기반 UI 유지
                       const paymentAmount = `$${option.amountUSD}`;
                       const formattedTotalPoints = formatPoints(totalPoints);
                       const formattedBonusPoints = option.bonus ? formatPoints(option.bonus) : '0 P';
@@ -476,7 +485,7 @@ export default function PointChargeModal({
               {/* 결제방법 */}
               <div className="mb-6">
                 <h3 className="text-sm font-medium text-gray-700 mb-3">
-                  {isEnglishSite ? t('sidebar.paymentMethod') : t('sidebar.paymentMethodLabel')}
+                  {isGlobalSite ? t('sidebar.paymentMethod') : t('sidebar.paymentMethodLabel')}
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
                   {paymentMethods.map((method) => {

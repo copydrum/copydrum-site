@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import LanguageSelector from './LanguageSelector';
-import { isEnglishHost } from '../../i18n/languages';
+import { isGlobalSiteHost } from '../../config/hostType';
 
 interface HeaderProps {
   user?: User | null;
@@ -17,7 +17,7 @@ export default function Header({ user: propUser }: HeaderProps) {
   const [customOrderCategoryId, setCustomOrderCategoryId] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
+  const isGlobalSite = typeof window !== 'undefined' && isGlobalSiteHost(window.location.host);
 
   useEffect(() => {
     if (!propUser) {
@@ -112,14 +112,14 @@ export default function Header({ user: propUser }: HeaderProps) {
           {/* Logo */}
           <div className="flex items-center space-x-4">
             <div className="flex items-center">
-              <img 
-                src="/logo.png" 
+              <img
+                src="/logo.png"
                 alt={t('site.name')}
-                className={`h-12 w-auto cursor-pointer ${isEnglishSite ? '' : 'mr-3'}`}
+                className={`h-12 w-auto cursor-pointer ${isGlobalSite ? '' : 'mr-3'}`}
                 onClick={() => navigate('/')}
               />
-              {!isEnglishSite && (
-                <h1 
+              {!isGlobalSite && (
+                <h1
                   className="text-2xl font-bold text-white cursor-pointer"
                   style={{ fontFamily: '"Noto Sans KR", "Malgun Gothic", sans-serif' }}
                   onClick={() => navigate('/')}
@@ -146,7 +146,7 @@ export default function Header({ user: propUser }: HeaderProps) {
                   }}
                   className="w-full px-6 py-3 text-base border-0 rounded-full focus:outline-none pr-12 bg-blue-50 placeholder-gray-400 text-gray-900"
                 />
-                <button 
+                <button
                   onClick={handleSearch}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-blue-700 cursor-pointer transition-colors duration-200"
                 >
@@ -159,27 +159,24 @@ export default function Header({ user: propUser }: HeaderProps) {
 
         {/* Navigation Menu - Below Search Bar */}
         <nav className="flex items-center justify-center space-x-8 pb-4">
-          <a 
-            href="/" 
-            className={`font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors duration-200 ${
-              isActive('/') ? 'text-white' : 'text-white hover:text-blue-200'
-            }`}
+          <a
+            href="/"
+            className={`font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors duration-200 ${isActive('/') ? 'text-white' : 'text-white hover:text-blue-200'
+              }`}
           >
             {t('nav.home')}
           </a>
-          <a 
-            href="/categories" 
-            className={`font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors duration-200 ${
-              isActive('/categories') ? 'text-white' : 'text-white hover:text-blue-200'
-            }`}
+          <a
+            href="/categories"
+            className={`font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors duration-200 ${isActive('/categories') ? 'text-white' : 'text-white hover:text-blue-200'
+              }`}
           >
             {t('nav.categories')}
           </a>
-          <a 
-            href={customOrderLink} 
-            className={`font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors duration-200 ${
-              isCustomOrderActive() ? 'text-white' : 'text-white hover:text-blue-200'
-            }`}
+          <a
+            href={customOrderLink}
+            className={`font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors duration-200 ${isCustomOrderActive() ? 'text-white' : 'text-white hover:text-blue-200'
+              }`}
           >
             {t('nav.customOrder')}
           </a>

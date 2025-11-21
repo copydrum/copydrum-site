@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
-import { languages, getLanguageByCode, isEnglishHost } from '../../i18n/languages';
+import { languages, getLanguageByCode } from '../../i18n/languages';
+import { isGlobalSiteHost } from '../../config/hostType';
 
 interface LanguageSelectorProps {
   variant?: 'desktop' | 'mobile';
@@ -77,25 +78,36 @@ export default function LanguageSelector({ variant = 'desktop', className = '' }
 
     const currentHost = window.location.host;
     const currentPath = location.pathname + location.search;
-    const isCurrentlyEnglish = isEnglishHost(currentHost);
+    const isCurrentlyGlobal = isGlobalSiteHost(currentHost);
     const wantsEnglish = langCode === 'en';
     const wantsKorean = langCode === 'ko';
 
-    // 호스트 변경이 필요한 경우 (영어 <-> 한국어)
-    if ((isCurrentlyEnglish && wantsKorean) || (!isCurrentlyEnglish && wantsEnglish)) {
-      // 로컬 환경에서는 도메인 변경 대신 쿼리 파라미터 사용
-      if (currentHost.includes('localhost') || currentHost.includes('127.0.0.1')) {
-        const searchParams = new URLSearchParams(window.location.search);
-        if (wantsEnglish) {
-          searchParams.set('lang', 'en');
-        } else {
-          searchParams.delete('lang');
-          searchParams.delete('en');
-        }
-        window.location.search = searchParams.toString();
-        return;
+    // 로컬 환경에서는 도메인 변경 대신 쿼리 파라미터 사용
+    if (currentHost.includes('localhost') || currentHost.includes('127.0.0.1')) {
+      const searchParams = new URLSearchParams(window.location.search);
+
+      // 한국어(기본값)인 경우 파라미터 제거, 그 외에는 lang 파라미터 설정
+      if (langCode === 'ko') {
+        searchParams.delete('lang');
+        searchParams.delete('en'); // 레거시 파라미터 제거
+      } else {
+        searchParams.set('lang', langCode);
+        searchParams.delete('en'); // 레거시 파라미터 제거
       }
 
+      window.location.search = searchParams.toString();
+      return;
+    }
+
+    // 호스트 변경이 필요한 경우 (영어 <-> 한국어 등 도메인 분리된 언어)
+    // 현재는 en.copydrum.com / copydrum.com / ja.copydrum.com(예정) 등
+    // 로컬이 아닌 프로덕션 환경에서의 도메인 전환 로직
+
+    // TODO: 추후 ja.copydrum.com 등 서브도메인이 실제 운영되면 해당 로직 추가 필요
+    // 현재는 영어/한국어 전환만 도메인 이동으로 처리하고, 나머지는 i18n.changeLanguage로 처리하거나
+    // 아직 도메인이 없으므로 동작하지 않게 둠.
+
+    if ((isCurrentlyGlobal && wantsKorean) || (!isCurrentlyGlobal && wantsEnglish)) {
       let targetHost: string;
 
       if (wantsEnglish) {

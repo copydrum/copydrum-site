@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
-import { isEnglishHost } from '../i18n/languages';
+import { isGlobalSiteHost } from '../config/hostType';
 
 export interface CartItem {
   id: string;
@@ -22,7 +22,7 @@ export const useCart = () => {
   // 장바구니 아이템 로드
   const loadCartItems = async () => {
     if (!user) return;
-    
+
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -67,35 +67,50 @@ export const useCart = () => {
 
   // 장바구니에 아이템 추가
   const addToCart = async (sheetId: string) => {
-    const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
-    
+    const isGlobalSite = typeof window !== 'undefined' && isGlobalSiteHost(window.location.host);
+
     if (!user) {
-      alert(isEnglishSite ? 'Login is required.' : '로그인이 필요합니다.');
-      return false;
+      alert(isGlobalSite ? 'Login is required.' : '로그인이 필요합니다.');
+      return;
     }
 
     try {
-      const { error } = await supabase
+      // 1. 현재 장바구니 아이템 조회
+      const { data: existingItems, error: fetchError } = await supabase
         .from('cart_items')
-        .insert({
-          user_id: user.id,
-          sheet_id: sheetId
-        });
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('sheet_id', sheetId);
 
-      if (error) {
-        if (error.code === '23505') {
-          alert(isEnglishSite ? 'This item is already in your cart.' : '이미 장바구니에 있는 상품입니다.');
-          return false;
-        }
-        throw error;
+      if (fetchError) throw fetchError;
+
+      // 2. 이미 장바구니에 있는지 확인
+      if (existingItems && existingItems.length > 0) {
+        alert(isGlobalSite ? 'Item is already in the cart.' : '이미 장바구니에 담긴 상품입니다.');
+        return;
       }
 
-      await loadCartItems();
-      return true;
+      // 3. 장바구니에 추가
+      const { error: insertError } = await supabase
+        .from('cart_items')
+        .insert([
+          {
+            user_id: user.id,
+            sheet_id: sheetId,
+          },
+        ]);
+
+      if (insertError) throw insertError;
+
+      // 4. 장바구니 상태 업데이트 (선택적)
+      // queryClient.invalidateQueries(['cart']); 
+
+      if (confirm(isGlobalSite ? 'Item added to cart. Go to cart?' : '장바구니에 담았습니다. 장바구니로 이동하시겠습니까?')) {
+        window.location.href = '/cart';
+      }
     } catch (error) {
       console.error('장바구니 추가 실패:', error);
-      alert(isEnglishSite ? 'Failed to add item to cart.' : '장바구니 추가에 실패했습니다.');
-      return false;
+      alert(isGlobalSite ? 'Failed to add item to cart.' : '장바구니 추가에 실패했습니다.');
     }
   };
 
@@ -168,7 +183,7 @@ export const useCart = () => {
 
   // 총 가격 계산
   const getTotalPrice = (selectedItems?: string[]) => {
-    const items = selectedItems 
+    const items = selectedItems
       ? cartItems.filter(item => selectedItems.includes(item.id))
       : cartItems;
     return items.reduce((total, item) => total + item.price, 0);

@@ -1,11 +1,11 @@
 import { useMemo, useState, type KeyboardEvent, type ChangeEvent } from 'react';
-import { createSearchParams, useNavigate } from 'react-router-dom';
+import { createSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import { googleAuth } from '../../lib/google';
 import LanguageSelector from './LanguageSelector';
-import { isEnglishHost } from '../../i18n/languages';
+import { isGlobalSiteHost } from '../../config/hostType';
 
 interface MainHeaderProps {
   user?: User | null;
@@ -15,7 +15,9 @@ export default function MainHeader({ user }: MainHeaderProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
-  const isEnglishSite = typeof window !== 'undefined' && isEnglishHost(window.location.host);
+  const location = useLocation();
+  const isGlobalSite = typeof window !== 'undefined' && isGlobalSiteHost(window.location.host);
+  // location.search dependency is implicit because useLocation() triggers re-render
 
   const navItems = useMemo(
     () => [
@@ -61,7 +63,7 @@ export default function MainHeader({ user }: MainHeaderProps) {
       if (googleAuth.isLoggedIn()) {
         googleAuth.logout();
       }
-      
+
       // Supabase 로그아웃
       await supabase.auth.signOut();
       window.location.reload();
@@ -91,10 +93,10 @@ export default function MainHeader({ user }: MainHeaderProps) {
             <img
               src="/logo.png"
               alt={t('site.name')}
-              className={`h-12 w-auto cursor-pointer ${isEnglishSite ? '' : 'mr-3'}`}
+              className={`h-12 w-auto cursor-pointer ${isGlobalSite ? '' : 'mr-3'}`}
               onClick={() => navigate('/')}
             />
-            {!isEnglishSite && (
+            {!isGlobalSite && (
               <h1
                 className="text-2xl font-bold text-white cursor-pointer"
                 style={{ fontFamily: '"Noto Sans KR", "Malgun Gothic", sans-serif' }}
@@ -110,7 +112,7 @@ export default function MainHeader({ user }: MainHeaderProps) {
             <div className="relative">
               <input
                 type="text"
-              placeholder={t('search.placeholder')}
+                placeholder={t('search.placeholder')}
                 value={searchQuery}
                 onChange={handleChange}
                 onKeyDown={handleKeyPress}

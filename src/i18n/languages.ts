@@ -98,31 +98,11 @@ const normalizeHost = (host?: string) => {
   return host.split(':')[0].toLowerCase();
 };
 
+import { isGlobalSiteHost } from '../config/hostType';
+
 export const isEnglishHost = (host?: string) => {
-  const normalized = normalizeHost(host);
-  if (!normalized) {
-    // 로컬 개발 환경에서 URL 쿼리 파라미터로 영어 모드 활성화
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      return params.get('lang') === 'en' || params.get('en') === 'true';
-    }
-    return false;
-  }
-  
-  // 프로덕션: en.copydrum.com 도메인 체크
-  if (normalized === 'en.copydrum.com' || normalized.endsWith('.en.copydrum.com')) {
-    return true;
-  }
-  
-  // 로컬 개발 환경: localhost에서도 쿼리 파라미터로 영어 모드 활성화 가능
-  if (normalized.includes('localhost') || normalized.includes('127.0.0.1')) {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      return params.get('lang') === 'en' || params.get('en') === 'true';
-    }
-  }
-  
-  return false;
+  if (!host) return false;
+  return isGlobalSiteHost(host);
 };
 
 const isKoreanPrimaryHost = (host?: string) => {

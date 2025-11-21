@@ -1,6 +1,7 @@
 import { DEFAULT_USD_RATE } from '../priceFormatter';
 import { loadPaymentUI } from '@portone/browser-sdk/v2';
-import { isEnglishHost } from '../../i18n/languages';
+import { isGlobalSiteHost } from '../../config/hostType';
+import { getActiveCurrency } from './getActiveCurrency';
 
 // 포트원 스크립트 URL (최신 버전 사용)
 const PORTONE_SCRIPT_URL = 'https://cdn.iamport.kr/js/iamport.payment-1.2.0.js';
@@ -172,10 +173,10 @@ export interface RequestPayPalPaymentResult {
 export const requestPayPalPayment = async (
   params: RequestPayPalPaymentParams,
 ): Promise<RequestPayPalPaymentResult> => {
-  // 영문 사이트에서만 포트원 V2 SDK 사용
-  const isEnglish = typeof window !== 'undefined' && isEnglishHost(window.location.host);
+  // 글로벌 사이트에서만 포트원 V2 SDK 사용
+  const isGlobalSite = typeof window !== 'undefined' && isGlobalSiteHost(window.location.host);
 
-  if (!isEnglish) {
+  if (!isGlobalSite) {
     // 한국어 사이트는 기존 로직 유지 (PayPal 직접 API 사용)
     const { createPayPalPaymentIntent, getPayPalReturnUrl } = await import('./paypal');
 
@@ -224,7 +225,7 @@ export const requestPayPalPayment = async (
     }
   }
 
-  // 영문 사이트: 포트원 V2 SDK 사용
+  // 글로벌 사이트: 포트원 V2 SDK 사용
   console.log('[portone-paypal] PayPal 결제 요청 (PortOne V2 SDK 사용)', {
     orderId: params.orderId,
     amount: params.amount,
@@ -243,6 +244,7 @@ export const requestPayPalPayment = async (
 
   try {
     // KRW를 USD로 변환 (PayPal은 USD 사용)
+    // TODO: 향후 currency가 JPY 등일 때는 해당 통화로 변환 로직 필요
     const usdAmount = convertKRWToUSD(params.amount);
     // USD는 센트 단위로 변환
     const totalAmountInCents = Math.round(usdAmount * 100);
@@ -251,12 +253,16 @@ export const requestPayPalPayment = async (
     const returnUrl = params.returnUrl || getPortOneReturnUrl();
     const elementSelector = params.elementId ? `#${params.elementId}` : undefined;
 
+    // 현재 활성 통화 가져오기 (기본값 USD)
+    const currency = getActiveCurrency();
+
     console.log('[portone-paypal] loadPaymentUI 호출', {
       storeId,
       channelKey,
       paymentId: params.orderId,
       element: elementSelector,
-      elementExists: elementSelector ? !!document.querySelector(elementSelector) : 'N/A'
+      elementExists: elementSelector ? !!document.querySelector(elementSelector) : 'N/A',
+      currency,
     });
 
     // 포트원 V2 SDK로 PayPal 결제 UI 로드
@@ -269,7 +275,7 @@ export const requestPayPalPayment = async (
       paymentId: params.orderId,
       orderName: params.description,
       totalAmount: totalAmountInCents,
-      currency: 'USD',
+      currency: currency,
       payMethod: 'PAYPAL',
       // element: elementSelector, // SDK가 자동으로 portone-ui-container를 찾으므로 생략
       customer: {

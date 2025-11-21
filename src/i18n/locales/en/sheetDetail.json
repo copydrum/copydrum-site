@@ -63,7 +63,12 @@
   "addedToCart": "Added to cart",
   "loginRequired": "Please log in to add to favorites",
   "favoriteError": "An error occurred while processing favorites. Please try again.",
-  "downloadError": "An error occurred while downloading. Please try again."
+  "downloadError": "An error occurred while downloading. Please try again.",
+  "refundPolicy": "Refund Policy",
+  "refundPolicyDescription": "This product is a digital PDF drum sheet music file. Once the file has been downloaded or accessed, it cannot be refunded.",
+  "refundPolicyLink": "Refund & Delivery Policy",
+  "refundPolicyLinkText": "For details, please check our",
+  "refundPolicyLinkSuffix": ""
 }
 
 

@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
 import { calculatePointPrice } from '../../lib/pointPrice';
-import { isEnglishHost } from '../../i18n/languages';
+import { isGlobalSiteHost } from '../../config/hostType';
 
 type PaymentMethod = 'cash' | 'card' | 'bank' | 'paypal';
 
@@ -33,22 +34,22 @@ export type { PaymentMethod, PaymentContext };
 /**
  * 도메인과 컨텍스트에 따라 사용 가능한 결제수단 목록을 반환합니다.
  * 
- * @param domain - 'ko' (한국어 사이트) 또는 'en' (영문 사이트)
+ * @param siteType - 'ko' (한국어 사이트) 또는 'global' (글로벌 사이트)
  * @param context - 'buyNow' (바로구매) 또는 'cashCharge' (캐시 충전)
  * @param t - i18n 번역 함수
  * @returns 사용 가능한 결제수단 옵션 배열
  */
 function getAvailablePaymentMethods(
-  domain: 'ko' | 'en',
+  siteType: 'ko' | 'global',
   context: PaymentContext,
   t: (key: string) => string,
   allowCash: boolean = true,
 ): PaymentMethodOption[] {
-  // 영문 사이트: 바로구매 컨텍스트에서는 캐시 결제 + PayPal 표시
-  if (domain === 'en') {
+  // 글로벌 사이트: 바로구매 컨텍스트에서는 캐시 결제 + PayPal 표시
+  if (siteType === 'global') {
     if (context === 'buyNow') {
       const methods: PaymentMethodOption[] = [];
-      
+
       // 캐시 결제 옵션 추가
       if (allowCash) {
         methods.push({
@@ -60,7 +61,7 @@ function getAvailablePaymentMethods(
           disabled: false,
         });
       }
-      
+
       // PayPal 옵션 추가
       methods.push({
         id: 'paypal',
@@ -70,10 +71,10 @@ function getAvailablePaymentMethods(
         color: 'text-blue-700',
         disabled: false,
       });
-      
+
       return methods;
     }
-    
+
     // 캐시 충전 컨텍스트: PayPal만 표시 (기존 동작 유지)
     return [
       {
@@ -88,11 +89,11 @@ function getAvailablePaymentMethods(
   }
 
   // 한국어 사이트
-  if (domain === 'ko') {
+  if (siteType === 'ko') {
     // 바로구매 컨텍스트: 캐시 결제 + 무통장입금만 표시
     if (context === 'buyNow') {
       const methods: PaymentMethodOption[] = [];
-      
+
       if (allowCash) {
         methods.push({
           id: 'cash',
@@ -103,7 +104,7 @@ function getAvailablePaymentMethods(
           disabled: false,
         });
       }
-      
+
       methods.push({
         id: 'bank',
         name: t('payment.bank'),
@@ -168,7 +169,7 @@ export const PaymentMethodSelector = ({
   context = 'buyNow', // 기본값은 바로구매
 }: PaymentMethodSelectorProps) => {
   const { t, i18n: i18nInstance } = useTranslation();
-  
+
   // payment 번역 키가 로딩되었는지 보장
   // 현재 구조에서는 모든 번역이 하나의 리소스에 평탄화되어 있지만,
   // 안전을 위해 번역 키 존재 여부를 확인
@@ -191,33 +192,34 @@ export const PaymentMethodSelector = ({
       }
     }
   }, [open, i18nInstance]);
-  
+
   const formatCurrency = useCallback(
     (value: number) => formatPrice({ amountKRW: value, language: i18nInstance.language }).formatted,
     [i18nInstance.language],
   );
 
-  const isEnglishSite = useMemo(() => {
+  const location = useLocation();
+  const isGlobalSite = useMemo(() => {
     if (typeof window === 'undefined') return false;
-    return isEnglishHost(window.location.host);
-  }, []);
+    return isGlobalSiteHost(window.location.host);
+  }, [location.search]);
 
-  const domain: 'ko' | 'en' = useMemo(() => {
-    return isEnglishSite ? 'en' : 'ko';
-  }, [isEnglishSite]);
+  const siteType: 'ko' | 'global' = useMemo(() => {
+    return isGlobalSite ? 'global' : 'ko';
+  }, [isGlobalSite]);
 
   const paymentMethodOptions: PaymentMethodOption[] = useMemo(() => {
-    return getAvailablePaymentMethods(domain, context, t, allowCash);
-  }, [domain, context, t, allowCash]);
+    return getAvailablePaymentMethods(siteType, context, t, allowCash);
+  }, [siteType, context, t, allowCash]);
 
   // 포인트 가격 계산 (모든 사이트에서 표시)
   const pointPrice = useMemo(() => {
     const calculated = calculatePointPrice(amount);
-    // 한국어 사이트에서는 한국어 형식으로, 영문 사이트에서는 영문 형식으로 표시
-    return isEnglishSite 
+    // 한국어 사이트에서는 한국어 형식으로, 글로벌 사이트에서는 영문 형식으로 표시
+    return isGlobalSite
       ? calculated.toLocaleString('en-US')
       : calculated.toLocaleString('ko-KR');
-  }, [amount, isEnglishSite]);
+  }, [amount, isGlobalSite]);
 
   if (!open) return null;
 
@@ -250,11 +252,10 @@ export const PaymentMethodSelector = ({
                     onSelect(option.id);
                   }}
                   disabled={isDisabled}
-                  className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition-colors ${
-                    isDisabled
-                      ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400'
-                      : 'cursor-pointer border-gray-200 hover:border-blue-500 hover:bg-blue-50'
-                  }`}
+                  className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition-colors ${isDisabled
+                    ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400'
+                    : 'cursor-pointer border-gray-200 hover:border-blue-500 hover:bg-blue-50'
+                    }`}
                 >
                   <div className="flex items-center space-x-3">
                     <i className={`${option.icon} ${option.color} text-xl`}></i>

@@ -7,6 +7,9 @@ import type { Profile } from '../../lib/supabase';
 import { googleAuth } from '../../lib/google';
 import { formatPrice } from '../../lib/priceFormatter';
 import { getUserDisplayName } from '../../utils/userDisplayName';
+import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
+import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
+import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
 
 interface MobileMenuSidebarProps {
   isOpen: boolean;
@@ -48,7 +51,14 @@ export default function MobileMenuSidebar({
   }, [t, user, profile]);
 
   const formatCurrency = useCallback(
-    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
+    (value: number) => {
+      if (i18n.language === 'ko') {
+        return formatPrice({ amountKRW: value, language: 'ko' }).formatted;
+      }
+      const currency = getActiveCurrency();
+      const converted = convertPriceForLocale(value, i18n.language, currency);
+      return formatCurrencyUi(converted, currency);
+    },
     [i18n.language],
   );
 
@@ -99,7 +109,7 @@ export default function MobileMenuSidebar({
       if (googleAuth.isLoggedIn()) {
         googleAuth.logout();
       }
-      
+
       // Supabase 로그아웃
       await supabase.auth.signOut();
       onClose();
@@ -159,16 +169,14 @@ export default function MobileMenuSidebar({
                 key={item.href}
                 type="button"
                 onClick={() => handleNavigate(item.href)}
-                className={`flex w-full items-center rounded-xl px-4 py-3 text-left transition-colors ${
-                  isActive
+                className={`flex w-full items-center rounded-xl px-4 py-3 text-left transition-colors ${isActive
                     ? 'bg-blue-50 text-blue-600 border border-blue-200'
                     : 'bg-white text-gray-700 border border-gray-100 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 <i
-                  className={`${item.icon} mr-3 text-lg ${
-                    isActive ? 'text-blue-500' : 'text-gray-400'
-                  }`}
+                  className={`${item.icon} mr-3 text-lg ${isActive ? 'text-blue-500' : 'text-gray-400'
+                    }`}
                 />
                 <span className="text-sm font-medium">{t(item.labelKey)}</span>
               </button>

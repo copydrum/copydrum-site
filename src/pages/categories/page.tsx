@@ -20,7 +20,10 @@ import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
 import { calculatePointPrice, calculatePointPriceFromUsd } from '../../lib/pointPrice';
-import { isEnglishHost } from '../../i18n/languages';
+import { isGlobalSiteHost } from '../../config/hostType';
+import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
+import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
+import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
 
 interface Category {
   id: string;
@@ -93,22 +96,23 @@ const CategoriesPage: React.FC = () => {
   // 한국어 사이트 여부 확인
   const isKoreanSite = useMemo(() => {
     if (typeof window === 'undefined') return true;
-    return !isEnglishHost(window.location.host);
+    // 글로벌 사이트에서는 무통장 입금 숨김
+    return !isGlobalSiteHost(window.location.host);
   }, []);
 
   // 장르 목록 (순서대로) - 한글 원본 (한글 사이트용)
   const genreListKo = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
-  
+
   // 영문 사이트용 장르 순서 (한글 이름으로 저장되어 있지만 영문 순서로 매핑)
   const genreListEn = ['팝', '락', '가요', '재즈', 'J-POP', 'OST', 'CCM', '트로트/성인가요', '드럼솔로', '드럼커버'];
-  
+
   // 현재 언어에 맞는 장르 목록 가져오기
   const genreList = i18n.language === 'en' ? genreListEn : genreListKo;
-  
+
   // 장르 이름을 번역하는 함수
   const getGenreName = (genreKo: string): string => {
-    if (i18n.language !== 'en') return genreKo;
-    
+    if (i18n.language === 'ko') return genreKo;
+
     const genreMap: Record<string, string> = {
       '가요': t('categoriesPage.categories.kpop'),
       '팝': t('categoriesPage.categories.pop'),
@@ -121,15 +125,15 @@ const CategoriesPage: React.FC = () => {
       '드럼솔로': t('categoriesPage.categories.drumSolo'),
       '드럼커버': t('categoriesPage.categories.drumCover'),
     };
-    
+
     return genreMap[genreKo] || genreKo;
   };
 
   // 카테고리 이름을 번역하는 함수
   const getCategoryName = (categoryName: string | null | undefined): string => {
     if (!categoryName) return t('categoriesPage.categories.other');
-    if (i18n.language !== 'en') return categoryName;
-    
+    if (i18n.language === 'ko') return categoryName;
+
     const categoryMap: Record<string, string> = {
       '가요': t('categoriesPage.categories.kpop'),
       '팝': t('categoriesPage.categories.pop'),
@@ -143,7 +147,7 @@ const CategoriesPage: React.FC = () => {
       '드럼커버': t('categoriesPage.categories.drumCover'),
       '기타': t('categoriesPage.categories.other'),
     };
-    
+
     return categoryMap[categoryName] || categoryName;
   };
 
@@ -471,7 +475,7 @@ const CategoriesPage: React.FC = () => {
       for (let page = 0; page < totalPages; page++) {
         const to = from + pageSize - 1;
         console.log(`[${page + 1}/${totalPages}] 악보 데이터 로드 중: ${from} ~ ${to}`);
-        
+
         const { data, error } = await supabase
           .from('drum_sheets')
           .select('id, title, artist, difficulty, price, category_id, tempo, pdf_url, preview_image_url, youtube_url, is_featured, created_at, thumbnail_url, album_name, page_count, categories (name)')
@@ -510,7 +514,7 @@ const CategoriesPage: React.FC = () => {
 
       setDrumSheets(allSheets);
       console.log(`🎉 최종 로드 완료: 총 ${allSheets.length}개의 악보를 로드했습니다. (예상: ${totalCount}개)`);
-      
+
       if (allSheets.length !== totalCount) {
         console.warn(`⚠️ 경고: 로드된 악보 수(${allSheets.length})와 총 개수(${totalCount})가 일치하지 않습니다.`);
       }
@@ -533,7 +537,7 @@ const CategoriesPage: React.FC = () => {
       .slice(0, 5);
 
     setTopSheets(top5);
-    
+
     // 선택된 악보가 없거나 리스트에 없으면 첫 번째로 설정
     if (top5.length > 0) {
       if (!selectedSheet || !top5.find(s => s.id === selectedSheet.id)) {
@@ -681,11 +685,19 @@ const CategoriesPage: React.FC = () => {
 
   // Helper function to remove spaces and convert to lowercase for fuzzy search
   const formatCurrency = useCallback(
-    (value: number) => formatPrice({ 
-      amountKRW: value, 
-      language: i18n.language,
-      host: typeof window !== 'undefined' ? window.location.host : undefined
-    }).formatted,
+    (value: number) => {
+      if (i18n.language === 'ko') {
+        return formatPrice({
+          amountKRW: value,
+          language: 'ko',
+          host: typeof window !== 'undefined' ? window.location.host : undefined
+        }).formatted;
+      }
+
+      const currency = getActiveCurrency();
+      const converted = convertPriceForLocale(value, i18n.language, currency);
+      return formatCurrencyUi(converted, currency);
+    },
     [i18n.language],
   );
 
@@ -703,50 +715,50 @@ const CategoriesPage: React.FC = () => {
   // Filtered sheets based on search, category, difficulty, price range, artist, album
   const filteredSheets = React.useMemo(() => {
     let filtered = [...drumSheets];
-    
+
     // Search filter with space-insensitive matching
     if (searchTerm.trim()) {
       const normalizedSearch = normalizeString(searchTerm);
-      
+
       filtered = filtered.filter(sheet => {
         const normalizedTitle = normalizeString(sheet.title);
         const normalizedArtist = normalizeString(sheet.artist);
         const normalizedCategory = sheet.categories?.name ? normalizeString(sheet.categories.name) : '';
-        
+
         // Search in individual fields (title, artist, category)
-        const matchesIndividual = 
+        const matchesIndividual =
           normalizedTitle.includes(normalizedSearch) ||
           normalizedArtist.includes(normalizedSearch) ||
           normalizedCategory.includes(normalizedSearch);
-        
+
         // Search in combined artist + title (e.g., "아이유 넘지 못할 산이 있거든")
         const combinedArtistTitle = normalizedArtist + normalizedTitle;
         const matchesCombined = combinedArtistTitle.includes(normalizedSearch);
-        
+
         return matchesIndividual || matchesCombined;
       });
     }
-    
+
     // Category filter
     if (selectedCategory) {
       filtered = filtered.filter(sheet => sheet.category_id === selectedCategory);
     }
-    
+
     // Artist filter
     if (selectedArtist) {
       filtered = filtered.filter(sheet => sheet.artist === selectedArtist);
     }
-    
+
     // Album filter
     if (selectedAlbum) {
       filtered = filtered.filter(sheet => sheet.album_name === selectedAlbum);
     }
-    
+
     // Difficulty filter
     if (selectedDifficulty && selectedDifficulty !== 'all') {
       filtered = filtered.filter(sheet => sheet.difficulty === selectedDifficulty);
     }
-    
+
     // Price range filter
     if (priceRange.min) {
       const minPrice = parseInt(priceRange.min, 10);
@@ -760,7 +772,7 @@ const CategoriesPage: React.FC = () => {
         filtered = filtered.filter(sheet => getDisplayPrice(sheet) <= maxPrice);
       }
     }
-    
+
     // Sort
     let sorted = [...filtered];
     switch (sortBy) {
@@ -782,7 +794,7 @@ const CategoriesPage: React.FC = () => {
       default:
         break;
     }
-    
+
     return sorted;
   }, [drumSheets, searchTerm, selectedCategory, selectedDifficulty, priceRange, sortBy, selectedArtist, selectedAlbum, eventDiscounts]);
 
@@ -796,7 +808,7 @@ const CategoriesPage: React.FC = () => {
   const selectedDisplayPrice = selectedSheet ? getDisplayPrice(selectedSheet) : 0;
   const selectedSheetIsFavorite = selectedSheet ? favoriteIds.has(selectedSheet.id) : false;
   const selectedSheetFavoriteLoading = selectedSheet ? favoriteLoadingIds.has(selectedSheet.id) : false;
-  
+
   // 영문 사이트에서 포인트 가격 계산 (USD 가격을 포인트로 변환)
   const selectedPointPrice = useMemo(() => {
     if (!selectedSheet || !selectedDisplayPrice) return 0;
@@ -805,8 +817,8 @@ const CategoriesPage: React.FC = () => {
       return calculatePointPrice(selectedDisplayPrice);
     } else {
       // 영문 사이트: USD 가격을 포인트로 변환
-      const priceInfo = formatPrice({ 
-        amountKRW: selectedDisplayPrice, 
+      const priceInfo = formatPrice({
+        amountKRW: selectedDisplayPrice,
         language: i18n.language,
         host: typeof window !== 'undefined' ? window.location.host : undefined
       });
@@ -860,12 +872,12 @@ const CategoriesPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-white">
       <div className="hidden md:block">
-      <MainHeader user={user} />
+        <MainHeader user={user} />
       </div>
 
       {/* User Sidebar - 데스크톱 전용 */}
       <div className="hidden lg:block">
-      <UserSidebar user={user} />
+        <UserSidebar user={user} />
       </div>
 
       {/* Mobile Layout */}
@@ -895,7 +907,7 @@ const CategoriesPage: React.FC = () => {
                 </div>
                 <div>
                   <span className="font-medium text-gray-900">{t('categoriesPage.depositAmount')}</span>{' '}
-                                    {formatCurrency(bankTransferInfo.amount ?? 0)}
+                  {formatCurrency(bankTransferInfo.amount ?? 0)}
                 </div>
                 {bankTransferInfo.expectedDepositor ? (
                   <div>
@@ -921,9 +933,8 @@ const CategoriesPage: React.FC = () => {
                     key={genre}
                     type="button"
                     onClick={() => handleCategorySelect(categoryId)}
-                    className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                      isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 text-gray-600'
-                    }`}
+                    className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition ${isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 text-gray-600'
+                      }`}
                   >
                     {getGenreName(genre)}
                   </button>
@@ -948,16 +959,15 @@ const CategoriesPage: React.FC = () => {
                         onClick={() => {
                           setSelectedTopSheetId((prev) => (prev === sheet.id ? null : sheet.id));
                         }}
-                        className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 transition ${
-                          isActive ? 'border-blue-200 bg-blue-50' : 'border-gray-100 bg-gray-50'
-                        }`}
+                        className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 transition ${isActive ? 'border-blue-200 bg-blue-50' : 'border-gray-100 bg-gray-50'
+                          }`}
                       >
                         <div className="flex min-w-0 items-center gap-3">
                           <span className="text-sm font-semibold text-gray-500">{index + 1}</span>
-                      <div className="min-w-0 text-left">
-                        <p className="truncate text-sm font-bold text-gray-900">{sheet.title}</p>
-                        <p className="truncate text-xs text-gray-500">{sheet.artist}</p>
-                      </div>
+                          <div className="min-w-0 text-left">
+                            <p className="truncate text-sm font-bold text-gray-900">{sheet.title}</p>
+                            <p className="truncate text-xs text-gray-500">{sheet.artist}</p>
+                          </div>
                         </div>
                         <i className={`ri-arrow-${isActive ? 'up' : 'down'}-s-line text-gray-400 text-lg`} />
                       </button>
@@ -1167,11 +1177,10 @@ const CategoriesPage: React.FC = () => {
                   type="button"
                   onClick={() => handleToggleFavorite(selectedSheet.id)}
                   disabled={selectedSheetFavoriteLoading}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${
-                    selectedSheetIsFavorite
-                      ? 'border-red-200 bg-red-50 text-red-500'
-                      : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
-                  } ${selectedSheetFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${selectedSheetIsFavorite
+                    ? 'border-red-200 bg-red-50 text-red-500'
+                    : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                    } ${selectedSheetFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
                   <i className={`ri-heart-${selectedSheetIsFavorite ? 'fill' : 'line'} text-xl`} />
                 </button>
@@ -1241,742 +1250,733 @@ const CategoriesPage: React.FC = () => {
       {/* Desktop Layout */}
       <div className="hidden md:block md:mr-0 lg:mr-64">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        {bankTransferInfo ? (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-blue-900">{t('categoriesPage.bankTransferInfo')}</h3>
-              <button
-                type="button"
-                onClick={() => setBankTransferInfo(null)}
-                className="text-blue-600 hover:text-blue-800 text-xs"
-              >
-                {t('categoriesPage.close')}
-              </button>
-            </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <div>
-                <span className="font-medium text-gray-900">{t('categoriesPage.bank')}</span> {bankTransferInfo.bankName}
+          {bankTransferInfo ? (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-blue-900">{t('categoriesPage.bankTransferInfo')}</h3>
+                <button
+                  type="button"
+                  onClick={() => setBankTransferInfo(null)}
+                  className="text-blue-600 hover:text-blue-800 text-xs"
+                >
+                  {t('categoriesPage.close')}
+                </button>
               </div>
-              <div>
-                <span className="font-medium text-gray-900">{t('categoriesPage.accountNumber')}</span> {bankTransferInfo.accountNumber}
-              </div>
-              <div>
-                <span className="font-medium text-gray-900">{t('categoriesPage.accountHolder')}</span> {bankTransferInfo.depositor}
-              </div>
-              <div>
-                <span className="font-medium text-gray-900">{t('categoriesPage.depositAmount')}</span>{' '}
-                {formatCurrency(bankTransferInfo.amount ?? 0)}
-              </div>
-              {bankTransferInfo.expectedDepositor ? (
-                <div className="sm:col-span-2">
-                  <span className="font-medium text-gray-900">{t('categoriesPage.depositorName')}</span>{' '}
-                  <span className="text-blue-600 font-semibold">{bankTransferInfo.expectedDepositor}</span>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div>
+                  <span className="font-medium text-gray-900">{t('categoriesPage.bank')}</span> {bankTransferInfo.bankName}
                 </div>
+                <div>
+                  <span className="font-medium text-gray-900">{t('categoriesPage.accountNumber')}</span> {bankTransferInfo.accountNumber}
+                </div>
+                <div>
+                  <span className="font-medium text-gray-900">{t('categoriesPage.accountHolder')}</span> {bankTransferInfo.depositor}
+                </div>
+                <div>
+                  <span className="font-medium text-gray-900">{t('categoriesPage.depositAmount')}</span>{' '}
+                  {formatCurrency(bankTransferInfo.amount ?? 0)}
+                </div>
+                {bankTransferInfo.expectedDepositor ? (
+                  <div className="sm:col-span-2">
+                    <span className="font-medium text-gray-900">{t('categoriesPage.depositorName')}</span>{' '}
+                    <span className="text-blue-600 font-semibold">{bankTransferInfo.expectedDepositor}</span>
+                  </div>
+                ) : null}
+              </div>
+              {bankTransferInfo.message ? (
+                <p className="mt-3 text-xs text-gray-600">{bankTransferInfo.message}</p>
               ) : null}
             </div>
-            {bankTransferInfo.message ? (
-              <p className="mt-3 text-xs text-gray-600">{bankTransferInfo.message}</p>
-            ) : null}
+          ) : null}
+
+          {/* 페이지 제목 */}
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              {selectedArtist ? `${selectedArtist}${t('categoriesPage.artistSongs')}` : selectedAlbum ? `${selectedAlbum} ${t('categoriesPage.album')}` : t('categoriesPage.pageTitle')}
+            </h1>
+            {selectedArtist && (
+              <button
+                onClick={() => {
+                  setSelectedArtist('');
+                  setCurrentPage(1);
+                  updateQueryParams(
+                    {
+                      artist: null,
+                      page: null,
+                    }
+                  );
+                }}
+                className="text-sm text-blue-600 hover:text-blue-800 mt-2"
+              >
+                {t('categoriesPage.backToAllSheets')}
+              </button>
+            )}
+            {selectedAlbum && (
+              <button
+                onClick={() => {
+                  setSelectedAlbum('');
+                  setCurrentPage(1);
+                  updateQueryParams(
+                    {
+                      album: null,
+                      page: null,
+                    }
+                  );
+                }}
+                className="text-sm text-blue-600 hover:text-blue-800 mt-2"
+              >
+                {t('categoriesPage.backToAllSheets')}
+              </button>
+            )}
+            {!selectedArtist && !selectedAlbum && (
+              <p className="text-gray-600">{t('categoriesPage.pageDescription')}</p>
+            )}
           </div>
-        ) : null}
 
-        {/* 페이지 제목 */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {selectedArtist ? `${selectedArtist}${t('categoriesPage.artistSongs')}` : selectedAlbum ? `${selectedAlbum} ${t('categoriesPage.album')}` : t('categoriesPage.pageTitle')}
-          </h1>
-          {selectedArtist && (
-            <button
-              onClick={() => {
-                setSelectedArtist('');
-                setCurrentPage(1);
-                updateQueryParams(
-                  {
-                    artist: null,
-                    page: null,
-                  }
-                );
-              }}
-              className="text-sm text-blue-600 hover:text-blue-800 mt-2"
-            >
-              {t('categoriesPage.backToAllSheets')}
-            </button>
-          )}
-          {selectedAlbum && (
-            <button
-              onClick={() => {
-                setSelectedAlbum('');
-                setCurrentPage(1);
-                updateQueryParams(
-                  {
-                    album: null,
-                    page: null,
-                  }
-                );
-              }}
-              className="text-sm text-blue-600 hover:text-blue-800 mt-2"
-            >
-              {t('categoriesPage.backToAllSheets')}
-            </button>
-          )}
-          {!selectedArtist && !selectedAlbum && (
-            <p className="text-gray-600">{t('categoriesPage.pageDescription')}</p>
-          )}
-        </div>
-
-        {/* 장르 하위 메뉴 */}
-        <div className="mb-8 border-b border-gray-200">
-          <div className="flex flex-wrap gap-3">
-            {genreList.map((genre) => {
-              const category = categories.find(cat => cat.name === genre);
-              const isSelected = selectedCategory === (category?.id || '');
-              return (
-                <button
-                  key={genre}
-                  onClick={() => {
-                    const categoryId = category?.id || '';
-                    handleCategorySelect(categoryId);
-                  }}
-                  className={`px-5 py-3 text-base font-semibold transition-all rounded-t-lg ${
-                    isSelected
+          {/* 장르 하위 메뉴 */}
+          <div className="mb-8 border-b border-gray-200">
+            <div className="flex flex-wrap gap-3">
+              {genreList.map((genre) => {
+                const category = categories.find(cat => cat.name === genre);
+                const isSelected = selectedCategory === (category?.id || '');
+                return (
+                  <button
+                    key={genre}
+                    onClick={() => {
+                      const categoryId = category?.id || '';
+                      handleCategorySelect(categoryId);
+                    }}
+                    className={`px-5 py-3 text-base font-semibold transition-all rounded-t-lg ${isSelected
                       ? 'bg-blue-600 text-white shadow-md'
                       : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
-                  }`}
-                >
-                  {getGenreName(genre)}
-                </button>
-              );
-            })}
+                      }`}
+                  >
+                    {getGenreName(genre)}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
 
-        {/* TOP 5 섹션 */}
-        {!loading && topSheets.length > 0 && (
-          <div className="mb-8 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">{t('categoriesPage.top5')}</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* 왼쪽: TOP 5 리스트 */}
-              <div className="space-y-2">
-                {topSheets.map((sheet, index) => {
-                  const isFavorite = favoriteIds.has(sheet.id);
-                  const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
-                  return (
-                    <div
-                      key={sheet.id}
-                      onClick={() => setSelectedSheet(sheet)}
-                      className={`p-4 rounded-lg cursor-pointer transition-colors ${
-                        selectedSheet?.id === sheet.id
+          {/* TOP 5 섹션 */}
+          {!loading && topSheets.length > 0 && (
+            <div className="mb-8 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">{t('categoriesPage.top5')}</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* 왼쪽: TOP 5 리스트 */}
+                <div className="space-y-2">
+                  {topSheets.map((sheet, index) => {
+                    const isFavorite = favoriteIds.has(sheet.id);
+                    const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
+                    return (
+                      <div
+                        key={sheet.id}
+                        onClick={() => setSelectedSheet(sheet)}
+                        className={`p-4 rounded-lg cursor-pointer transition-colors ${selectedSheet?.id === sheet.id
                           ? 'bg-blue-50 border-2 border-blue-500'
                           : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`text-lg font-bold ${
-                              selectedSheet?.id === sheet.id ? 'text-blue-600' : 'text-gray-400'
-                            }`}
-                          >
-                            {index + 1}
-                          </span>
-                          <img
-                            src={getThumbnailUrl(sheet)}
-                            alt={sheet.title}
-                            className="w-12 h-12 object-cover rounded border border-gray-200 flex-shrink-0"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-gray-900 truncate">{sheet.title}</p>
-                            <p className="text-sm text-gray-600 truncate">{sheet.artist}</p>
+                          }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`text-lg font-bold ${selectedSheet?.id === sheet.id ? 'text-blue-600' : 'text-gray-400'
+                                }`}
+                            >
+                              {index + 1}
+                            </span>
+                            <img
+                              src={getThumbnailUrl(sheet)}
+                              alt={sheet.title}
+                              className="w-12 h-12 object-cover rounded border border-gray-200 flex-shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-gray-900 truncate">{sheet.title}</p>
+                              <p className="text-sm text-gray-600 truncate">{sheet.artist}</p>
+                            </div>
                           </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleToggleFavorite(sheet.id);
-                          }}
-                          disabled={isFavoriteLoading}
-                          className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
-                            isFavorite
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleToggleFavorite(sheet.id);
+                            }}
+                            disabled={isFavoriteLoading}
+                            className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${isFavorite
                               ? 'border-red-200 bg-red-50 text-red-500'
                               : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
-                          } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          aria-label={isFavorite ? t('categoriesPage.favoriteRemove') : t('categoriesPage.favoriteAdd')}
-                        >
-                          <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* 오른쪽: 선택된 악보 상세 정보 */}
-              {selectedSheet && (
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <div className="flex items-start space-x-4 mb-4">
-                    <img
-                      src={getThumbnailUrl(selectedSheet)}
-                      alt={selectedSheet.title}
-                      className="w-48 h-48 object-cover rounded-lg border border-gray-300 flex-shrink-0"
-                    />
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold text-gray-900 mb-1">{selectedSheet.title}</h3>
-                      <p className="text-gray-600 mb-2">{selectedSheet.artist}</p>
-                      {selectedEventInfo && (
-                        <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 mb-3">
-                          <span>🔥</span> {t('categoriesPage.eventDiscountSheetWithPrice')}
-                        </span>
-                      )}
-                      {selectedSheet.categories?.name && (
-                        <p className="text-sm text-gray-500 mb-1">{getCategoryName(selectedSheet.categories.name)}</p>
-                      )}
-                      {selectedSheet.difficulty && (
-                        <div className="text-sm text-gray-500 space-y-1">
-                          <p>
-                            {selectedSheet.difficulty === 'beginner'
-                              ? t('categoriesPage.beginner')
-                              : selectedSheet.difficulty === 'intermediate'
-                              ? t('categoriesPage.intermediate')
-                              : t('categoriesPage.advanced')}
-                            {selectedSheet.page_count && ` / ${selectedSheet.page_count}${t('categoriesPage.pageUnit')}`}
-                          </p>
-                          <p>
-                            {t('categoriesPage.difficultyLabel')} :{' '}
-                            {selectedSheet.difficulty === 'beginner'
-                              ? t('categoriesPage.beginner')
-                              : selectedSheet.difficulty === 'intermediate'
-                              ? t('categoriesPage.intermediate')
-                              : t('categoriesPage.advanced')}
-                          </p>
-                          {selectedSheet.page_count && <p>{t('categoriesPage.pageLabel')} : {selectedSheet.page_count} {t('categoriesPage.pageUnit')}</p>}
+                              } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            aria-label={isFavorite ? t('categoriesPage.favoriteRemove') : t('categoriesPage.favoriteAdd')}
+                          >
+                            <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
+                          </button>
                         </div>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleFavorite(selectedSheet.id)}
-                        disabled={selectedSheetFavoriteLoading}
-                        className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${
-                          selectedSheetIsFavorite
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 오른쪽: 선택된 악보 상세 정보 */}
+                {selectedSheet && (
+                  <div className="bg-gray-50 rounded-lg p-6">
+                    <div className="flex items-start space-x-4 mb-4">
+                      <img
+                        src={getThumbnailUrl(selectedSheet)}
+                        alt={selectedSheet.title}
+                        className="w-48 h-48 object-cover rounded-lg border border-gray-300 flex-shrink-0"
+                      />
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-gray-900 mb-1">{selectedSheet.title}</h3>
+                        <p className="text-gray-600 mb-2">{selectedSheet.artist}</p>
+                        {selectedEventInfo && (
+                          <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 mb-3">
+                            <span>🔥</span> {t('categoriesPage.eventDiscountSheetWithPrice')}
+                          </span>
+                        )}
+                        {selectedSheet.categories?.name && (
+                          <p className="text-sm text-gray-500 mb-1">{getCategoryName(selectedSheet.categories.name)}</p>
+                        )}
+                        {selectedSheet.difficulty && (
+                          <div className="text-sm text-gray-500 space-y-1">
+                            <p>
+                              {selectedSheet.difficulty === 'beginner'
+                                ? t('categoriesPage.beginner')
+                                : selectedSheet.difficulty === 'intermediate'
+                                  ? t('categoriesPage.intermediate')
+                                  : t('categoriesPage.advanced')}
+                              {selectedSheet.page_count && ` / ${selectedSheet.page_count}${t('categoriesPage.pageUnit')}`}
+                            </p>
+                            <p>
+                              {t('categoriesPage.difficultyLabel')} :{' '}
+                              {selectedSheet.difficulty === 'beginner'
+                                ? t('categoriesPage.beginner')
+                                : selectedSheet.difficulty === 'intermediate'
+                                  ? t('categoriesPage.intermediate')
+                                  : t('categoriesPage.advanced')}
+                            </p>
+                            {selectedSheet.page_count && <p>{t('categoriesPage.pageLabel')} : {selectedSheet.page_count} {t('categoriesPage.pageUnit')}</p>}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFavorite(selectedSheet.id)}
+                          disabled={selectedSheetFavoriteLoading}
+                          className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${selectedSheetIsFavorite
                             ? 'border-red-200 bg-red-50 text-red-500'
                             : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
-                        } ${selectedSheetFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                        aria-label={selectedSheetIsFavorite ? t('categoriesPage.favoriteRemove') : t('categoriesPage.favoriteAdd')}
-                      >
-                        <i className={`ri-heart-${selectedSheetIsFavorite ? 'fill' : 'line'} text-xl`} />
-                      </button>
-                      <button type="button" className="text-gray-400 hover:text-gray-600">
-                        <i className="ri-information-line text-xl"></i>
-                      </button>
+                            } ${selectedSheetFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          aria-label={selectedSheetIsFavorite ? t('categoriesPage.favoriteRemove') : t('categoriesPage.favoriteAdd')}
+                        >
+                          <i className={`ri-heart-${selectedSheetIsFavorite ? 'fill' : 'line'} text-xl`} />
+                        </button>
+                        <button type="button" className="text-gray-400 hover:text-gray-600">
+                          <i className="ri-information-line text-xl"></i>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-gray-200 pt-4">
+                      <div className="flex items-center justify-end mb-4">
+                        <div className="flex items-center space-x-2">
+                          <div className="flex flex-col items-end space-y-1">
+                            {selectedEventInfo ? (
+                              <>
+                                <span className="text-sm text-gray-400 line-through">
+                                  {formatCurrency(selectedSheet.price)}
+                                </span>
+                                <span className="text-2xl font-extrabold text-red-500">
+                                  {formatCurrency(selectedDisplayPrice)}
+                                </span>
+                                {isKoreanSite && (
+                                  <span className="text-sm text-gray-600">
+                                    {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('ko-KR') })}
+                                  </span>
+                                )}
+                                {!isKoreanSite && (
+                                  <span className="text-sm text-gray-600">
+                                    {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('en-US') })}
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-2xl font-bold text-gray-900">
+                                  {formatCurrency(selectedDisplayPrice)}
+                                </span>
+                                {isKoreanSite && (
+                                  <span className="text-sm text-gray-600">
+                                    {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('ko-KR') })}
+                                  </span>
+                                )}
+                                {!isKoreanSite && (
+                                  <span className="text-sm text-gray-600">
+                                    {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('en-US') })}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={isInCart(selectedSheet.id)}
+                            onChange={() => handleAddToCart(selectedSheet.id)}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-end">
+                          <span className="font-bold text-gray-900">
+                            {t('categoriesPage.total')} {formatCurrency(selectedDisplayPrice)}
+                          </span>
+                        </div>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleAddToCart(selectedSheet.id)}
+                            className="flex-1 bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+                          >
+                            {t('categoriesPage.addToCartFull')}
+                          </button>
+                          <button
+                            onClick={() => handleBuyNow(selectedSheet.id)}
+                            disabled={buyingSheetId === selectedSheet.id}
+                            className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {buyingSheetId === selectedSheet.id ? t('categoriesPage.processing') : t('categoriesPage.buyNow')}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  
-                  <div className="border-t border-gray-200 pt-4">
-                    <div className="flex items-center justify-end mb-4">
-                      <div className="flex items-center space-x-2">
-                        <div className="flex flex-col items-end space-y-1">
-                          {selectedEventInfo ? (
-                            <>
-                              <span className="text-sm text-gray-400 line-through">
-                                {formatCurrency(selectedSheet.price)}
-                              </span>
-                              <span className="text-2xl font-extrabold text-red-500">
-                                {formatCurrency(selectedDisplayPrice)}
-                              </span>
-                              {isKoreanSite && (
-                                <span className="text-sm text-gray-600">
-                                  {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('ko-KR') })}
-                                </span>
-                              )}
-                              {!isKoreanSite && (
-                                <span className="text-sm text-gray-600">
-                                  {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('en-US') })}
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <span className="text-2xl font-bold text-gray-900">
-                                {formatCurrency(selectedDisplayPrice)}
-                              </span>
-                              {isKoreanSite && (
-                                <span className="text-sm text-gray-600">
-                                  {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('ko-KR') })}
-                                </span>
-                              )}
-                              {!isKoreanSite && (
-                                <span className="text-sm text-gray-600">
-                                  {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('en-US') })}
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={isInCart(selectedSheet.id)}
-                          onChange={() => handleAddToCart(selectedSheet.id)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-end">
-                        <span className="font-bold text-gray-900">
-                          {t('categoriesPage.total')} {formatCurrency(selectedDisplayPrice)}
-                        </span>
-                      </div>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleAddToCart(selectedSheet.id)}
-                          className="flex-1 bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors"
-                        >
-                          {t('categoriesPage.addToCartFull')}
-                        </button>
-                        <button
-                          onClick={() => handleBuyNow(selectedSheet.id)}
-                          disabled={buyingSheetId === selectedSheet.id}
-                          className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {buyingSheetId === selectedSheet.id ? t('categoriesPage.processing') : t('categoriesPage.buyNow')}
-                        </button>
-                      </div>
-                    </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 필터 및 정렬 - 기본적으로 숨김 */}
+          {!loading && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center space-x-4">
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <i className="ri-filter-line w-4 h-4"></i>
+                    <span>{t('categoriesPage.filter')}</span>
+                    <i className={`ri-arrow-${showFilters ? 'up' : 'down'}-s-line w-4 h-4`}></i>
+                  </button>
+
+                  <button
+                    onClick={() => setShowSortFilter(!showSortFilter)}
+                    className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <i className="ri-sort-desc w-4 h-4"></i>
+                    <span>{t('categoriesPage.sort')}</span>
+                    <i className={`ri-arrow-${showSortFilter ? 'up' : 'down'}-s-line w-4 h-4`}></i>
+                  </button>
+                </div>
+              </div>
+
+              {/* 정렬 옵션 - 클릭시 표시 */}
+              {showSortFilter && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="flex items-center space-x-4">
+                    <label className="text-sm font-medium text-gray-700">{t('categoriesPage.sortLabel')}</label>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setSortBy(value);
+                        setCurrentPage(1);
+                        updateQueryParams(
+                          {
+                            sort: value === 'newest' ? null : value,
+                            page: null,
+                          }
+                        );
+                      }}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm pr-8"
+                    >
+                      <option value="newest">{t('categoriesPage.sortNewest')}</option>
+                      <option value="popular">{t('categoriesPage.sortPopular')}</option>
+                      <option value="price-low">{t('categoriesPage.sortPriceLow')}</option>
+                      <option value="price-high">{t('categoriesPage.sortPriceHigh')}</option>
+                    </select>
                   </div>
                 </div>
               )}
-            </div>
-          </div>
-        )}
 
-        {/* 필터 및 정렬 - 기본적으로 숨김 */}
-        {!loading && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <i className="ri-filter-line w-4 h-4"></i>
-                <span>{t('categoriesPage.filter')}</span>
-                <i className={`ri-arrow-${showFilters ? 'up' : 'down'}-s-line w-4 h-4`}></i>
-              </button>
-              
-              <button
-                onClick={() => setShowSortFilter(!showSortFilter)}
-                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <i className="ri-sort-desc w-4 h-4"></i>
-                <span>{t('categoriesPage.sort')}</span>
-                <i className={`ri-arrow-${showSortFilter ? 'up' : 'down'}-s-line w-4 h-4`}></i>
-              </button>
-            </div>
-          </div>
-          
-          {/* 정렬 옵션 - 클릭시 표시 */}
-          {showSortFilter && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <div className="flex items-center space-x-4">
-                <label className="text-sm font-medium text-gray-700">{t('categoriesPage.sortLabel')}</label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setSortBy(value);
-                    setCurrentPage(1);
-                    updateQueryParams(
-                      {
-                        sort: value === 'newest' ? null : value,
-                        page: null,
-                      }
-                    );
-                  }}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm pr-8"
-                >
-                  <option value="newest">{t('categoriesPage.sortNewest')}</option>
-                  <option value="popular">{t('categoriesPage.sortPopular')}</option>
-                  <option value="price-low">{t('categoriesPage.sortPriceLow')}</option>
-                  <option value="price-high">{t('categoriesPage.sortPriceHigh')}</option>
-                </select>
-              </div>
-            </div>
-          )}
-          
-          {/* 확장 필터 */}
-          {showFilters && (
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">{t('categoriesPage.categoryLabel')}</label>
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => handleCategorySelect(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm pr-8"
-                  >
-                    <option value="">{t('categoriesPage.allCategories')}</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">{t('categoriesPage.difficultyLabelFilter')}</label>
-                  <select
-                    value={selectedDifficulty}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setSelectedDifficulty(value);
-                      setCurrentPage(1);
-                      updateQueryParams(
-                        {
-                          difficulty: value || null,
-                          page: null,
-                        }
-                      );
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm pr-8"
-                  >
-                    <option value="">{t('categoriesPage.allDifficulties')}</option>
-                    <option value="beginner">{t('categoriesPage.beginner')}</option>
-                    <option value="intermediate">{t('categoriesPage.intermediate')}</option>
-                    <option value="advanced">{t('categoriesPage.advanced')}</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">{t('categoriesPage.priceRange')}</label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="number"
-                      placeholder={t('categoriesPage.min')}
-                      value={priceRange.min}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setPriceRange((prev) => ({ ...prev, min: value }));
-                        setCurrentPage(1);
-                        updateQueryParams(
-                          {
-                            priceMin: value,
-                            page: null,
-                          }
-                        );
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                    />
-                    <span className="text-gray-500">~</span>
-                    <input
-                      type="number"
-                      placeholder={t('categoriesPage.max')}
-                      value={priceRange.max}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setPriceRange((prev) => ({ ...prev, max: value }));
-                        setCurrentPage(1);
-                        updateQueryParams(
-                          {
-                            priceMax: value,
-                            page: null,
-                          }
-                        );
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-4 flex justify-end">
-                <button
-                  onClick={() => {
-                    handleCategorySelect('');
-                    setSelectedDifficulty('');
-                    setPriceRange({ min: '', max: '' });
-                    updateQueryParams(
-                      {
-                        difficulty: null,
-                        priceMin: null,
-                        priceMax: null,
-                        page: null,
-                      }
-                    );
-                  }}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-                >
-                  {t('categoriesPage.resetFilters')}
-                </button>
-              </div>
-            </div>
-          )}
-          </div>
-        )}
+              {/* 확장 필터 */}
+              {showFilters && (
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">{t('categoriesPage.categoryLabel')}</label>
+                      <select
+                        value={selectedCategory}
+                        onChange={(e) => handleCategorySelect(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm pr-8"
+                      >
+                        <option value="">{t('categoriesPage.allCategories')}</option>
+                        {categories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-        {/* 악보 목록 - 리스트 형식 */}
-        {!loading && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <table className="w-full table-fixed">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="w-[34%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('categoriesPage.tableTitle')}</th>
-                  <th className="w-[18%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('categoriesPage.tableArtist')}</th>
-                  <th className="w-[24%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('categoriesPage.tableAlbum')}</th>
-                  <th className="w-[24%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('categoriesPage.tablePurchase')}</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedSheets.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                      {t('categoriesPage.noSheets')}
-                    </td>
-                  </tr>
-                ) : (
-                paginatedSheets.map((sheet) => {
-                  const eventInfo = getEventForSheet(sheet.id);
-                  const displayPrice = getDisplayPrice(sheet);
-                  const isFavorite = favoriteIds.has(sheet.id);
-                  const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
-                  return (
-                  <tr key={sheet.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 align-top">
-                      <div className="flex items-center space-x-3 overflow-hidden">
-                        <img
-                          src={getThumbnailUrl(sheet)}
-                          alt={sheet.title}
-                          className="w-12 h-12 object-cover rounded border border-gray-200 cursor-pointer flex-shrink-0"
-                          onClick={() => navigate(`/sheet-detail/${sheet.id}`)}
-                        />
-                        <div className="flex flex-col space-y-1 min-w-0 flex-1">
-                          <div className="flex items-center space-x-2 min-w-0">
-                            <i className="ri-file-music-line text-gray-400 flex-shrink-0"></i>
-                            <span 
-                              className="block truncate text-sm font-bold text-gray-900 cursor-pointer hover:text-blue-600"
-                              title={sheet.title}
-                              onClick={() => navigate(`/sheet-detail/${sheet.id}`)}
-                            >
-                              {sheet.title}
-                            </span>
-                            {eventInfo && (
-                              <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600 flex-shrink-0 whitespace-nowrap">
-                                {t('categoriesPage.eventDiscountSheet')}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center space-x-2 text-xs flex-shrink-0">
-                            {eventInfo ? (
-                              <>
-                                <span className="text-gray-400 line-through">
-                                  {formatCurrency(sheet.price)}
-                                </span>
-                                <span className="font-semibold text-red-500">
-                                  {formatCurrency(displayPrice)}
-                                </span>
-                              </>
-                            ) : (
-                              <span className="font-semibold text-gray-700">
-                                {formatCurrency(displayPrice)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 align-top">
-                      <span 
-                        className="block truncate text-sm text-gray-600 cursor-pointer hover:text-blue-600"
-                        onClick={() => {
-                          setSelectedArtist(sheet.artist);
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">{t('categoriesPage.difficultyLabelFilter')}</label>
+                      <select
+                        value={selectedDifficulty}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setSelectedDifficulty(value);
                           setCurrentPage(1);
                           updateQueryParams(
                             {
-                              artist: sheet.artist,
+                              difficulty: value || null,
                               page: null,
                             }
                           );
                         }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm pr-8"
                       >
-                        {sheet.artist}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 align-top">
-                      <span 
-                        className="block truncate text-sm text-gray-600 cursor-pointer hover:text-blue-600"
-                        title={sheet.album_name || '-'}
-                        onClick={() => {
-                          if (sheet.album_name) {
-                            setSelectedAlbum(sheet.album_name);
+                        <option value="">{t('categoriesPage.allDifficulties')}</option>
+                        <option value="beginner">{t('categoriesPage.beginner')}</option>
+                        <option value="intermediate">{t('categoriesPage.intermediate')}</option>
+                        <option value="advanced">{t('categoriesPage.advanced')}</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">{t('categoriesPage.priceRange')}</label>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="number"
+                          placeholder={t('categoriesPage.min')}
+                          value={priceRange.min}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setPriceRange((prev) => ({ ...prev, min: value }));
                             setCurrentPage(1);
                             updateQueryParams(
                               {
-                                album: sheet.album_name,
+                                priceMin: value,
                                 page: null,
                               }
                             );
-                          }
-                        }}
-                      >
-                        {sheet.album_name || '-'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 align-top">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleFavorite(sheet.id);
                           }}
-                          disabled={isFavoriteLoading}
-                          className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
-                            isFavorite
-                              ? 'border-red-200 bg-red-50 text-red-500'
-                              : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
-                          } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          aria-label={isFavorite ? t('categoriesPage.favoriteRemove') : t('categoriesPage.favoriteAdd')}
-                        >
-                          <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAddToCart(sheet.id);
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                        />
+                        <span className="text-gray-500">~</span>
+                        <input
+                          type="number"
+                          placeholder={t('categoriesPage.max')}
+                          value={priceRange.max}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setPriceRange((prev) => ({ ...prev, max: value }));
+                            setCurrentPage(1);
+                            updateQueryParams(
+                              {
+                                priceMax: value,
+                                page: null,
+                              }
+                            );
                           }}
-                          className="px-4 py-2.5 text-sm bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors"
-                        >
-                          {t('categoriesPage.addToCart')}
-                        </button>
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            await handleBuyNow(sheet.id);
-                          }}
-                          disabled={buyingSheetId === sheet.id || paymentProcessing}
-                          className="px-4 py-2.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {buyingSheetId === sheet.id
-                            ? paymentProcessing
-                              ? t('categoriesPage.paymentPreparing')
-                              : t('categoriesPage.processing')
-                            : t('categoriesPage.buyNow')}
-                        </button>
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                        />
                       </div>
-                    </td>
-                  </tr>
-                );
-              })
-              )}
-              </tbody>
-            </table>
-          </div>
-        )}
+                    </div>
+                  </div>
 
-        {/* 페이지네이션 */}
-        {!loading && totalPages > 1 && (
-          <div className="mt-6 flex items-center justify-center space-x-2">
-            <button
-              onClick={() => {
-                const previousPage = Math.max(1, currentPage - 1);
-                setCurrentPage(previousPage);
-                updateQueryParams(
-                  {
-                    page: previousPage > 1 ? String(previousPage) : null,
-                  }
-                );
-              }}
-              disabled={currentPage === 1}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                currentPage === 1
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      onClick={() => {
+                        handleCategorySelect('');
+                        setSelectedDifficulty('');
+                        setPriceRange({ min: '', max: '' });
+                        updateQueryParams(
+                          {
+                            difficulty: null,
+                            priceMin: null,
+                            priceMax: null,
+                            page: null,
+                          }
+                        );
+                      }}
+                      className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                    >
+                      {t('categoriesPage.resetFilters')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 악보 목록 - 리스트 형식 */}
+          {!loading && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <table className="w-full table-fixed">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="w-[34%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('categoriesPage.tableTitle')}</th>
+                    <th className="w-[18%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('categoriesPage.tableArtist')}</th>
+                    <th className="w-[24%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('categoriesPage.tableAlbum')}</th>
+                    <th className="w-[24%] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('categoriesPage.tablePurchase')}</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {paginatedSheets.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                        {t('categoriesPage.noSheets')}
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedSheets.map((sheet) => {
+                      const eventInfo = getEventForSheet(sheet.id);
+                      const displayPrice = getDisplayPrice(sheet);
+                      const isFavorite = favoriteIds.has(sheet.id);
+                      const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
+                      return (
+                        <tr key={sheet.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 align-top">
+                            <div className="flex items-center space-x-3 overflow-hidden">
+                              <img
+                                src={getThumbnailUrl(sheet)}
+                                alt={sheet.title}
+                                className="w-12 h-12 object-cover rounded border border-gray-200 cursor-pointer flex-shrink-0"
+                                onClick={() => navigate(`/sheet-detail/${sheet.id}`)}
+                              />
+                              <div className="flex flex-col space-y-1 min-w-0 flex-1">
+                                <div className="flex items-center space-x-2 min-w-0">
+                                  <i className="ri-file-music-line text-gray-400 flex-shrink-0"></i>
+                                  <span
+                                    className="block truncate text-sm font-bold text-gray-900 cursor-pointer hover:text-blue-600"
+                                    title={sheet.title}
+                                    onClick={() => navigate(`/sheet-detail/${sheet.id}`)}
+                                  >
+                                    {sheet.title}
+                                  </span>
+                                  {eventInfo && (
+                                    <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600 flex-shrink-0 whitespace-nowrap">
+                                      {t('categoriesPage.eventDiscountSheet')}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center space-x-2 text-xs flex-shrink-0">
+                                  {eventInfo ? (
+                                    <>
+                                      <span className="text-gray-400 line-through">
+                                        {formatCurrency(sheet.price)}
+                                      </span>
+                                      <span className="font-semibold text-red-500">
+                                        {formatCurrency(displayPrice)}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="font-semibold text-gray-700">
+                                      {formatCurrency(displayPrice)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 align-top">
+                            <span
+                              className="block truncate text-sm text-gray-600 cursor-pointer hover:text-blue-600"
+                              onClick={() => {
+                                setSelectedArtist(sheet.artist);
+                                setCurrentPage(1);
+                                updateQueryParams(
+                                  {
+                                    artist: sheet.artist,
+                                    page: null,
+                                  }
+                                );
+                              }}
+                            >
+                              {sheet.artist}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 align-top">
+                            <span
+                              className="block truncate text-sm text-gray-600 cursor-pointer hover:text-blue-600"
+                              title={sheet.album_name || '-'}
+                              onClick={() => {
+                                if (sheet.album_name) {
+                                  setSelectedAlbum(sheet.album_name);
+                                  setCurrentPage(1);
+                                  updateQueryParams(
+                                    {
+                                      album: sheet.album_name,
+                                      page: null,
+                                    }
+                                  );
+                                }
+                              }}
+                            >
+                              {sheet.album_name || '-'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 align-top">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleFavorite(sheet.id);
+                                }}
+                                disabled={isFavoriteLoading}
+                                className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${isFavorite
+                                  ? 'border-red-200 bg-red-50 text-red-500'
+                                  : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                                  } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                aria-label={isFavorite ? t('categoriesPage.favoriteRemove') : t('categoriesPage.favoriteAdd')}
+                              >
+                                <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddToCart(sheet.id);
+                                }}
+                                className="px-4 py-2.5 text-sm bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors"
+                              >
+                                {t('categoriesPage.addToCart')}
+                              </button>
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  await handleBuyNow(sheet.id);
+                                }}
+                                disabled={buyingSheetId === sheet.id || paymentProcessing}
+                                className="px-4 py-2.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {buyingSheetId === sheet.id
+                                  ? paymentProcessing
+                                    ? t('categoriesPage.paymentPreparing')
+                                    : t('categoriesPage.processing')
+                                  : t('categoriesPage.buyNow')}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* 페이지네이션 */}
+          {!loading && totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-center space-x-2">
+              <button
+                onClick={() => {
+                  const previousPage = Math.max(1, currentPage - 1);
+                  setCurrentPage(previousPage);
+                  updateQueryParams(
+                    {
+                      page: previousPage > 1 ? String(previousPage) : null,
+                    }
+                  );
+                }}
+                disabled={currentPage === 1}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${currentPage === 1
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-              }`}
-            >
-              <i className="ri-arrow-left-s-line"></i>
-            </button>
-            
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-              // 현재 페이지 주변 2페이지씩만 표시
-              if (
-                page === 1 ||
-                page === totalPages ||
-                (page >= currentPage - 2 && page <= currentPage + 2)
-              ) {
-                return (
-                  <button
-                    key={page}
-                    onClick={() => {
-                      setCurrentPage(page);
-                      updateQueryParams(
-                        {
-                          page: page > 1 ? String(page) : null,
-                        }
-                      );
-                    }}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      currentPage === page
+                  }`}
+              >
+                <i className="ri-arrow-left-s-line"></i>
+              </button>
+
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                // 현재 페이지 주변 2페이지씩만 표시
+                if (
+                  page === 1 ||
+                  page === totalPages ||
+                  (page >= currentPage - 2 && page <= currentPage + 2)
+                ) {
+                  return (
+                    <button
+                      key={page}
+                      onClick={() => {
+                        setCurrentPage(page);
+                        updateQueryParams(
+                          {
+                            page: page > 1 ? String(page) : null,
+                          }
+                        );
+                      }}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${currentPage === page
                         ? 'bg-blue-600 text-white'
                         : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                );
-              } else if (
-                page === currentPage - 3 ||
-                page === currentPage + 3
-              ) {
-                return (
-                  <span key={page} className="px-2 text-gray-400">
-                    ...
-                  </span>
-                );
-              }
-              return null;
-            })}
-            
-            <button
-              onClick={() => {
-                const nextPage = Math.min(totalPages, currentPage + 1);
-                setCurrentPage(nextPage);
-                updateQueryParams(
-                  {
-                    page: nextPage > 1 ? String(nextPage) : null,
-                  }
-                );
-              }}
-              disabled={currentPage === totalPages}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                currentPage === totalPages
+                        }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                } else if (
+                  page === currentPage - 3 ||
+                  page === currentPage + 3
+                ) {
+                  return (
+                    <span key={page} className="px-2 text-gray-400">
+                      ...
+                    </span>
+                  );
+                }
+                return null;
+              })}
+
+              <button
+                onClick={() => {
+                  const nextPage = Math.min(totalPages, currentPage + 1);
+                  setCurrentPage(nextPage);
+                  updateQueryParams(
+                    {
+                      page: nextPage > 1 ? String(nextPage) : null,
+                    }
+                  );
+                }}
+                disabled={currentPage === totalPages}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${currentPage === totalPages
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-              }`}
-            >
-              <i className="ri-arrow-right-s-line"></i>
-            </button>
-          </div>
-        )}
+                  }`}
+              >
+                <i className="ri-arrow-right-s-line"></i>
+              </button>
+            </div>
+          )}
 
-        {/* 로딩 중 */}
-        {loading && (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">{t('categoriesPage.loadingSheetsMessage')}</h3>
-          </div>
-        )}
+          {/* 로딩 중 */}
+          {loading && (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">{t('categoriesPage.loadingSheetsMessage')}</h3>
+            </div>
+          )}
 
-        {/* 빈 상태 - 로딩이 완료되었고 결과가 없을 때만 표시 */}
-        {!loading && paginatedSheets.length === 0 && (
-          <div className="text-center py-12">
-            <i className="ri-file-music-line text-gray-300 w-16 h-16 mx-auto mb-4"></i>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">{t('categoriesPage.noSearchResults')}</h3>
-            <p className="text-gray-600">{t('categoriesPage.tryDifferentSearch')}</p>
-          </div>
-        )}
+          {/* 빈 상태 - 로딩이 완료되었고 결과가 없을 때만 표시 */}
+          {!loading && paginatedSheets.length === 0 && (
+            <div className="text-center py-12">
+              <i className="ri-file-music-line text-gray-300 w-16 h-16 mx-auto mb-4"></i>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">{t('categoriesPage.noSearchResults')}</h3>
+              <p className="text-gray-600">{t('categoriesPage.tryDifferentSearch')}</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1985,9 +1985,9 @@ const CategoriesPage: React.FC = () => {
         amount={
           pendingPurchaseSheet
             ? Math.max(
-                0,
-                (getEventForSheet(pendingPurchaseSheet.id)?.discount_price ?? pendingPurchaseSheet.price) ?? 0,
-              )
+              0,
+              (getEventForSheet(pendingPurchaseSheet.id)?.discount_price ?? pendingPurchaseSheet.price) ?? 0,
+            )
             : 0
         }
         userName={(user?.user_metadata?.name as string | undefined) ?? user?.email ?? undefined}
@@ -2003,11 +2003,11 @@ const CategoriesPage: React.FC = () => {
         amount={
           pendingPurchaseSheet
             ? Math.max(
-                0,
-                (
-                  getEventForSheet(pendingPurchaseSheet.id)?.discount_price ?? pendingPurchaseSheet.price
-                ) ?? 0,
-              )
+              0,
+              (
+                getEventForSheet(pendingPurchaseSheet.id)?.discount_price ?? pendingPurchaseSheet.price
+              ) ?? 0,
+            )
             : 0
         }
         onClose={() => {

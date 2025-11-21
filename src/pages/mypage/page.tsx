@@ -15,10 +15,13 @@ import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
 import { buildDownloadKey, downloadFile, getDownloadFileName, requestSignedDownloadUrl } from '../../utils/downloadHelpers';
 // convertUSDToKRW is not used in this component anymore
 import { useTranslation } from 'react-i18next';
-import { isEnglishHost } from '../../i18n/languages';
+import { isGlobalSiteHost } from '../../config/hostType';
 import { getUserDisplayName } from '../../utils/userDisplayName';
 import type { Profile } from '../../lib/supabase';
 import { formatPrice } from '../../lib/priceFormatter';
+import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
+import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
+import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
 
 type TabKey = 'profile' | 'purchases' | 'downloads' | 'favorites' | 'cash' | 'inquiries' | 'custom-orders';
 
@@ -122,15 +125,7 @@ interface CashHistoryEntry {
 const formatCurrency = (value: number) => `₩${value.toLocaleString('ko-KR')}`;
 const formatDate = (value: MaybeDateString) => (value ? new Date(value).toLocaleDateString('ko-KR') : '-');
 const formatDateTime = (value: MaybeDateString) => (value ? new Date(value).toLocaleString('ko-KR') : '-');
-// 캐시 표시용 포맷 함수 (영문 사이트는 USD, 한국어 사이트는 KRW)
-const formatCash = (value: number, isEnglishSite: boolean) => {
-  // formatPrice를 사용하여 자동으로 USD/KRW 결정
-  return formatPrice({ 
-    amountKRW: value, 
-    language: isEnglishSite ? 'en' : 'ko',
-    host: typeof window !== 'undefined' ? window.location.host : undefined
-  }).formatted;
-};
+
 
 // Status maps and helper functions will be created inside component using t()
 
@@ -139,6 +134,20 @@ export default function MyPage() {
   const [searchParams] = useSearchParams();
   const { cartItems, addToCart, isInCart } = useCart();
   const { t, i18n } = useTranslation();
+
+  const formatCash = useCallback((value: number) => {
+    if (i18n.language === 'ko') {
+      return formatPrice({
+        amountKRW: value,
+        language: 'ko',
+        host: typeof window !== 'undefined' ? window.location.host : undefined
+      }).formatted;
+    }
+
+    const currency = getActiveCurrency();
+    const converted = convertPriceForLocale(value, i18n.language, currency);
+    return formatCurrencyUi(converted, currency);
+  }, [i18n.language]);
 
   // Status maps using t()
   const orderStatusStyles = useMemo(() => ({
@@ -164,7 +173,7 @@ export default function MyPage() {
 
   const getInquiryStatusMeta = useCallback((status: string) =>
     (inquiryStatusMap[status as keyof typeof inquiryStatusMap] ?? { label: t('mypage.status.inquiry.processing'), className: 'bg-gray-100 text-gray-600' }),
-  [inquiryStatusMap, t]);
+    [inquiryStatusMap, t]);
 
   const CASH_TYPE_META = useMemo(() => ({
     charge: {
@@ -200,11 +209,11 @@ export default function MyPage() {
   ], [t]);
 
   const [user, setUser] = useState<User | null>(null);
-  
+
   // 캐시 잔액 조회: 통일된 훅 사용 (profiles 테이블의 credits 필드가 기준)
   const { credits: userCashBalance, loading: cashBalanceLoading, error: cashBalanceError, refresh: refreshCashBalance } = useUserCashBalance(user);
   const [loading, setLoading] = useState(true);
-  
+
   // URL 쿼리 파라미터에서 탭 정보 읽기
   const getInitialTab = useCallback((): TabKey => {
     const tabParam = searchParams.get('tab') || searchParams.get('section');
@@ -221,17 +230,17 @@ export default function MyPage() {
     if (sectionParam === 'inquiries') return 'inquiries';
     return 'profile';
   }, [searchParams]);
-  
+
   const initialTab = useMemo(() => getInitialTab(), [getInitialTab]);
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [profileForm, setProfileForm] = useState({ name: '', phone: '' });
   const [profileSaving, setProfileSaving] = useState(false);
-  
-  // 영문 사이트 체크
+
+  // 글로벌 사이트 여부 확인
   const isEnglishSite = useMemo(() => {
     if (typeof window === 'undefined') return false;
-    return isEnglishHost(window.location.host);
+    return isGlobalSiteHost(window.location.host);
   }, []);
 
   // 캐시충전 모달 상태
@@ -527,15 +536,15 @@ export default function MyPage() {
             created_at: item.created_at,
             drum_sheets: item.drum_sheets
               ? {
-                  id: item.drum_sheets.id,
-                  title: item.drum_sheets.title,
-                  artist: item.drum_sheets.artist,
-                  price: item.drum_sheets.price,
-                  thumbnail_url: item.drum_sheets.thumbnail_url,
-                  pdf_url: item.drum_sheets.pdf_url,
-                  preview_image_url: item.drum_sheets.preview_image_url,
-                  categories: item.drum_sheets.categories,
-                }
+                id: item.drum_sheets.id,
+                title: item.drum_sheets.title,
+                artist: item.drum_sheets.artist,
+                price: item.drum_sheets.price,
+                thumbnail_url: item.drum_sheets.thumbnail_url,
+                pdf_url: item.drum_sheets.pdf_url,
+                preview_image_url: item.drum_sheets.preview_image_url,
+                categories: item.drum_sheets.categories,
+              }
               : null,
           };
         }),
@@ -547,13 +556,13 @@ export default function MyPage() {
       const downloadItems: DownloadableItem[] = filteredOrders.flatMap((order) =>
         DOWNLOADABLE_STATUSES.includes((order.status ?? '').toLowerCase())
           ? order.order_items
-              .filter((item) => item.sheet_id)
-              .map((item) => ({
-                ...item,
-                order_id: order.id,
-                order_status: order.status,
-                order_created_at: order.created_at,
-              }))
+            .filter((item) => item.sheet_id)
+            .map((item) => ({
+              ...item,
+              order_id: order.id,
+              order_status: order.status,
+              order_created_at: order.created_at,
+            }))
           : [],
       );
       setDownloads(downloadItems);
@@ -830,13 +839,13 @@ export default function MyPage() {
         prev
           ? { ...prev, name: updates.name, phone: updates.phone }
           : {
-              id: user.id,
-              email: user.email ?? null,
-              name: updates.name,
-              phone: updates.phone,
-              credits: userCashBalance, // 통일된 캐시 잔액 사용
-              created_at: user.created_at,
-            }
+            id: user.id,
+            email: user.email ?? null,
+            name: updates.name,
+            phone: updates.phone,
+            credits: userCashBalance, // 통일된 캐시 잔액 사용
+            created_at: user.created_at,
+          }
       );
 
       alert(t('mypage.errors.profileUpdated'));
@@ -1197,914 +1206,898 @@ export default function MyPage() {
             renderGuestState()
           ) : (
             <div className="space-y-10">
-            <header>
-              <h2 className="text-3xl font-extrabold text-gray-900">{t('mypage.title')}</h2>
-              <p className="mt-2 text-gray-600">
-                {t('mypage.subtitle')}
-              </p>
-            </header>
+              <header>
+                <h2 className="text-3xl font-extrabold text-gray-900">{t('mypage.title')}</h2>
+                <p className="mt-2 text-gray-600">
+                  {t('mypage.subtitle')}
+                </p>
+              </header>
 
-            <section className="space-y-6">
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex items-center gap-6">
-                  <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold">
-                    {getUserDisplayName(profile as Profile | null, profile?.email || null).slice(0, 1).toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">{t('mypage.profile.memberInfo')}</p>
-                    <h3 className="text-xl font-bold text-gray-900">{getUserDisplayName(profile as Profile | null, profile?.email || null)}</h3>
-                    <p className="text-sm text-gray-600">{profile?.email}</p>
-                    <p className="mt-2 text-xs text-gray-400">{t('mypage.profile.joinedOn')} {formatDate(profile?.created_at)}</p>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-red-100 bg-gradient-to-r from-red-50 via-rose-50 to-orange-50 shadow-sm p-6 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-red-500">{t('mypage.profile.cashBalance')}</p>
-                    {cashBalanceLoading ? (
-                      <p className="mt-2 text-3xl font-black text-gray-400 animate-pulse">로딩 중...</p>
-                    ) : cashBalanceError ? (
-                      <p className="mt-2 text-lg font-bold text-red-600">
-                        오류: {cashBalanceError.message}
-                      </p>
-                    ) : (
-                      <p className="mt-2 text-3xl font-black text-gray-900">
-                        {formatCash(userCashBalance, isEnglishSite)}
-                      </p>
-                    )}
-                    <p className="mt-1 text-xs text-gray-500">{t('mypage.profile.cashBalanceDescription')}</p>
-                  </div>
-                  <button
-                    onClick={handleCashCharge}
-                    className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-semibold shadow-lg hover:bg-red-600 transition"
-                  >
-                    {t('mypage.profile.chargeCash')}
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {stats.map((item) => (
-                  <div key={item.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                    <p className="text-sm text-gray-500">{item.label}</p>
-                    <p className="mt-2 text-2xl font-extrabold text-gray-900">{item.value.toLocaleString('ko-KR')}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-              <aside className="lg:col-span-1 space-y-4">
-                {getTabs().map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex flex-col items-start gap-1 rounded-2xl border px-4 py-3 text-left transition ${
-                      activeTab === tab.id
-                        ? 'border-blue-500 bg-blue-50 text-blue-600 shadow-sm'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-blue-200 hover:text-blue-600'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <i className={`${tab.icon} text-lg`} />
-                      <span className="font-semibold">{tab.label}</span>
+              <section className="space-y-6">
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex items-center gap-6">
+                    <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold">
+                      {getUserDisplayName(profile as Profile | null, profile?.email || null).slice(0, 1).toUpperCase()}
                     </div>
-                    {tab.description ? <p className="text-xs text-gray-500">{tab.description}</p> : null}
-                  </button>
-                ))}
-              </aside>
-
-              <section className="lg:col-span-3">
-                {activeTab === 'profile' && (
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                    <h3 className="text-xl font-bold text-gray-900 mb-6">{t('mypage.profile.title')}</h3>
-                    <form onSubmit={handleProfileSubmit} className="space-y-6">
-                      <div className="grid gap-6 md:grid-cols-2">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">{t('mypage.profile.email')}</label>
-                          <input
-                            type="email"
-                            value={profile?.email ?? ''}
-                            disabled
-                            className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">{t('mypage.profile.name')}</label>
-                          <input
-                            type="text"
-                            value={profileForm.name}
-                            onChange={(event) => setProfileForm((prev) => ({ ...prev, name: event.target.value }))}
-                            placeholder={t('mypage.profile.namePlaceholder')}
-                            className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">{t('mypage.profile.phoneNumber')}</label>
-                          <input
-                            type="tel"
-                            value={profileForm.phone}
-                            onChange={(event) => setProfileForm((prev) => ({ ...prev, phone: event.target.value }))}
-                            placeholder={t('mypage.profile.phonePlaceholder')}
-                            className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">{t('mypage.profile.joinDate')}</label>
-                          <input
-                            type="text"
-                            value={formatDate(profile?.created_at)}
-                            disabled
-                            className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-500"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex justify-end">
-                        <button
-                          type="submit"
-                          disabled={profileSaving}
-                          className={`px-6 py-3 rounded-lg font-semibold text-white transition ${
-                            profileSaving ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-                          }`}
-                        >
-                          {profileSaving ? t('mypage.profile.saving') : t('mypage.profile.updateProfile')}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
-
-                {activeTab === 'purchases' && (
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">{t('mypage.purchases.title')}</h3>
-                        <p className="text-sm text-gray-500">{t('mypage.purchases.description')}</p>
-                      </div>
-                      <Link
-                        to="/categories"
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-blue-200 text-blue-600 text-sm font-semibold hover:bg-blue-50"
-                      >
-                        <i className="ri-add-line text-lg" /> {t('mypage.purchases.browseMore')}
-                      </Link>
-                    </div>
-
-                    {orders.length === 0 ? (
-                      <div className="py-16 text-center text-gray-500">
-                        <i className="ri-shopping-bag-line text-4xl text-gray-300 mb-4" />
-                        <p className="font-medium">{t('mypage.purchases.noPurchases')}</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {orders.map((order) => {
-                          const selectableOrderItems = order.order_items.filter((item) => item.sheet_id);
-                          const orderSelectedIds = selectedPurchaseIds[order.id] ?? [];
-                          const selectedCount = orderSelectedIds.length;
-                          const allSelectableSelected =
-                            selectableOrderItems.length > 0 && selectedCount === selectableOrderItems.length;
-                          const hasSelectableItems = selectableOrderItems.length > 0;
-
-                          return (
-                            <div key={order.id} className="border border-gray-100 rounded-xl p-4 space-y-4">
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                  <p className="text-sm text-gray-500">{t('mypage.purchases.orderNumber')}</p>
-                                  <h4 className="text-lg font-semibold text-gray-900">
-                                    #{order.id.slice(0, 8).toUpperCase()}
-                                  </h4>
-                                  <p className="text-xs text-gray-400 mt-1">{formatDateTime(order.created_at)}</p>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-3">
-                                  {renderOrderStatusBadge(order.status)}
-                                  <p className="text-base font-semibold text-gray-900">
-                                    {t('mypage.purchases.total')} {formatCurrency(order.total_amount)}
-                                  </p>
-                                  {hasSelectableItems ? (
-                                    <button
-                                      onClick={() => handleDownloadAllInOrder(order)}
-                                      disabled={bulkDownloading}
-                                      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-                                        bulkDownloading
-                                          ? 'border-blue-200 bg-blue-100 text-blue-300 cursor-not-allowed'
-                                          : 'border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100'
-                                      }`}
-                                    >
-                                      <i className="ri-stack-line text-base" />
-                                      {bulkDownloading ? t('mypage.purchases.downloading') : t('mypage.purchases.downloadAllInOrder')}
-                                    </button>
-                                  ) : null}
-                                </div>
-                              </div>
-
-                              {hasSelectableItems ? (
-                                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <button
-                                      onClick={() => toggleSelectAllInOrder(order.id, order.order_items)}
-                                      disabled={bulkDownloading}
-                                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold transition ${
-                                        bulkDownloading
-                                          ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
-                                          : 'border-gray-300 text-gray-700 hover:bg-white'
-                                      }`}
-                                    >
-                                      <i className="ri-checkbox-multiple-line text-base" />
-                                      {allSelectableSelected ? t('mypage.purchases.deselectAll') : t('mypage.purchases.selectAll')}
-                                    </button>
-                                    <button
-                                      onClick={() => clearPurchaseSelection(order.id)}
-                                      disabled={bulkDownloading || selectedCount === 0}
-                                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold transition ${
-                                        bulkDownloading || selectedCount === 0
-                                          ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
-                                          : 'border-gray-300 text-gray-700 hover:bg-white'
-                                      }`}
-                                    >
-                                      <i className="ri-close-circle-line text-base" />
-                                      {t('mypage.purchases.deselectAll')}
-                                    </button>
-                                    <span className="text-xs text-gray-500">
-                                      {t('mypage.purchases.selected')} {selectedCount.toLocaleString('ko-KR')}
-                                    </span>
-                                  </div>
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <button
-                                      onClick={() => handleDownloadSelectedInOrder(order)}
-                                      disabled={bulkDownloading || selectedCount === 0}
-                                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition ${
-                                        bulkDownloading || selectedCount === 0
-                                          ? 'bg-blue-300 cursor-not-allowed'
-                                          : 'bg-blue-600 hover:bg-blue-700'
-                                      }`}
-                                    >
-                                      <i className="ri-download-2-line text-base" />
-                                      {bulkDownloading ? t('mypage.purchases.downloading') : t('mypage.purchases.downloadSelected')}
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              <div className="space-y-3">
-                                {order.order_items.map((item) => {
-                                  const downloadItem: DownloadableItem = {
-                                    ...item,
-                                    order_id: order.id,
-                                    order_status: order.status,
-                                    order_created_at: order.created_at,
-                                  };
-                                  const downloadKey = buildDownloadKey(downloadItem.order_id, downloadItem.id);
-                                  const isDownloading = bulkDownloading || downloadingKeys.includes(downloadKey);
-                                  const isSelectable = Boolean(item.sheet_id);
-                                  const isSelected = isSelectable && orderSelectedIds.includes(item.id);
-
-                                  return (
-                                    <div
-                                      key={item.id}
-                                      className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 transition ${
-                                        isSelected
-                                          ? 'border-blue-300 bg-blue-50/70 shadow-sm'
-                                          : 'border-gray-100 bg-gray-50'
-                                      }`}
-                                    >
-                                      <div className="flex items-center gap-3">
-                                        <input
-                                          type="checkbox"
-                                          className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                          checked={isSelectable ? isSelected : false}
-                                          onChange={() => togglePurchaseSelection(order.id, item.id)}
-                                          disabled={!isSelectable || bulkDownloading}
-                                        />
-                                        <img
-                                          src={
-                                            item.drum_sheets?.thumbnail_url ||
-                                            generateDefaultThumbnail(80, 80)
-                                          }
-                                          alt={item.drum_sheets?.title ?? '악보 썸네일'}
-                                          className="w-16 h-16 rounded-lg object-cover"
-                                          onError={(event) => {
-                                            (event.target as HTMLImageElement).src = generateDefaultThumbnail(80, 80);
-                                          }}
-                                        />
-                                        <div>
-                                          <p className="text-sm text-gray-500">
-                                            {item.drum_sheets?.categories?.name ?? t('mypage.purchases.categoryNotSet')}
-                                          </p>
-                                          <h5 className="font-semibold text-gray-900">
-                                            {item.drum_sheets?.title ?? t('mypage.purchases.deletedSheet')}
-                                          </h5>
-                                          <p className="text-sm text-gray-500">{item.drum_sheets?.artist ?? '-'}</p>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-3">
-                                        <button
-                                          onClick={() => handleDownload(downloadItem)}
-                                          disabled={isDownloading}
-                                          className={`px-3 py-2 rounded-lg text-sm font-semibold text-white transition ${
-                                            isDownloading
-                                              ? 'bg-blue-300 cursor-not-allowed'
-                                              : 'bg-blue-600 hover:bg-blue-700'
-                                          }`}
-                                        >
-                                          {isDownloading ? t('mypage.purchases.downloading') : t('mypage.purchases.download')}
-                                        </button>
-                                        <button
-                                          onClick={() => handleGoToSheet(item.sheet_id)}
-                                          className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                                        >
-                                          {t('mypage.purchases.viewDetails')}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {activeTab === 'downloads' && (
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">{t('mypage.downloads.title')}</h3>
-                        <p className="text-sm text-gray-500">{t('mypage.downloads.description')}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-gray-500">{t('mypage.downloads.totalItems', { count: downloads.length })}</p>
-                        {selectedDownloadIds.length > 0 ? (
-                          <p className="mt-1 text-xs text-blue-600">{t('mypage.downloads.selectedItems', { count: selectedDownloadIds.length })}</p>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    {downloads.length > 0 ? (
-                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            onClick={handleToggleSelectAllDownloads}
-                            disabled={downloads.length === 0 || bulkDownloading}
-                            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold transition ${
-                              downloads.length === 0 || bulkDownloading
-                                ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
-                                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                            }`}
-                          >
-                            <i className="ri-checkbox-multiple-line text-base" />
-                            {downloads.length > 0 && selectedDownloadIds.length === downloads.length ? t('mypage.downloads.deselectAll') : t('mypage.downloads.selectAll')}
-                          </button>
-                          <button
-                            onClick={clearDownloadSelection}
-                            disabled={selectedDownloadIds.length === 0 || bulkDownloading}
-                            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold transition ${
-                              selectedDownloadIds.length === 0 || bulkDownloading
-                                ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
-                                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                            }`}
-                          >
-                            <i className="ri-close-circle-line text-base" />
-                            {t('mypage.downloads.deselectAll')}
-                          </button>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            onClick={handleDownloadSelected}
-                            disabled={selectedDownloadIds.length === 0 || bulkDownloading}
-                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition ${
-                              selectedDownloadIds.length === 0 || bulkDownloading
-                                ? 'bg-blue-300 cursor-not-allowed'
-                                : 'bg-blue-600 hover:bg-blue-700'
-                            }`}
-                          >
-                            <i className="ri-download-2-line text-base" />
-                            {bulkDownloading ? t('mypage.downloads.downloading') : t('mypage.downloads.downloadSelected')}
-                          </button>
-                          <button
-                            onClick={handleDownloadAll}
-                            disabled={downloads.length === 0 || bulkDownloading}
-                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition ${
-                              downloads.length === 0 || bulkDownloading
-                                ? 'bg-indigo-300 cursor-not-allowed'
-                                : 'bg-indigo-600 hover:bg-indigo-700'
-                            }`}
-                          >
-                            <i className="ri-stack-line text-base" />
-                            {bulkDownloading ? t('mypage.downloads.downloading') : t('mypage.downloads.downloadAll')}
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {downloads.length === 0 ? (
-                      <div className="py-16 text-center text-gray-500">
-                        <i className="ri-download-2-line text-4xl text-gray-300 mb-4" />
-                        <p className="font-medium">{t('mypage.downloads.noDownloads')}</p>
-                      </div>
-                    ) : (
-                      <div className="grid gap-4 md:grid-cols-2">
-                        {downloads.map((item) => {
-                          const itemKey = buildDownloadKey(item.order_id, item.id);
-                          const isSelected = selectedDownloadIds.includes(itemKey);
-                          const isDownloading = bulkDownloading || downloadingKeys.includes(itemKey);
-                          const isDownloadableStatus = DOWNLOADABLE_STATUSES.includes(
-                            (item.order_status ?? '').toLowerCase(),
-                          );
-
-                          return (
-                            <div
-                              key={itemKey}
-                              className={`rounded-xl border p-4 space-y-3 transition ${
-                                isSelected
-                                  ? 'border-blue-300 bg-blue-50/70 shadow-sm'
-                                  : 'border-gray-100 bg-white hover:border-blue-200'
-                              }`}
-                            >
-                              <div className="flex items-start gap-3">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={() => toggleDownloadSelection(item)}
-                                  disabled={bulkDownloading || !isDownloadableStatus}
-                                  className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                />
-                                <div className="flex flex-1 items-center gap-3">
-                                  <img
-                                    src={
-                                      item.drum_sheets?.thumbnail_url ||
-                                      generateDefaultThumbnail(96, 96)
-                                    }
-                                    alt={item.drum_sheets?.title ?? t('mypage.downloads.noDownloads')}
-                                    className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
-                                    onError={(event) => {
-                                      (event.target as HTMLImageElement).src = generateDefaultThumbnail(96, 96);
-                                    }}
-                                  />
-                                  <div>
-                                    <h4 className="font-semibold text-gray-900">
-                                      {item.drum_sheets?.title ?? t('mypage.favorites.deletedSheet')}
-                                    </h4>
-                                    <p className="text-sm text-gray-500">{item.drum_sheets?.artist ?? '-'}</p>
-                                    <p className="text-xs text-gray-400">{t('mypage.downloads.purchaseDate')} {formatDate(item.order_created_at)}</p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <button
-                                  onClick={() => handleDownload(item)}
-                                  disabled={isDownloading || !isDownloadableStatus}
-                                  className={`flex-1 min-w-[120px] px-3 py-2 rounded-lg text-sm font-semibold text-white transition ${
-                                    isDownloading || !isDownloadableStatus
-                                      ? 'bg-blue-300 cursor-not-allowed'
-                                      : 'bg-blue-600 hover:bg-blue-700'
-                                  }`}
-                                >
-                                  {isDownloading
-                                    ? t('mypage.downloads.downloading')
-                                    : isDownloadableStatus
-                                    ? t('mypage.downloads.download')
-                                    : t('mypage.downloads.downloadUnavailable')}
-                                </button>
-                                <button
-                                  onClick={() => handlePreview(item)}
-                                  disabled={bulkDownloading}
-                                  className={`flex-1 min-w-[120px] px-3 py-2 rounded-lg text-sm font-semibold transition ${
-                                    bulkDownloading
-                                      ? 'border border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
-                                      : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
-                                  }`}
-                                >
-                                  {t('mypage.downloads.preview')}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {activeTab === 'favorites' && (
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">{t('mypage.favorites.title')}</h3>
-                        <p className="text-sm text-gray-500">{t('mypage.favorites.description')}</p>
-                      </div>
-                      <p className="text-sm text-gray-500">{t('mypage.favorites.totalCount', { count: favorites.length })}</p>
-                    </div>
-
-                    {favorites.length === 0 ? (
-                      <div className="py-16 text-center text-gray-500">
-                        <i className="ri-heart-line text-4xl text-gray-300 mb-4" />
-                        <p className="font-medium">{t('mypage.favorites.noFavorites')}</p>
-                        <p className="text-sm">{t('mypage.favorites.addFavorites')}</p>
-                      </div>
-                    ) : (
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        {favorites.map((favorite) => (
-                          <div key={favorite.id} className="border border-gray-100 rounded-xl p-4 space-y-3">
-                            <div className="flex items-center gap-3">
-                              <img
-                                src={
-                                  favorite.sheet?.thumbnail_url ||
-                                  generateDefaultThumbnail(96, 96)
-                                }
-                                alt={favorite.sheet?.title ?? '악보 썸네일'}
-                                className="w-20 h-20 rounded-lg object-cover"
-                                onError={(event) => {
-                                  (event.target as HTMLImageElement).src = generateDefaultThumbnail(96, 96);
-                                }}
-                              />
-                              <div className="min-w-0">
-                                <h4 className="font-semibold text-gray-900 truncate">
-                                  {favorite.sheet?.title ?? t('mypage.favorites.deletedSheet')}
-                                </h4>
-                                <p className="text-sm text-gray-500 truncate">{favorite.sheet?.artist ?? '-'}</p>
-                                <p className="text-base font-bold text-blue-600 mt-1">
-                                  {favorite.sheet ? formatCurrency(favorite.sheet.price) : '-'}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <button
-                                onClick={() => handleGoToSheet(favorite.sheet_id)}
-                                className="flex-1 min-w-[120px] px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
-                              >
-                                {t('mypage.favorites.viewDetails')}
-                              </button>
-                              <button
-                                onClick={() => handleAddToCart(favorite.sheet_id)}
-                                className={`flex-1 min-w-[120px] px-3 py-2 rounded-lg text-sm font-semibold border ${
-                                  isInCart(favorite.sheet_id)
-                                    ? 'border-green-200 bg-green-50 text-green-600 cursor-not-allowed'
-                                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                                }`}
-                                disabled={isInCart(favorite.sheet_id)}
-                              >
-                                {isInCart(favorite.sheet_id) ? t('mypage.favorites.inCart') : t('mypage.favorites.cart')}
-                              </button>
-                              <button
-                                onClick={() => handleFavoriteRemove(favorite.sheet_id)}
-                                className="flex-1 min-w-[120px] px-3 py-2 rounded-lg border border-red-200 text-sm font-semibold text-red-600 hover:bg-red-50"
-                              >
-                                {t('mypage.favorites.removeFavorite')}
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {activeTab === 'inquiries' && (
-                  <div className="space-y-6">
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">{t('mypage.inquiries.title')}</h3>
-                        <p className="text-sm text-gray-500">
-                          {t('mypage.inquiries.description')}
-                        </p>
-                      </div>
-
-                      <form className="space-y-5" onSubmit={handleInquirySubmit}>
-                        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                          <div>
-                            <label htmlFor="inquiry-name" className="block text-sm font-medium text-gray-700 mb-2">
-                              {t('mypage.inquiries.name')} *
-                            </label>
-                            <input
-                              id="inquiry-name"
-                              name="name"
-                              type="text"
-                              value={inquiryForm.name}
-                              onChange={handleInquiryInputChange}
-                              required
-                              disabled={inquirySubmitting}
-                              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                              placeholder={t('mypage.inquiries.namePlaceholder')}
-                            />
-                          </div>
-                          <div>
-                            <label htmlFor="inquiry-email" className="block text-sm font-medium text-gray-700 mb-2">
-                              {t('mypage.inquiries.email')} *
-                            </label>
-                            <input
-                              id="inquiry-email"
-                              name="email"
-                              type="email"
-                              value={inquiryForm.email}
-                              onChange={handleInquiryInputChange}
-                              required
-                              disabled={inquirySubmitting}
-                              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                              placeholder={t('mypage.inquiries.emailPlaceholder')}
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label htmlFor="inquiry-category" className="block text-sm font-medium text-gray-700 mb-2">
-                            {t('mypage.inquiries.category')} *
-                          </label>
-                          <select
-                            id="inquiry-category"
-                            name="category"
-                            value={inquiryForm.category}
-                            onChange={handleInquiryInputChange}
-                            required
-                            disabled={inquirySubmitting}
-                            className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                          >
-                            <option value="">{t('mypage.inquiries.categoryPlaceholder')}</option>
-                            <option value="주문/결제">{t('mypage.inquiries.categories.orderPayment')}</option>
-                            <option value="악보/다운로드">{t('mypage.inquiries.categories.sheetDownload')}</option>
-                            <option value="주문제작">{t('mypage.inquiries.categories.customOrder')}</option>
-                            <option value="기술지원">{t('mypage.inquiries.categories.technical')}</option>
-                            <option value="기타">{t('mypage.inquiries.categories.other')}</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label htmlFor="inquiry-subject" className="block text-sm font-medium text-gray-700 mb-2">
-                            {t('mypage.inquiries.subject')} *
-                          </label>
-                          <input
-                            id="inquiry-subject"
-                            name="subject"
-                            type="text"
-                            value={inquiryForm.subject}
-                            onChange={handleInquiryInputChange}
-                            required
-                            disabled={inquirySubmitting}
-                            className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                            placeholder={t('mypage.inquiries.subjectPlaceholder')}
-                          />
-                        </div>
-
-                        <div>
-                          <label htmlFor="inquiry-message" className="block text-sm font-medium text-gray-700 mb-2">
-                            {t('mypage.inquiries.message')} *
-                          </label>
-                          <textarea
-                            id="inquiry-message"
-                            name="message"
-                            value={inquiryForm.message}
-                            onChange={handleInquiryInputChange}
-                            required
-                            disabled={inquirySubmitting}
-                            rows={6}
-                            maxLength={500}
-                            className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 resize-none"
-                            placeholder={t('mypage.inquiries.messagePlaceholder')}
-                          />
-                          <div className="mt-1 text-right text-xs text-gray-400">
-                            {inquiryForm.message.length}/500{t('mypage.inquiries.characters')}
-                          </div>
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={inquirySubmitting}
-                          className="w-full rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:bg-blue-300"
-                        >
-                          {inquirySubmitting ? t('mypage.inquiries.submitting') : t('mypage.inquiries.submit')}
-                        </button>
-                      </form>
-                    </div>
-
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
-                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                        <div>
-                          <h3 className="text-xl font-bold text-gray-900">{t('mypage.inquiries.history.title')}</h3>
-                          <p className="text-sm text-gray-500">{t('mypage.inquiries.history.description')}</p>
-                        </div>
-                        <span className="text-sm text-gray-500">{t('mypage.inquiries.history.total', { count: userInquiries.length })}</span>
-                      </div>
-
-                      {inquiriesLoading ? (
-                        <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
-                          <p className="font-medium">{t('mypage.inquiries.history.loading')}</p>
-                        </div>
-                      ) : userInquiries.length === 0 ? (
-                        <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
-                          <i className="ri-question-answer-line text-4xl text-gray-300 mb-4" />
-                          <p className="font-medium">{t('mypage.inquiries.history.noInquiries')}</p>
-                          <p className="text-sm">{t('mypage.inquiries.history.noInquiriesDescription')}</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {userInquiries.map((inquiry) => (
-                            <div key={inquiry.id} className="border border-gray-100 rounded-xl p-5 space-y-4">
-                              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-                                    {inquiry.category || t('mypage.inquiries.history.category')}
-                                  </span>
-                                  {renderInquiryStatusBadge(inquiry.status)}
-                                </div>
-                                <span className="text-xs text-gray-400">
-                                  {t('mypage.inquiries.history.received')} {formatDateTime(inquiry.created_at)}
-                                </span>
-                              </div>
-
-                              <div>
-                                <h4 className="text-lg font-semibold text-gray-900">{inquiry.title}</h4>
-                                <div className="mt-2 rounded-lg bg-gray-50 p-4 text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
-                                  {inquiry.content}
-                                </div>
-                              </div>
-
-                              {inquiry.admin_reply ? (
-                                <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-                                  <div className="flex flex-col gap-1 text-sm text-blue-700 md:flex-row md:items-center md:justify-between">
-                                    <span className="font-semibold">{t('mypage.inquiries.history.adminReply')}</span>
-                                    {inquiry.replied_at ? (
-                                      <span className="text-xs text-blue-500">
-                                        {t('mypage.inquiries.history.replied')} {formatDateTime(inquiry.replied_at)}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                  <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-blue-900">
-                                    {inquiry.admin_reply}
-                                  </p>
-                                </div>
-                              ) : (
-                                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">
-                                  {t('mypage.inquiries.history.preparing')}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                    <div>
+                      <p className="text-sm text-gray-500">{t('mypage.profile.memberInfo')}</p>
+                      <h3 className="text-xl font-bold text-gray-900">{getUserDisplayName(profile as Profile | null, profile?.email || null)}</h3>
+                      <p className="text-sm text-gray-600">{profile?.email}</p>
+                      <p className="mt-2 text-xs text-gray-400">{t('mypage.profile.joinedOn')} {formatDate(profile?.created_at)}</p>
                     </div>
                   </div>
-                )}
 
-                {activeTab === 'cash' && (
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">{t('mypage.cash.title')}</h3>
-                        <p className="text-sm text-gray-500">{t('mypage.cash.description')}</p>
-                      </div>
-                      <button
-                        onClick={handleCashCharge}
-                        className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
-                      >
-                        {t('mypage.cash.chargeCash')}
-                      </button>
-                    </div>
-
-                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-6">
-                      <p className="text-sm text-blue-600">{t('mypage.cash.availableCash')}</p>
+                  <div className="rounded-2xl border border-red-100 bg-gradient-to-r from-red-50 via-rose-50 to-orange-50 shadow-sm p-6 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-red-500">{t('mypage.profile.cashBalance')}</p>
                       {cashBalanceLoading ? (
-                        <p className="mt-2 text-3xl font-bold text-blue-400 animate-pulse">로딩 중...</p>
+                        <p className="mt-2 text-3xl font-black text-gray-400 animate-pulse">로딩 중...</p>
                       ) : cashBalanceError ? (
                         <p className="mt-2 text-lg font-bold text-red-600">
                           오류: {cashBalanceError.message}
                         </p>
                       ) : (
-                        <p className="mt-2 text-3xl font-bold text-blue-900">
-                          {formatCash(userCashBalance, isEnglishSite)}
+                        <p className="mt-2 text-3xl font-black text-gray-900">
+                          {formatCash(userCashBalance)}
                         </p>
                       )}
+                      <p className="mt-1 text-xs text-gray-500">{t('mypage.profile.cashBalanceDescription')}</p>
                     </div>
+                    <button
+                      onClick={handleCashCharge}
+                      className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-semibold shadow-lg hover:bg-red-600 transition"
+                    >
+                      {t('mypage.profile.chargeCash')}
+                    </button>
+                  </div>
+                </div>
 
-                    <div className="space-y-3">
-                      {cashHistoryLoading ? (
-                        <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
-                          <p className="font-medium">{t('mypage.cash.loadingHistory')}</p>
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  {stats.map((item) => (
+                    <div key={item.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                      <p className="text-sm text-gray-500">{item.label}</p>
+                      <p className="mt-2 text-2xl font-extrabold text-gray-900">{item.value.toLocaleString('ko-KR')}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                <aside className="lg:col-span-1 space-y-4">
+                  {getTabs().map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`w-full flex flex-col items-start gap-1 rounded-2xl border px-4 py-3 text-left transition ${activeTab === tab.id
+                        ? 'border-blue-500 bg-blue-50 text-blue-600 shadow-sm'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-blue-200 hover:text-blue-600'
+                        }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <i className={`${tab.icon} text-lg`} />
+                        <span className="font-semibold">{tab.label}</span>
+                      </div>
+                      {tab.description ? <p className="text-xs text-gray-500">{tab.description}</p> : null}
+                    </button>
+                  ))}
+                </aside>
+
+                <section className="lg:col-span-3">
+                  {activeTab === 'profile' && (
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                      <h3 className="text-xl font-bold text-gray-900 mb-6">{t('mypage.profile.title')}</h3>
+                      <form onSubmit={handleProfileSubmit} className="space-y-6">
+                        <div className="grid gap-6 md:grid-cols-2">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('mypage.profile.email')}</label>
+                            <input
+                              type="email"
+                              value={profile?.email ?? ''}
+                              disabled
+                              className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('mypage.profile.name')}</label>
+                            <input
+                              type="text"
+                              value={profileForm.name}
+                              onChange={(event) => setProfileForm((prev) => ({ ...prev, name: event.target.value }))}
+                              placeholder={t('mypage.profile.namePlaceholder')}
+                              className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('mypage.profile.phoneNumber')}</label>
+                            <input
+                              type="tel"
+                              value={profileForm.phone}
+                              onChange={(event) => setProfileForm((prev) => ({ ...prev, phone: event.target.value }))}
+                              placeholder={t('mypage.profile.phonePlaceholder')}
+                              className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('mypage.profile.joinDate')}</label>
+                            <input
+                              type="text"
+                              value={formatDate(profile?.created_at)}
+                              disabled
+                              className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-500"
+                            />
+                          </div>
                         </div>
-                      ) : cashHistory.length === 0 ? (
-                        <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
-                          <p className="font-medium">{t('mypage.cash.noHistory')}</p>
-                          <p className="text-sm">{t('mypage.cash.noHistoryDescription')}</p>
+                        <div className="flex justify-end">
+                          <button
+                            type="submit"
+                            disabled={profileSaving}
+                            className={`px-6 py-3 rounded-lg font-semibold text-white transition ${profileSaving ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                              }`}
+                          >
+                            {profileSaving ? t('mypage.profile.saving') : t('mypage.profile.updateProfile')}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {activeTab === 'purchases' && (
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900">{t('mypage.purchases.title')}</h3>
+                          <p className="text-sm text-gray-500">{t('mypage.purchases.description')}</p>
+                        </div>
+                        <Link
+                          to="/categories"
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-blue-200 text-blue-600 text-sm font-semibold hover:bg-blue-50"
+                        >
+                          <i className="ri-add-line text-lg" /> {t('mypage.purchases.browseMore')}
+                        </Link>
+                      </div>
+
+                      {orders.length === 0 ? (
+                        <div className="py-16 text-center text-gray-500">
+                          <i className="ri-shopping-bag-line text-4xl text-gray-300 mb-4" />
+                          <p className="font-medium">{t('mypage.purchases.noPurchases')}</p>
                         </div>
                       ) : (
-                        cashHistory.map((entry) => {
-                          const meta =
-                            CASH_TYPE_META[entry.transaction_type] ?? {
-                              label: t('mypage.cash.types.record'),
-                              badgeClass: 'bg-gray-100 text-gray-600 border border-gray-200',
-                              amountClass: 'text-gray-700',
-                            };
-                          const amount = entry.amount ?? 0;
-                          const amountSign = amount >= 0 ? '+' : '-';
-                          const description =
-                            entry.description || (entry.sheet?.title ? `${t('mypage.cash.sheet')}: ${entry.sheet.title}` : t('mypage.cash.noDescription'));
-                          return (
-                            <div
-                              key={entry.id}
-                              className="flex flex-col gap-3 rounded-xl border border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                            >
-                              <div className="flex-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span
-                                    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${meta.badgeClass}`}
-                                  >
-                                    {meta.label}
-                                  </span>
-                                  <span className="text-xs text-gray-400">{formatDateTime(entry.created_at)}</span>
+                        <div className="space-y-4">
+                          {orders.map((order) => {
+                            const selectableOrderItems = order.order_items.filter((item) => item.sheet_id);
+                            const orderSelectedIds = selectedPurchaseIds[order.id] ?? [];
+                            const selectedCount = orderSelectedIds.length;
+                            const allSelectableSelected =
+                              selectableOrderItems.length > 0 && selectedCount === selectableOrderItems.length;
+                            const hasSelectableItems = selectableOrderItems.length > 0;
+
+                            return (
+                              <div key={order.id} className="border border-gray-100 rounded-xl p-4 space-y-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                  <div>
+                                    <p className="text-sm text-gray-500">{t('mypage.purchases.orderNumber')}</p>
+                                    <h4 className="text-lg font-semibold text-gray-900">
+                                      #{order.id.slice(0, 8).toUpperCase()}
+                                    </h4>
+                                    <p className="text-xs text-gray-400 mt-1">{formatDateTime(order.created_at)}</p>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-3">
+                                    {renderOrderStatusBadge(order.status)}
+                                    <p className="text-base font-semibold text-gray-900">
+                                      {t('mypage.purchases.total')} {formatCurrency(order.total_amount)}
+                                    </p>
+                                    {hasSelectableItems ? (
+                                      <button
+                                        onClick={() => handleDownloadAllInOrder(order)}
+                                        disabled={bulkDownloading}
+                                        className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition ${bulkDownloading
+                                          ? 'border-blue-200 bg-blue-100 text-blue-300 cursor-not-allowed'
+                                          : 'border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                          }`}
+                                      >
+                                        <i className="ri-stack-line text-base" />
+                                        {bulkDownloading ? t('mypage.purchases.downloading') : t('mypage.purchases.downloadAllInOrder')}
+                                      </button>
+                                    ) : null}
+                                  </div>
                                 </div>
-                                <p className="mt-2 text-sm font-semibold text-gray-900">{description}</p>
+
+                                {hasSelectableItems ? (
+                                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <button
+                                        onClick={() => toggleSelectAllInOrder(order.id, order.order_items)}
+                                        disabled={bulkDownloading}
+                                        className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold transition ${bulkDownloading
+                                          ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                          : 'border-gray-300 text-gray-700 hover:bg-white'
+                                          }`}
+                                      >
+                                        <i className="ri-checkbox-multiple-line text-base" />
+                                        {allSelectableSelected ? t('mypage.purchases.deselectAll') : t('mypage.purchases.selectAll')}
+                                      </button>
+                                      <button
+                                        onClick={() => clearPurchaseSelection(order.id)}
+                                        disabled={bulkDownloading || selectedCount === 0}
+                                        className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold transition ${bulkDownloading || selectedCount === 0
+                                          ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                          : 'border-gray-300 text-gray-700 hover:bg-white'
+                                          }`}
+                                      >
+                                        <i className="ri-close-circle-line text-base" />
+                                        {t('mypage.purchases.deselectAll')}
+                                      </button>
+                                      <span className="text-xs text-gray-500">
+                                        {t('mypage.purchases.selected')} {selectedCount.toLocaleString('ko-KR')}
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <button
+                                        onClick={() => handleDownloadSelectedInOrder(order)}
+                                        disabled={bulkDownloading || selectedCount === 0}
+                                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition ${bulkDownloading || selectedCount === 0
+                                          ? 'bg-blue-300 cursor-not-allowed'
+                                          : 'bg-blue-600 hover:bg-blue-700'
+                                          }`}
+                                      >
+                                        <i className="ri-download-2-line text-base" />
+                                        {bulkDownloading ? t('mypage.purchases.downloading') : t('mypage.purchases.downloadSelected')}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : null}
+
+                                <div className="space-y-3">
+                                  {order.order_items.map((item) => {
+                                    const downloadItem: DownloadableItem = {
+                                      ...item,
+                                      order_id: order.id,
+                                      order_status: order.status,
+                                      order_created_at: order.created_at,
+                                    };
+                                    const downloadKey = buildDownloadKey(downloadItem.order_id, downloadItem.id);
+                                    const isDownloading = bulkDownloading || downloadingKeys.includes(downloadKey);
+                                    const isSelectable = Boolean(item.sheet_id);
+                                    const isSelected = isSelectable && orderSelectedIds.includes(item.id);
+
+                                    return (
+                                      <div
+                                        key={item.id}
+                                        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 transition ${isSelected
+                                          ? 'border-blue-300 bg-blue-50/70 shadow-sm'
+                                          : 'border-gray-100 bg-gray-50'
+                                          }`}
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <input
+                                            type="checkbox"
+                                            className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            checked={isSelectable ? isSelected : false}
+                                            onChange={() => togglePurchaseSelection(order.id, item.id)}
+                                            disabled={!isSelectable || bulkDownloading}
+                                          />
+                                          <img
+                                            src={
+                                              item.drum_sheets?.thumbnail_url ||
+                                              generateDefaultThumbnail(80, 80)
+                                            }
+                                            alt={item.drum_sheets?.title ?? '악보 썸네일'}
+                                            className="w-16 h-16 rounded-lg object-cover"
+                                            onError={(event) => {
+                                              (event.target as HTMLImageElement).src = generateDefaultThumbnail(80, 80);
+                                            }}
+                                          />
+                                          <div>
+                                            <p className="text-sm text-gray-500">
+                                              {item.drum_sheets?.categories?.name ?? t('mypage.purchases.categoryNotSet')}
+                                            </p>
+                                            <h5 className="font-semibold text-gray-900">
+                                              {item.drum_sheets?.title ?? t('mypage.purchases.deletedSheet')}
+                                            </h5>
+                                            <p className="text-sm text-gray-500">{item.drum_sheets?.artist ?? '-'}</p>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                          <button
+                                            onClick={() => handleDownload(downloadItem)}
+                                            disabled={isDownloading}
+                                            className={`px-3 py-2 rounded-lg text-sm font-semibold text-white transition ${isDownloading
+                                              ? 'bg-blue-300 cursor-not-allowed'
+                                              : 'bg-blue-600 hover:bg-blue-700'
+                                              }`}
+                                          >
+                                            {isDownloading ? t('mypage.purchases.downloading') : t('mypage.purchases.download')}
+                                          </button>
+                                          <button
+                                            onClick={() => handleGoToSheet(item.sheet_id)}
+                                            className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                                          >
+                                            {t('mypage.purchases.viewDetails')}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                              <div className="text-right min-w-[140px]">
-                                <p className={`text-lg font-bold ${meta.amountClass}`}>
-                                  {amountSign}
-                                  {formatCurrency(Math.abs(amount))}
-                                </p>
-                                {entry.bonus_amount > 0 && (
-                                  <p className="text-xs text-emerald-600 mt-1">
-                                    {t('mypage.cash.bonus')} +{formatCurrency(entry.bonus_amount)}
-                                  </p>
-                                )}
-                                {entry.balance_after !== undefined && (
-                                  <p className="text-xs text-gray-400 mt-1">
-                                    {t('mypage.cash.balance')} {formatCurrency(entry.balance_after)}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {activeTab === 'custom-orders' && (
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">{t('mypage.customOrders.title')}</h3>
-                        <p className="text-sm text-gray-500">{t('mypage.customOrders.description')}</p>
+                  {activeTab === 'downloads' && (
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900">{t('mypage.downloads.title')}</h3>
+                          <p className="text-sm text-gray-500">{t('mypage.downloads.description')}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-500">{t('mypage.downloads.totalItems', { count: downloads.length })}</p>
+                          {selectedDownloadIds.length > 0 ? (
+                            <p className="mt-1 text-xs text-blue-600">{t('mypage.downloads.selectedItems', { count: selectedDownloadIds.length })}</p>
+                          ) : null}
+                        </div>
                       </div>
-                      <button
-                        onClick={() => navigate('/custom-order')}
-                        className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
-                      >
-                        {t('mypage.customOrders.newOrderRequest')}
-                      </button>
-                    </div>
 
-                    {customOrders.length === 0 ? (
-                      <div className="py-16 text-center text-gray-500">
-                        <i className="ri-file-text-line text-4xl text-gray-300 mb-4" />
-                        <p className="font-medium">{t('mypage.customOrders.noOrders')}</p>
-                        <p className="text-sm">{t('mypage.customOrders.serviceDescription')}</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {customOrders.map((order) => (
-                          <div key={order.id} className="border border-gray-100 rounded-xl p-4">
-                            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                              <div>
-                                <h4 className="text-lg font-semibold text-gray-900">{order.song_title}</h4>
-                                <p className="text-sm text-gray-500">{order.artist}</p>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                {renderCustomOrderStatusBadge(order.status)}
-                                <p className="text-sm font-semibold text-gray-900">
-                                  {order.status === 'quoted' && order.estimated_price
-                                    ? formatCurrency(order.estimated_price)
-                                    : order.status === 'quoted' && !order.estimated_price
-                                    ? t('mypage.customOrders.quoteConfirm')
-                                    : order.status === 'completed' && !order.estimated_price
-                                    ? t('mypage.customOrders.workCompleted')
-                                    : order.estimated_price
-                                    ? formatCurrency(order.estimated_price)
-                                    : t('mypage.customOrders.quotePending')}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-400">
-                              <span>{t('mypage.customOrders.requestDate')} {formatDateTime(order.created_at)}</span>
-                              <span>{t('mypage.customOrders.lastUpdate')} {formatDateTime(order.updated_at)}</span>
-                            </div>
-                            <div className="mt-4 flex justify-end">
-                              <button
-                                onClick={() => navigate(`/custom-order-detail/${order.id}`)}
-                                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+                      {downloads.length > 0 ? (
+                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              onClick={handleToggleSelectAllDownloads}
+                              disabled={downloads.length === 0 || bulkDownloading}
+                              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold transition ${downloads.length === 0 || bulkDownloading
+                                ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                }`}
+                            >
+                              <i className="ri-checkbox-multiple-line text-base" />
+                              {downloads.length > 0 && selectedDownloadIds.length === downloads.length ? t('mypage.downloads.deselectAll') : t('mypage.downloads.selectAll')}
+                            </button>
+                            <button
+                              onClick={clearDownloadSelection}
+                              disabled={selectedDownloadIds.length === 0 || bulkDownloading}
+                              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold transition ${selectedDownloadIds.length === 0 || bulkDownloading
+                                ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                }`}
+                            >
+                              <i className="ri-close-circle-line text-base" />
+                              {t('mypage.downloads.deselectAll')}
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              onClick={handleDownloadSelected}
+                              disabled={selectedDownloadIds.length === 0 || bulkDownloading}
+                              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition ${selectedDownloadIds.length === 0 || bulkDownloading
+                                ? 'bg-blue-300 cursor-not-allowed'
+                                : 'bg-blue-600 hover:bg-blue-700'
+                                }`}
+                            >
+                              <i className="ri-download-2-line text-base" />
+                              {bulkDownloading ? t('mypage.downloads.downloading') : t('mypage.downloads.downloadSelected')}
+                            </button>
+                            <button
+                              onClick={handleDownloadAll}
+                              disabled={downloads.length === 0 || bulkDownloading}
+                              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition ${downloads.length === 0 || bulkDownloading
+                                ? 'bg-indigo-300 cursor-not-allowed'
+                                : 'bg-indigo-600 hover:bg-indigo-700'
+                                }`}
+                            >
+                              <i className="ri-stack-line text-base" />
+                              {bulkDownloading ? t('mypage.downloads.downloading') : t('mypage.downloads.downloadAll')}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {downloads.length === 0 ? (
+                        <div className="py-16 text-center text-gray-500">
+                          <i className="ri-download-2-line text-4xl text-gray-300 mb-4" />
+                          <p className="font-medium">{t('mypage.downloads.noDownloads')}</p>
+                        </div>
+                      ) : (
+                        <div className="grid gap-4 md:grid-cols-2">
+                          {downloads.map((item) => {
+                            const itemKey = buildDownloadKey(item.order_id, item.id);
+                            const isSelected = selectedDownloadIds.includes(itemKey);
+                            const isDownloading = bulkDownloading || downloadingKeys.includes(itemKey);
+                            const isDownloadableStatus = DOWNLOADABLE_STATUSES.includes(
+                              (item.order_status ?? '').toLowerCase(),
+                            );
+
+                            return (
+                              <div
+                                key={itemKey}
+                                className={`rounded-xl border p-4 space-y-3 transition ${isSelected
+                                  ? 'border-blue-300 bg-blue-50/70 shadow-sm'
+                                  : 'border-gray-100 bg-white hover:border-blue-200'
+                                  }`}
                               >
-                                <i className="ri-chat-1-line"></i>
-                                {t('mypage.customOrders.viewDetails')}
-                              </button>
+                                <div className="flex items-start gap-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleDownloadSelection(item)}
+                                    disabled={bulkDownloading || !isDownloadableStatus}
+                                    className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                  />
+                                  <div className="flex flex-1 items-center gap-3">
+                                    <img
+                                      src={
+                                        item.drum_sheets?.thumbnail_url ||
+                                        generateDefaultThumbnail(96, 96)
+                                      }
+                                      alt={item.drum_sheets?.title ?? t('mypage.downloads.noDownloads')}
+                                      className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
+                                      onError={(event) => {
+                                        (event.target as HTMLImageElement).src = generateDefaultThumbnail(96, 96);
+                                      }}
+                                    />
+                                    <div>
+                                      <h4 className="font-semibold text-gray-900">
+                                        {item.drum_sheets?.title ?? t('mypage.favorites.deletedSheet')}
+                                      </h4>
+                                      <p className="text-sm text-gray-500">{item.drum_sheets?.artist ?? '-'}</p>
+                                      <p className="text-xs text-gray-400">{t('mypage.downloads.purchaseDate')} {formatDate(item.order_created_at)}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <button
+                                    onClick={() => handleDownload(item)}
+                                    disabled={isDownloading || !isDownloadableStatus}
+                                    className={`flex-1 min-w-[120px] px-3 py-2 rounded-lg text-sm font-semibold text-white transition ${isDownloading || !isDownloadableStatus
+                                      ? 'bg-blue-300 cursor-not-allowed'
+                                      : 'bg-blue-600 hover:bg-blue-700'
+                                      }`}
+                                  >
+                                    {isDownloading
+                                      ? t('mypage.downloads.downloading')
+                                      : isDownloadableStatus
+                                        ? t('mypage.downloads.download')
+                                        : t('mypage.downloads.downloadUnavailable')}
+                                  </button>
+                                  <button
+                                    onClick={() => handlePreview(item)}
+                                    disabled={bulkDownloading}
+                                    className={`flex-1 min-w-[120px] px-3 py-2 rounded-lg text-sm font-semibold transition ${bulkDownloading
+                                      ? 'border border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                      : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                                      }`}
+                                  >
+                                    {t('mypage.downloads.preview')}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {activeTab === 'favorites' && (
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900">{t('mypage.favorites.title')}</h3>
+                          <p className="text-sm text-gray-500">{t('mypage.favorites.description')}</p>
+                        </div>
+                        <p className="text-sm text-gray-500">{t('mypage.favorites.totalCount', { count: favorites.length })}</p>
+                      </div>
+
+                      {favorites.length === 0 ? (
+                        <div className="py-16 text-center text-gray-500">
+                          <i className="ri-heart-line text-4xl text-gray-300 mb-4" />
+                          <p className="font-medium">{t('mypage.favorites.noFavorites')}</p>
+                          <p className="text-sm">{t('mypage.favorites.addFavorites')}</p>
+                        </div>
+                      ) : (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          {favorites.map((favorite) => (
+                            <div key={favorite.id} className="border border-gray-100 rounded-xl p-4 space-y-3">
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={
+                                    favorite.sheet?.thumbnail_url ||
+                                    generateDefaultThumbnail(96, 96)
+                                  }
+                                  alt={favorite.sheet?.title ?? '악보 썸네일'}
+                                  className="w-20 h-20 rounded-lg object-cover"
+                                  onError={(event) => {
+                                    (event.target as HTMLImageElement).src = generateDefaultThumbnail(96, 96);
+                                  }}
+                                />
+                                <div className="min-w-0">
+                                  <h4 className="font-semibold text-gray-900 truncate">
+                                    {favorite.sheet?.title ?? t('mypage.favorites.deletedSheet')}
+                                  </h4>
+                                  <p className="text-sm text-gray-500 truncate">{favorite.sheet?.artist ?? '-'}</p>
+                                  <p className="text-base font-bold text-blue-600 mt-1">
+                                    {favorite.sheet ? formatCurrency(favorite.sheet.price) : '-'}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  onClick={() => handleGoToSheet(favorite.sheet_id)}
+                                  className="flex-1 min-w-[120px] px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
+                                >
+                                  {t('mypage.favorites.viewDetails')}
+                                </button>
+                                <button
+                                  onClick={() => handleAddToCart(favorite.sheet_id)}
+                                  className={`flex-1 min-w-[120px] px-3 py-2 rounded-lg text-sm font-semibold border ${isInCart(favorite.sheet_id)
+                                    ? 'border-green-200 bg-green-50 text-green-600 cursor-not-allowed'
+                                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                    }`}
+                                  disabled={isInCart(favorite.sheet_id)}
+                                >
+                                  {isInCart(favorite.sheet_id) ? t('mypage.favorites.inCart') : t('mypage.favorites.cart')}
+                                </button>
+                                <button
+                                  onClick={() => handleFavoriteRemove(favorite.sheet_id)}
+                                  className="flex-1 min-w-[120px] px-3 py-2 rounded-lg border border-red-200 text-sm font-semibold text-red-600 hover:bg-red-50"
+                                >
+                                  {t('mypage.favorites.removeFavorite')}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {activeTab === 'inquiries' && (
+                    <div className="space-y-6">
+                      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900">{t('mypage.inquiries.title')}</h3>
+                          <p className="text-sm text-gray-500">
+                            {t('mypage.inquiries.description')}
+                          </p>
+                        </div>
+
+                        <form className="space-y-5" onSubmit={handleInquirySubmit}>
+                          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                            <div>
+                              <label htmlFor="inquiry-name" className="block text-sm font-medium text-gray-700 mb-2">
+                                {t('mypage.inquiries.name')} *
+                              </label>
+                              <input
+                                id="inquiry-name"
+                                name="name"
+                                type="text"
+                                value={inquiryForm.name}
+                                onChange={handleInquiryInputChange}
+                                required
+                                disabled={inquirySubmitting}
+                                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                                placeholder={t('mypage.inquiries.namePlaceholder')}
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="inquiry-email" className="block text-sm font-medium text-gray-700 mb-2">
+                                {t('mypage.inquiries.email')} *
+                              </label>
+                              <input
+                                id="inquiry-email"
+                                name="email"
+                                type="email"
+                                value={inquiryForm.email}
+                                onChange={handleInquiryInputChange}
+                                required
+                                disabled={inquirySubmitting}
+                                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                                placeholder={t('mypage.inquiries.emailPlaceholder')}
+                              />
                             </div>
                           </div>
-                        ))}
+
+                          <div>
+                            <label htmlFor="inquiry-category" className="block text-sm font-medium text-gray-700 mb-2">
+                              {t('mypage.inquiries.category')} *
+                            </label>
+                            <select
+                              id="inquiry-category"
+                              name="category"
+                              value={inquiryForm.category}
+                              onChange={handleInquiryInputChange}
+                              required
+                              disabled={inquirySubmitting}
+                              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                            >
+                              <option value="">{t('mypage.inquiries.categoryPlaceholder')}</option>
+                              <option value="주문/결제">{t('mypage.inquiries.categories.orderPayment')}</option>
+                              <option value="악보/다운로드">{t('mypage.inquiries.categories.sheetDownload')}</option>
+                              <option value="주문제작">{t('mypage.inquiries.categories.customOrder')}</option>
+                              <option value="기술지원">{t('mypage.inquiries.categories.technical')}</option>
+                              <option value="기타">{t('mypage.inquiries.categories.other')}</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label htmlFor="inquiry-subject" className="block text-sm font-medium text-gray-700 mb-2">
+                              {t('mypage.inquiries.subject')} *
+                            </label>
+                            <input
+                              id="inquiry-subject"
+                              name="subject"
+                              type="text"
+                              value={inquiryForm.subject}
+                              onChange={handleInquiryInputChange}
+                              required
+                              disabled={inquirySubmitting}
+                              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                              placeholder={t('mypage.inquiries.subjectPlaceholder')}
+                            />
+                          </div>
+
+                          <div>
+                            <label htmlFor="inquiry-message" className="block text-sm font-medium text-gray-700 mb-2">
+                              {t('mypage.inquiries.message')} *
+                            </label>
+                            <textarea
+                              id="inquiry-message"
+                              name="message"
+                              value={inquiryForm.message}
+                              onChange={handleInquiryInputChange}
+                              required
+                              disabled={inquirySubmitting}
+                              rows={6}
+                              maxLength={500}
+                              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 resize-none"
+                              placeholder={t('mypage.inquiries.messagePlaceholder')}
+                            />
+                            <div className="mt-1 text-right text-xs text-gray-400">
+                              {inquiryForm.message.length}/500{t('mypage.inquiries.characters')}
+                            </div>
+                          </div>
+
+                          <button
+                            type="submit"
+                            disabled={inquirySubmitting}
+                            className="w-full rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:bg-blue-300"
+                          >
+                            {inquirySubmitting ? t('mypage.inquiries.submitting') : t('mypage.inquiries.submit')}
+                          </button>
+                        </form>
                       </div>
-                    )}
-                  </div>
-                )}
+
+                      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
+                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <h3 className="text-xl font-bold text-gray-900">{t('mypage.inquiries.history.title')}</h3>
+                            <p className="text-sm text-gray-500">{t('mypage.inquiries.history.description')}</p>
+                          </div>
+                          <span className="text-sm text-gray-500">{t('mypage.inquiries.history.total', { count: userInquiries.length })}</span>
+                        </div>
+
+                        {inquiriesLoading ? (
+                          <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
+                            <p className="font-medium">{t('mypage.inquiries.history.loading')}</p>
+                          </div>
+                        ) : userInquiries.length === 0 ? (
+                          <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
+                            <i className="ri-question-answer-line text-4xl text-gray-300 mb-4" />
+                            <p className="font-medium">{t('mypage.inquiries.history.noInquiries')}</p>
+                            <p className="text-sm">{t('mypage.inquiries.history.noInquiriesDescription')}</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {userInquiries.map((inquiry) => (
+                              <div key={inquiry.id} className="border border-gray-100 rounded-xl p-5 space-y-4">
+                                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                                      {inquiry.category || t('mypage.inquiries.history.category')}
+                                    </span>
+                                    {renderInquiryStatusBadge(inquiry.status)}
+                                  </div>
+                                  <span className="text-xs text-gray-400">
+                                    {t('mypage.inquiries.history.received')} {formatDateTime(inquiry.created_at)}
+                                  </span>
+                                </div>
+
+                                <div>
+                                  <h4 className="text-lg font-semibold text-gray-900">{inquiry.title}</h4>
+                                  <div className="mt-2 rounded-lg bg-gray-50 p-4 text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
+                                    {inquiry.content}
+                                  </div>
+                                </div>
+
+                                {inquiry.admin_reply ? (
+                                  <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                                    <div className="flex flex-col gap-1 text-sm text-blue-700 md:flex-row md:items-center md:justify-between">
+                                      <span className="font-semibold">{t('mypage.inquiries.history.adminReply')}</span>
+                                      {inquiry.replied_at ? (
+                                        <span className="text-xs text-blue-500">
+                                          {t('mypage.inquiries.history.replied')} {formatDateTime(inquiry.replied_at)}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-blue-900">
+                                      {inquiry.admin_reply}
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">
+                                    {t('mypage.inquiries.history.preparing')}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'cash' && (
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900">{t('mypage.cash.title')}</h3>
+                          <p className="text-sm text-gray-500">{t('mypage.cash.description')}</p>
+                        </div>
+                        <button
+                          onClick={handleCashCharge}
+                          className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
+                        >
+                          {t('mypage.cash.chargeCash')}
+                        </button>
+                      </div>
+
+                      <div className="rounded-xl border border-blue-100 bg-blue-50 p-6">
+                        <p className="text-sm text-blue-600">{t('mypage.cash.availableCash')}</p>
+                        {cashBalanceLoading ? (
+                          <p className="mt-2 text-3xl font-bold text-blue-400 animate-pulse">로딩 중...</p>
+                        ) : cashBalanceError ? (
+                          <p className="mt-2 text-lg font-bold text-red-600">
+                            오류: {cashBalanceError.message}
+                          </p>
+                        ) : (
+                          <p className="mt-2 text-3xl font-bold text-blue-900">
+                            {formatCash(userCashBalance)}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-3">
+                        {cashHistoryLoading ? (
+                          <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
+                            <p className="font-medium">{t('mypage.cash.loadingHistory')}</p>
+                          </div>
+                        ) : cashHistory.length === 0 ? (
+                          <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
+                            <p className="font-medium">{t('mypage.cash.noHistory')}</p>
+                            <p className="text-sm">{t('mypage.cash.noHistoryDescription')}</p>
+                          </div>
+                        ) : (
+                          cashHistory.map((entry) => {
+                            const meta =
+                              CASH_TYPE_META[entry.transaction_type] ?? {
+                                label: t('mypage.cash.types.record'),
+                                badgeClass: 'bg-gray-100 text-gray-600 border border-gray-200',
+                                amountClass: 'text-gray-700',
+                              };
+                            const amount = entry.amount ?? 0;
+                            const amountSign = amount >= 0 ? '+' : '-';
+                            const description =
+                              entry.description || (entry.sheet?.title ? `${t('mypage.cash.sheet')}: ${entry.sheet.title}` : t('mypage.cash.noDescription'));
+                            return (
+                              <div
+                                key={entry.id}
+                                className="flex flex-col gap-3 rounded-xl border border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                              >
+                                <div className="flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span
+                                      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${meta.badgeClass}`}
+                                    >
+                                      {meta.label}
+                                    </span>
+                                    <span className="text-xs text-gray-400">{formatDateTime(entry.created_at)}</span>
+                                  </div>
+                                  <p className="mt-2 text-sm font-semibold text-gray-900">{description}</p>
+                                </div>
+                                <div className="text-right min-w-[140px]">
+                                  <p className={`text-lg font-bold ${meta.amountClass}`}>
+                                    {amountSign}
+                                    {formatCurrency(Math.abs(amount))}
+                                  </p>
+                                  {entry.bonus_amount > 0 && (
+                                    <p className="text-xs text-emerald-600 mt-1">
+                                      {t('mypage.cash.bonus')} +{formatCurrency(entry.bonus_amount)}
+                                    </p>
+                                  )}
+                                  {entry.balance_after !== undefined && (
+                                    <p className="text-xs text-gray-400 mt-1">
+                                      {t('mypage.cash.balance')} {formatCurrency(entry.balance_after)}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'custom-orders' && (
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900">{t('mypage.customOrders.title')}</h3>
+                          <p className="text-sm text-gray-500">{t('mypage.customOrders.description')}</p>
+                        </div>
+                        <button
+                          onClick={() => navigate('/custom-order')}
+                          className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
+                        >
+                          {t('mypage.customOrders.newOrderRequest')}
+                        </button>
+                      </div>
+
+                      {customOrders.length === 0 ? (
+                        <div className="py-16 text-center text-gray-500">
+                          <i className="ri-file-text-line text-4xl text-gray-300 mb-4" />
+                          <p className="font-medium">{t('mypage.customOrders.noOrders')}</p>
+                          <p className="text-sm">{t('mypage.customOrders.serviceDescription')}</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {customOrders.map((order) => (
+                            <div key={order.id} className="border border-gray-100 rounded-xl p-4">
+                              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                <div>
+                                  <h4 className="text-lg font-semibold text-gray-900">{order.song_title}</h4>
+                                  <p className="text-sm text-gray-500">{order.artist}</p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  {renderCustomOrderStatusBadge(order.status)}
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    {order.status === 'quoted' && order.estimated_price
+                                      ? formatCurrency(order.estimated_price)
+                                      : order.status === 'quoted' && !order.estimated_price
+                                        ? t('mypage.customOrders.quoteConfirm')
+                                        : order.status === 'completed' && !order.estimated_price
+                                          ? t('mypage.customOrders.workCompleted')
+                                          : order.estimated_price
+                                            ? formatCurrency(order.estimated_price)
+                                            : t('mypage.customOrders.quotePending')}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-400">
+                                <span>{t('mypage.customOrders.requestDate')} {formatDateTime(order.created_at)}</span>
+                                <span>{t('mypage.customOrders.lastUpdate')} {formatDateTime(order.updated_at)}</span>
+                              </div>
+                              <div className="mt-4 flex justify-end">
+                                <button
+                                  onClick={() => navigate(`/custom-order-detail/${order.id}`)}
+                                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+                                >
+                                  <i className="ri-chat-1-line"></i>
+                                  {t('mypage.customOrders.viewDetails')}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </section>
               </section>
-            </section>
-          </div>
+            </div>
           )}
         </main>
       </div>

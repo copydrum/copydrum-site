@@ -383,6 +383,7 @@ export default {
 
   // Footer
   'footer.categories': '악보 카테고리',
+  'footer.scoreCategoryTitle': '악보 카테고리',
   'footer.support': '고객 지원',
   'footer.company': '회사 정보',
   'footer.guide': '이용 가이드',

@@ -1,7 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import messages from './local/index';
-import { supportedLanguages, defaultLanguage, getDefaultLanguageForHost } from './languages';
+import { supportedLanguages, defaultLanguage } from './languages';
 
 // JSON 기반 번역 파일 로드
 const jsonModules = import.meta.glob('./locales/*/*.json', { eager: true });
@@ -13,11 +13,11 @@ Object.keys(jsonModules).forEach((path) => {
   if (match) {
     const [, lang, fileName] = match;
     const module = jsonModules[path] as { default?: Record<string, any> };
-    
+
     if (!jsonMessages[lang]) {
       jsonMessages[lang] = { translation: {} };
     }
-    
+
     // JSON 파일 내용을 파일명을 키로 하여 직접 병합
     // 예: authLogin.json -> authLogin.title 형태로 접근 가능하도록
     if (module.default) {
@@ -34,7 +34,7 @@ Object.keys(jsonModules).forEach((path) => {
         });
         return result;
       };
-      
+
       const flattened = flattenJson(module.default, fileName);
       Object.assign(jsonMessages[lang].translation, flattened);
     }
@@ -55,11 +55,25 @@ Object.keys(jsonMessages).forEach((lang) => {
   };
 });
 
+import { getLocaleFromHost } from './getLocaleFromHost';
+
 const getCurrentHostLanguage = () => {
   if (typeof window === 'undefined') {
     return defaultLanguage;
   }
-  return getDefaultLanguageForHost(window.location.host);
+
+  // 1. Query Param Check (Preserve existing dev/testing behavior)
+  const params = new URLSearchParams(window.location.search);
+  const langParam = params.get('lang');
+  if (langParam && supportedLanguages.includes(langParam)) {
+    return langParam;
+  }
+  if (params.get('en') === 'true') {
+    return 'en';
+  }
+
+  // 2. Hostname Check (New logic)
+  return getLocaleFromHost(window.location.host);
 };
 
 const initialLanguage = getCurrentHostLanguage();
@@ -83,13 +97,13 @@ if (typeof window !== 'undefined') {
   if (i18n.language !== domainLanguage) {
     i18n.changeLanguage(domainLanguage);
   }
-  
+
   // 언어 변경 시 항상 도메인 기반 언어로 강제
   i18n.on('languageChanged', (lng) => {
     if (typeof document !== 'undefined') {
       document.documentElement.lang = lng;
     }
-    
+
     // 도메인 기반 언어와 다르면 강제로 변경
     const domainLanguage = getCurrentHostLanguage();
     if (lng !== domainLanguage) {

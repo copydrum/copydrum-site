@@ -1,4 +1,4 @@
-import { isKoreanHost } from '../i18n/languages';
+import { isKoreanSiteHost } from '../config/hostType';
 
 const ENV_USD_RATE = Number(import.meta.env.VITE_DEFAULT_USD_RATE);
 export const DEFAULT_USD_RATE = Number.isFinite(ENV_USD_RATE) && ENV_USD_RATE > 0 ? ENV_USD_RATE : 0.00077; // ≈ KRW → USD (1 USD ≈ 1,300 KRW)
@@ -70,13 +70,13 @@ export const formatPrice = ({
 }: FormatPriceOptions): FormatPriceResult => {
   const safeAmount = Number(amountKRW ?? 0);
   const resolvedHost = getHost(host);
-  
-  // 언어가 영어이고 currencyMode가 auto일 때는 달러 사용
-  const isEnglishLanguage = language?.startsWith('en') || (!language && typeof window !== 'undefined' && window.location.hostname.includes('en.copydrum.com'));
-  
+
+  // 언어가 영어이거나 글로벌 사이트이고 currencyMode가 auto일 때는 달러 사용
+  const isGlobalContext = language?.startsWith('en') || (!language && typeof window !== 'undefined' && !isKoreanSiteHost(resolvedHost || ''));
+
   const shouldUseKRW =
     currencyMode === 'krw' ||
-    (currencyMode === 'auto' && !isEnglishLanguage && isKoreanHost(resolvedHost));
+    (currencyMode === 'auto' && !isGlobalContext && isKoreanSiteHost(resolvedHost || ''));
   const appliedUsdRate = resolveUsdRate(usdRate);
 
   if (shouldUseKRW) {

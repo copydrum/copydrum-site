@@ -13,6 +13,9 @@ import { useTranslation } from 'react-i18next';
 import { formatPrice as formatPriceWithCurrency } from '../../lib/priceFormatter';
 import { calculatePointPrice } from '../../lib/pointPrice';
 import PayPalPaymentModal from '../../components/payments/PayPalPaymentModal';
+import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
+import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
+import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
 
 type PendingCartPurchase = {
   targetItemIds: string[];
@@ -39,7 +42,14 @@ export default function CartPage() {
   const navigate = useNavigate();
   const { i18n, t } = useTranslation();
   const formatPriceValue = useCallback(
-    (price: number) => formatPriceWithCurrency({ amountKRW: price, language: i18n.language }).formatted,
+    (price: number) => {
+      if (i18n.language === 'ko') {
+        return formatPriceWithCurrency({ amountKRW: price, language: 'ko' }).formatted;
+      }
+      const currency = getActiveCurrency();
+      const converted = convertPriceForLocale(price, i18n.language, currency);
+      return formatCurrencyUi(converted, currency);
+    },
     [i18n.language],
   );
 
@@ -304,7 +314,7 @@ export default function CartPage() {
           if (cashResult.reason === 'INSUFFICIENT_CREDIT') {
             alert(
               t('cartPage.insufficientCash', {
-                amount: cashResult.currentCredits.toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')
+                amount: formatPriceValue(cashResult.currentCredits)
               }),
             );
             openCashChargeModal();

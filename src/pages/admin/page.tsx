@@ -10639,8 +10639,8 @@ const AdminPage: React.FC = () => {
 
       {/* 메인 컨텐츠 */}
       <div className="flex-1 flex flex-col w-full md:w-auto">
-        {/* 헤더 - 모바일에서만 숨김 */}
-        <header className="hidden md:block bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
+        {/* 헤더 - 모바일에서도 표시 */}
+        <header className="block bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
           <div className="px-4 md:px-6 py-3 md:py-4">
             <div className="flex justify-between items-center gap-3">
               <div className="flex items-center gap-3 flex-1 min-w-0">

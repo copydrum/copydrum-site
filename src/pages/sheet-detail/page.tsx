@@ -20,9 +20,8 @@ import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
-import { isEnglishHost } from '../../i18n/languages';
+import { isGlobalSiteHost } from '../../config/hostType';
 import { calculatePointPrice } from '../../lib/pointPrice';
-import { isEnglishSite } from '../../utils/site';
 
 interface DrumSheet {
   id: string;
@@ -67,7 +66,9 @@ export default function SheetDetailPage() {
   // 한국어 사이트 여부 확인
   const isKoreanSite = useMemo(() => {
     if (typeof window === 'undefined') return true;
-    return !isEnglishHost(window.location.host);
+    // 글로벌 사이트에서는 무통장 입금 숨김 (PayPal 등 사용)
+    // 한국 사이트에서는 무통장 입금 표시
+    return !isGlobalSiteHost(window.location.host);
   }, []);
 
   // 포인트 가격 계산 (모든 사이트에서 사용)
@@ -76,14 +77,32 @@ export default function SheetDetailPage() {
     return calculatePointPrice(displayPrice);
   }, [displayPrice]);
   const { i18n, t } = useTranslation();
-  const formatCurrency = (value: number) => formatPrice({
-    amountKRW: value,
-    language: i18n.language,
-    host: typeof window !== 'undefined' ? window.location.host : undefined
-  }).formatted;
 
-  // 영문 사이트 여부 확인 (공용 유틸 함수 사용)
-  const englishSite = useMemo(() => isEnglishSite(), []);
+  // Phase 4: 일본어 사이트 UI 적용
+  // 기존 formatPrice는 한국어/영어 사이트용으로 유지
+  // ja 로케일일 때만 새 formatCurrency 유틸 사용
+  const formatCurrency = (value: number) => {
+    if (i18n.language === 'ja') {
+      // TODO: Phase X에서 환율 변환 로직 추가 필요 (현재는 숫자 그대로 JPY 포맷)
+      // import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
+      // return formatCurrencyUi(value, 'JPY');
+
+      // 임시로 직접 구현 (import 순환 방지 및 간단 적용)
+      return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(value);
+    }
+
+    return formatPrice({
+      amountKRW: value,
+      language: i18n.language,
+      host: typeof window !== 'undefined' ? window.location.host : undefined
+    }).formatted;
+  };
+
+  // 영문 사이트 여부 확인
+  const englishSite = useMemo(() => {
+    const host = typeof window !== 'undefined' ? window.location.host : '';
+    return isGlobalSiteHost(host);
+  }, []);
 
   // 카테고리 이름을 번역하는 함수 (영문 사이트용)
   const getCategoryName = (categoryName: string | null | undefined): string => {
@@ -103,6 +122,23 @@ export default function SheetDetailPage() {
       '드럼커버': t('categoriesPage.categories.drumCover'),
       '기타': t('categoriesPage.categories.other'),
     };
+
+    if (i18n.language === 'ja') {
+      const categoryMapJa: Record<string, string> = {
+        '가요': t('category.kpop'),
+        '팝': t('category.pop'),
+        '락': t('category.rock'),
+        'CCM': t('category.ccm'),
+        '트로트/성인가요': t('category.trot'),
+        '재즈': t('category.jazz'),
+        'J-POP': t('category.jpop'),
+        'OST': t('category.ost'),
+        '드럼솔로': t('category.drumSolo'),
+        '드럼커버': t('category.drumCover'),
+        '기타': t('category.other'),
+      };
+      return categoryMapJa[categoryName] || categoryName;
+    }
 
     return categoryMap[categoryName] || categoryName;
   };
@@ -218,7 +254,8 @@ export default function SheetDetailPage() {
     if (!difficulty) return t('sheetDetail.difficulty.notSet');
 
     const normalizedDifficulty = (difficulty || '').toLowerCase().trim();
-    const isEnglishSiteLocal = isEnglishSite();
+    const host = typeof window !== 'undefined' ? window.location.host : '';
+    const isEnglishSiteLocal = isGlobalSiteHost(host);
 
     // 영문 사이트에서 한글 난이도 값을 영어로 변환
     if (isEnglishSiteLocal || i18n.language === 'en') {
@@ -231,6 +268,21 @@ export default function SheetDetailPage() {
       // 한글 값이면 영어로 변환
       if (difficultyMapEn[difficulty]) {
         return difficultyMapEn[difficulty];
+      }
+    }
+
+    // 일본어 사이트
+    if (i18n.language === 'ja') {
+      const difficultyMapJa: Record<string, string> = {
+        '초급': t('sheetDetail.difficulty.beginner'),
+        '중급': t('sheetDetail.difficulty.intermediate'),
+        '고급': t('sheetDetail.difficulty.advanced'),
+        'beginner': t('sheetDetail.difficulty.beginner'),
+        'intermediate': t('sheetDetail.difficulty.intermediate'),
+        'advanced': t('sheetDetail.difficulty.advanced'),
+      };
+      if (difficultyMapJa[normalizedDifficulty] || difficultyMapJa[difficulty]) {
+        return difficultyMapJa[normalizedDifficulty] || difficultyMapJa[difficulty];
       }
     }
 
@@ -788,8 +840,8 @@ export default function SheetDetailPage() {
                     onClick={handleToggleFavorite}
                     disabled={favoriteProcessing}
                     className={`flex h-11 w-11 items-center justify-center rounded-full border transition-colors ${isFavoriteSheet
-                        ? 'border-red-200 bg-red-50 text-red-500'
-                        : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                      ? 'border-red-200 bg-red-50 text-red-500'
+                      : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
                       } ${favoriteProcessing ? 'opacity-60 cursor-not-allowed' : ''}`}
                     aria-label={isFavoriteSheet ? t('sheetDetail.removeFromFavorites') : t('sheetDetail.addToFavorites')}
                   >
@@ -814,8 +866,8 @@ export default function SheetDetailPage() {
                   onClick={handleAddToCart}
                   disabled={!user || isInCart(sheet.id)}
                   className={`w-full py-3 px-6 rounded-lg font-medium flex items-center justify-center space-x-2 whitespace-nowrap cursor-pointer transition-colors ${isInCart(sheet.id)
-                      ? 'bg-gray-400 text-white cursor-not-allowed'
-                      : 'bg-gray-900 text-white hover:bg-gray-800'
+                    ? 'bg-gray-400 text-white cursor-not-allowed'
+                    : 'bg-gray-900 text-white hover:bg-gray-800'
                     }`}
                 >
                   <ShoppingCart className="w-5 h-5" />
@@ -932,37 +984,17 @@ export default function SheetDetailPage() {
 
           {/* 환불 규정 안내 블록 */}
           <div className="bg-gray-50 rounded-lg p-6 mt-8">
-            {englishSite ? (
-              <>
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Refund Policy</h3>
-                <p className="text-sm text-gray-700 mb-2">
-                  This product is a digital PDF drum sheet music file. Once the file has
-                  been downloaded or accessed, it cannot be refunded.
-                </p>
-                <p className="text-sm text-gray-700">
-                  For details, please check our{' '}
-                  <a href="/policy/refund" className="text-blue-600 hover:text-blue-800 underline">
-                    Refund &amp; Delivery Policy
-                  </a>
-                  .
-                </p>
-              </>
-            ) : (
-              <>
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">환불 규정</h3>
-                <p className="text-sm text-gray-700 mb-2">
-                  본 상품은 디지털 PDF 드럼 악보 파일로, 파일 다운로드 또는 열람이 이루어진
-                  경우 환불이 불가합니다.
-                </p>
-                <p className="text-sm text-gray-700">
-                  자세한 내용은{' '}
-                  <a href="/policy/refund" className="text-blue-600 hover:text-blue-800 underline">
-                    환불 및 제공(배송) 정책
-                  </a>
-                  을 확인해 주세요.
-                </p>
-              </>
-            )}
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">{t('sheetDetail.refundPolicy')}</h3>
+            <p className="text-sm text-gray-700 mb-2">
+              {t('sheetDetail.refundPolicyDescription')}
+            </p>
+            <p className="text-sm text-gray-700">
+              {t('sheetDetail.refundPolicyLinkText')}{' '}
+              <a href="/policy/refund" className="text-blue-600 hover:text-blue-800 underline">
+                {t('sheetDetail.refundPolicyLink')}
+              </a>
+              {t('sheetDetail.refundPolicyLinkSuffix')}
+            </p>
           </div>
         </div>
       </div>

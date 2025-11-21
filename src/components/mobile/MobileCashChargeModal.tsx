@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 import { startCashCharge } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { formatPrice, convertUSDToKRW } from '../../lib/priceFormatter';
-import { isEnglishHost } from '../../i18n/languages';
+import { isGlobalSiteHost } from '../../config/hostType';
+import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
+import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
+import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
 
 import PayPalPaymentModal from '../payments/PayPalPaymentModal';
 
@@ -43,7 +47,14 @@ export default function MobileCashChargeModal({
   const [cashLoading, setCashLoading] = useState(false);
 
   const formatCurrency = useCallback(
-    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
+    (value: number) => {
+      if (i18n.language === 'ko') {
+        return formatPrice({ amountKRW: value, language: 'ko' }).formatted;
+      }
+      const currency = getActiveCurrency();
+      const converted = convertPriceForLocale(value, i18n.language, currency);
+      return formatCurrencyUi(converted, currency);
+    },
     [i18n.language],
   );
   const formatNumber = useCallback(
@@ -56,10 +67,11 @@ export default function MobileCashChargeModal({
     [],
   );
 
+  const location = useLocation();
   const isEnglishSite = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return isEnglishHost(window.location.host);
-  }, []);
+    if (typeof window === 'undefined') return false;    // 글로벌 사이트 여부 확인 (PayPal 사용)
+    return isGlobalSiteHost(window.location.host);
+  }, [location.search]);
 
   const chargeOptions = useMemo<ChargeOption[]>(() => {
     if (isEnglishSite) {

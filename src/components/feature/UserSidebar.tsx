@@ -5,14 +5,17 @@ import type { Profile } from '../../lib/supabase';
 import { getSiteUrl } from '../../lib/siteUrl';
 import { googleAuth } from '../../lib/google';
 import type { User } from '@supabase/supabase-js';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../../hooks/useCart';
 import { useUserCashBalance } from '../../hooks/useUserCashBalance';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
-import { isEnglishHost } from '../../i18n/languages';
+import { isGlobalSiteHost } from '../../config/hostType';
 import { getUserDisplayName } from '../../utils/userDisplayName';
 import PointChargeModal from '../payments/PointChargeModal';
+import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
+import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
+import { formatCurrency } from '../../lib/pricing/formatCurrency';
 
 interface UserSidebarProps {
   user: User | null;
@@ -23,7 +26,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   const { credits: userCash, loading: cashLoading, error: cashError, refresh: refreshCash } = useUserCashBalance(user);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [showCashChargeModal, setShowCashChargeModal] = useState(false);
-  
+
   // 로그인 폼 상태
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,27 +39,33 @@ export default function UserSidebar({ user }: UserSidebarProps) {
 
   const navigate = useNavigate();
   const { i18n, t } = useTranslation();
-  const formatCurrency = useCallback(
-    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
-    [i18n.language],
-  );
 
   const { cartItems } = useCart();
 
-  // 영문 사이트 여부 확인 (formatCash보다 먼저 정의되어야 함)
+  // 글로벌 사이트 여부 확인
+  const location = useLocation();
   const isEnglishSite = useMemo(() => {
     if (typeof window === 'undefined') return false;
-    return isEnglishHost(window.location.host);
-  }, []);
+    return isGlobalSiteHost(window.location.host);
+  }, [location.search]);
+
+
+  // ... existing imports ...
 
   // 캐시 표시용 포맷 함수 (영문 사이트는 USD, 한국어 사이트는 KRW)
   const formatCash = useCallback(
     (value: number) => {
-      return formatPrice({ 
-        amountKRW: value, 
-        language: i18n.language,
-        host: typeof window !== 'undefined' ? window.location.host : undefined
-      }).formatted;
+      if (i18n.language === 'ko') {
+        return formatPrice({
+          amountKRW: value,
+          language: 'ko',
+          host: typeof window !== 'undefined' ? window.location.host : undefined
+        }).formatted;
+      }
+
+      const currency = getActiveCurrency();
+      const converted = convertPriceForLocale(value, i18n.language, currency);
+      return formatCurrency(converted, currency);
     },
     [i18n.language],
   );
@@ -67,7 +76,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
       if (googleAuth.isLoggedIn()) {
         googleAuth.logout();
       }
-      
+
       // Supabase 로그아웃
       await supabase.auth.signOut();
       window.location.reload();
@@ -115,9 +124,9 @@ export default function UserSidebar({ user }: UserSidebarProps) {
 
             if (resetError) {
               console.error('비밀번호 재설정 메일 발송 오류:', resetError);
-              setLoginError('비밀번호 재설정 메일 발송 중 오류가 발생했습니다. 다시 시도해주세요.');
+              setLoginError(t('sidebar.loginError.resetFailed'));
             } else {
-              setLoginInfo('기존 회원님이시군요! 비밀번호 재설정 이메일을 발송했습니다. 메일함을 확인해주세요.');
+              setLoginInfo(t('sidebar.loginInfo.resetSent'));
             }
             return;
           }
@@ -129,11 +138,11 @@ export default function UserSidebar({ user }: UserSidebarProps) {
           console.error('마이그레이션 사용자 확인 오류:', checkError);
         }
 
-        setLoginError('이메일 또는 비밀번호가 올바르지 않습니다.');
+        setLoginError(t('sidebar.loginError.invalidCredentials'));
       } else if (err.message.includes('Email not confirmed')) {
-        setLoginError('이메일 인증이 필요합니다. 이메일을 확인해주세요.');
+        setLoginError(t('sidebar.loginError.emailConfirmation'));
       } else {
-        setLoginError('로그인에 실패했습니다. 다시 시도해주세요.');
+        setLoginError(t('sidebar.loginError.generic'));
       }
     } finally {
       setLoginLoading(false);
@@ -154,10 +163,10 @@ export default function UserSidebar({ user }: UserSidebarProps) {
           redirectTo: redirectUrl,
         },
       });
-      
+
       if (error) {
         console.error('카카오 로그인 오류:', error);
-        setLoginError('카카오 로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        setLoginError(t('sidebar.loginError.kakao'));
         setKakaoLoading(false);
       }
       // 성공 시 리다이렉트되므로 여기서는 아무것도 하지 않음
@@ -176,12 +185,12 @@ export default function UserSidebar({ user }: UserSidebarProps) {
       // 현재 호스트를 유지하여 리다이렉트
       const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://copydrum.com';
       const currentHost = typeof window !== 'undefined' ? window.location.host : 'copydrum.com';
-      
+
       // 원래 호스트를 localStorage에 저장 (콜백에서 확인용)
       if (typeof window !== 'undefined') {
         localStorage.setItem('oauth_original_host', currentHost);
       }
-      
+
       const redirectUrl = `${currentOrigin}/auth/callback`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -193,10 +202,10 @@ export default function UserSidebar({ user }: UserSidebarProps) {
           },
         },
       });
-      
+
       if (error) {
         console.error('구글 로그인 오류:', error);
-        setLoginError('구글 로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        setLoginError(t('sidebar.loginError.google'));
         setGoogleLoading(false);
       }
       // 성공 시 리다이렉트되므로 여기서는 아무것도 하지 않음
@@ -337,185 +346,185 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     return (
       <div className="hidden md:block">
         <div className="fixed top-0 right-0 h-full w-64 bg-white shadow-2xl z-50 border-l border-gray-200">
-        {/* 헤더 */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white flex flex-col items-center justify-center" style={{ height: '156px' }}>
-          <h2 className="text-lg font-bold text-center">{t('sidebar.loginTitle')}</h2>
-          <p className="text-blue-100 text-xs text-center mt-1">{t('sidebar.loginDescription')}</p>
-        </div>
+          {/* 헤더 */}
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white flex flex-col items-center justify-center" style={{ height: '156px' }}>
+            <h2 className="text-lg font-bold text-center">{t('sidebar.loginTitle')}</h2>
+            <p className="text-blue-100 text-xs text-center mt-1">{t('sidebar.loginDescription')}</p>
+          </div>
 
-        {/* 로그인 폼 */}
-        <div className="p-4 h-full overflow-y-auto pb-16">
-          <form onSubmit={handleLogin} className="space-y-4">
-            {loginInfo && (
-              <div className="bg-blue-50 border border-blue-200 text-blue-700 px-3 py-2 rounded-md text-xs">
-                {loginInfo}
-              </div>
-            )}
-
-            {loginError && (
-              <div className="space-y-2">
-                <div className="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-md text-xs">
-                  {loginError}
+          {/* 로그인 폼 */}
+          <div className="p-4 h-full overflow-y-auto pb-16">
+            <form onSubmit={handleLogin} className="space-y-4">
+              {loginInfo && (
+                <div className="bg-blue-50 border border-blue-200 text-blue-700 px-3 py-2 rounded-md text-xs">
+                  {loginInfo}
                 </div>
-                <div className="text-xs text-gray-600 bg-gray-50 border border-gray-200 px-3 py-2 rounded-md">
-                  로그인이 되지 않는 경우, 사이트 이전으로 인해 비밀번호 재설정이 필요할 수 있습니다.<br />
-                  아래 <span className="font-semibold text-blue-600">비밀번호 찾기</span>를 눌러 새 비밀번호를 설정해 주세요.
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                {t('sidebar.email')}
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder={t('sidebar.emailPlaceholder')}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                {t('sidebar.password')}
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder={t('sidebar.passwordPlaceholder')}
-              />
-            </div>
-
-            <div className="flex items-center">
-              <input
-                id="remember-me"
-                type="checkbox"
-                checked={rememberMe}
-                onChange={e => setRememberMe(e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
-              />
-              <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 cursor-pointer">
-                {t('sidebar.rememberMe')}
-              </label>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loginLoading}
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer"
-            >
-              {loginLoading ? (
-                <div className="flex items-center justify-center">
-                  <i className="ri-loader-4-line animate-spin mr-2"></i>
-                  {t('sidebar.loggingIn')}
-                </div>
-              ) : (
-                t('sidebar.login')
               )}
-            </button>
-          </form>
 
-          {/* 소셜 로그인 */}
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="px-2 bg-white text-gray-500">{t('sidebar.or')}</span>
-              </div>
-            </div>
+              {loginError && (
+                <div className="space-y-2">
+                  <div className="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-md text-xs">
+                    {loginError}
+                  </div>
+                  <div className="text-xs text-gray-600 bg-gray-50 border border-gray-200 px-3 py-2 rounded-md">
+                    {t('sidebar.migrationNotice1')}<br />
+                    {t('sidebar.migrationNotice2')}
+                  </div>
+                </div>
+              )}
 
-            <div className="mt-4 space-y-3">
-              {/* 카카오톡 로그인 버튼 (한국어 사이트에서만 표시) */}
-              {!isEnglishSite && (
-                <button 
-                  onClick={handleKakaoLogin}
-                  disabled={kakaoLoading}
-                  className="w-full flex items-center justify-center py-3 px-4 bg-yellow-400 text-gray-900 rounded-md shadow-sm font-bold text-sm hover:bg-yellow-500 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('sidebar.email')}
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder={t('sidebar.emailPlaceholder')}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('sidebar.password')}
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder={t('sidebar.passwordPlaceholder')}
+                />
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  id="remember-me"
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                />
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 cursor-pointer">
+                  {t('sidebar.rememberMe')}
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loginLoading}
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer"
+              >
+                {loginLoading ? (
+                  <div className="flex items-center justify-center">
+                    <i className="ri-loader-4-line animate-spin mr-2"></i>
+                    {t('sidebar.loggingIn')}
+                  </div>
+                ) : (
+                  t('sidebar.login')
+                )}
+              </button>
+            </form>
+
+            {/* 소셜 로그인 */}
+            <div className="mt-6">
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="px-2 bg-white text-gray-500">{t('sidebar.or')}</span>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {/* 카카오톡 로그인 버튼 (한국어 사이트에서만 표시) */}
+                {!isEnglishSite && (
+                  <button
+                    onClick={handleKakaoLogin}
+                    disabled={kakaoLoading}
+                    className="w-full flex items-center justify-center py-3 px-4 bg-yellow-400 text-gray-900 rounded-md shadow-sm font-bold text-sm hover:bg-yellow-500 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {kakaoLoading ? (
+                      <>
+                        <i className="ri-loader-4-line animate-spin text-lg mr-2"></i>
+                        {t('sidebar.kakaoLoggingIn')}
+                      </>
+                    ) : (
+                      <>
+                        <i className="ri-kakao-talk-fill text-lg mr-2"></i>
+                        {t('sidebar.kakaoLogin')}
+                      </>
+                    )}
+                  </button>
+                )}
+
+                <button
+                  onClick={handleGoogleLogin}
+                  disabled={googleLoading}
+                  className="w-full flex items-center justify-center py-3 px-4 bg-white border border-gray-300 text-gray-700 rounded-md shadow-sm font-bold text-sm hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {kakaoLoading ? (
+                  {googleLoading ? (
                     <>
                       <i className="ri-loader-4-line animate-spin text-lg mr-2"></i>
-                      {t('sidebar.kakaoLoggingIn')}
+                      {t('sidebar.googleLoggingIn')}
                     </>
                   ) : (
                     <>
-                      <i className="ri-kakao-talk-fill text-lg mr-2"></i>
-                      {t('sidebar.kakaoLogin')}
+                      <i className="ri-google-fill text-red-500 text-lg mr-2"></i>
+                      {t('sidebar.googleLogin')}
                     </>
                   )}
                 </button>
-              )}
+              </div>
 
-              <button 
-                onClick={handleGoogleLogin}
-                disabled={googleLoading}
-                className="w-full flex items-center justify-center py-3 px-4 bg-white border border-gray-300 text-gray-700 rounded-md shadow-sm font-bold text-sm hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {googleLoading ? (
-                  <>
-                    <i className="ri-loader-4-line animate-spin text-lg mr-2"></i>
-                    {t('sidebar.googleLoggingIn')}
-                  </>
-                ) : (
-                  <>
-                    <i className="ri-google-fill text-red-500 text-lg mr-2"></i>
-                    {t('sidebar.googleLogin')}
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* 링크들 */}
-            <div className="mt-6 space-y-3">
-              <a
-                href="/auth/register"
-                className="w-full flex items-center justify-center py-2 px-4 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-medium text-sm cursor-pointer"
-              >
-                <i className="ri-user-add-line mr-2"></i>
-                {t('sidebar.register')}
-              </a>
-
-            <div className="flex space-x-2">
-              <a
-                href="/auth/forgot-password"
-                className="flex-1 text-center py-2 px-3 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md hover:bg-blue-50 cursor-pointer"
-              >
-                {t('sidebar.findId')}
-              </a>
-              <a
-                href="/auth/forgot-password"
-                className="flex-1 text-center py-2 px-3 text-xs text-white bg-blue-600 hover:bg-blue-700 border border-blue-600 rounded-md cursor-pointer"
-              >
-                {t('sidebar.findPassword')}
-              </a>
-            </div>
-            </div>
-
-            {/* 고객센터 */}
-            <div className="mt-6 pt-4 border-t border-gray-200">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">{t('sidebar.needHelp')}</h3>
-              <div className="space-y-2">
-                <button 
-                  onClick={handleCustomerSupportClick}
-                  className="w-full flex items-center p-2 text-sm text-gray-600 hover:bg-gray-50 rounded-md cursor-pointer"
+              {/* 링크들 */}
+              <div className="mt-6 space-y-3">
+                <a
+                  href="/auth/register"
+                  className="w-full flex items-center justify-center py-2 px-4 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-medium text-sm cursor-pointer"
                 >
-                  <i className="ri-customer-service-2-line mr-2"></i>
-                  {t('sidebar.customerSupport')}
-                </button>
+                  <i className="ri-user-add-line mr-2"></i>
+                  {t('sidebar.register')}
+                </a>
+
+                <div className="flex space-x-2">
+                  <a
+                    href="/auth/forgot-password"
+                    className="flex-1 text-center py-2 px-3 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md hover:bg-blue-50 cursor-pointer"
+                  >
+                    {t('sidebar.findId')}
+                  </a>
+                  <a
+                    href="/auth/forgot-password"
+                    className="flex-1 text-center py-2 px-3 text-xs text-white bg-blue-600 hover:bg-blue-700 border border-blue-600 rounded-md cursor-pointer"
+                  >
+                    {t('sidebar.findPassword')}
+                  </a>
+                </div>
+              </div>
+
+              {/* 고객센터 */}
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">{t('sidebar.needHelp')}</h3>
+                <div className="space-y-2">
+                  <button
+                    onClick={handleCustomerSupportClick}
+                    className="w-full flex items-center p-2 text-sm text-gray-600 hover:bg-gray-50 rounded-md cursor-pointer"
+                  >
+                    <i className="ri-customer-service-2-line mr-2"></i>
+                    {t('sidebar.customerSupport')}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
         </div>
       </div>
     );
@@ -623,7 +632,7 @@ export default function UserSidebar({ user }: UserSidebarProps) {
         profile={profile}
         userCash={userCash}
         cashLoading={cashLoading}
-        cashError={cashError}
+        cashError={!!cashError}
         onCashUpdate={refreshCash}
       />
     </div>

@@ -19,6 +19,9 @@ import MainHeader from '../../components/common/MainHeader';
 import Footer from '../../components/common/Footer';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../../lib/priceFormatter';
+import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
+import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
+import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
 
 interface DrumSheet {
   id: string;
@@ -373,12 +376,37 @@ export default function Home() {
     return match ? match[1] : '';
   };
 
+  // 100-yen event section: Currency formatting
+  // For Japanese locale (ja), display prices as JPY (¥100)
+  // For Korean locale (ko), keep KRW (₩100)
+  // For other locales (en, etc.), use existing behavior
   const formatCurrency = useCallback(
-    (value: number) => formatPrice({ 
-      amountKRW: value, 
-      language: i18n.language,
-      host: typeof window !== 'undefined' ? window.location.host : undefined
-    }).formatted,
+    (value: number) => {
+      const locale = i18n.language;
+      
+      // Japanese site: use JPY formatting
+      if (locale === 'ja') {
+        const currency = getActiveCurrency();
+        const convertedPrice = convertPriceForLocale(value, locale, currency);
+        return formatCurrencyUi(convertedPrice, 'JPY');
+      }
+      
+      // Korean site: keep existing KRW behavior
+      if (locale === 'ko') {
+        return formatPrice({ 
+          amountKRW: value, 
+          language: locale,
+          host: typeof window !== 'undefined' ? window.location.host : undefined
+        }).formatted;
+      }
+      
+      // Other locales (en, etc.): use existing behavior
+      return formatPrice({ 
+        amountKRW: value, 
+        language: locale,
+        host: typeof window !== 'undefined' ? window.location.host : undefined
+      }).formatted;
+    },
     [i18n.language],
   );
   const getEventForSheet = (sheetId: string) => eventDiscounts[sheetId];
