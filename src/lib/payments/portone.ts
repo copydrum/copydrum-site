@@ -246,7 +246,8 @@ export const requestPayPalPayment = async (
   try {
     // 리턴 URL 설정
     const returnUrl = params.returnUrl || getPortOneReturnUrl();
-    const elementSelector = params.elementId ? `#${params.elementId}` : undefined;
+    // Always use the global container
+    const elementSelector = '#portone-ui-container';
 
     // 현재 활성 통화 가져오기
     const hostname = window.location.hostname;
@@ -260,12 +261,33 @@ export const requestPayPalPayment = async (
     // KRW 금액을 타겟 통화로 변환
     const convertedAmount = convertFromKrw(params.amount, currency);
 
+    // Show global container before loading UI
+    const container = document.querySelector(elementSelector) as HTMLElement;
+    if (container) {
+      // Make container visible and position it appropriately
+      container.style.position = 'fixed';
+      container.style.top = '50%';
+      container.style.left = '50%';
+      container.style.transform = 'translate(-50%, -50%)';
+      container.style.width = '400px';
+      container.style.maxWidth = '90vw';
+      container.style.height = 'auto';
+      container.style.minHeight = '200px';
+      container.style.opacity = '1';
+      container.style.pointerEvents = 'auto';
+      container.style.zIndex = '10000';
+      container.style.backgroundColor = 'white';
+      container.style.padding = '20px';
+      container.style.borderRadius = '8px';
+      container.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+    }
+
     console.log('[portone-paypal] loadPaymentUI 호출', {
       storeId,
       channelKey,
       paymentId: params.orderId,
       element: elementSelector,
-      elementExists: elementSelector ? !!document.querySelector(elementSelector) : 'N/A',
+      elementExists: !!container,
       currency,
       originalAmount: params.amount,
       convertedAmount,
@@ -283,7 +305,7 @@ export const requestPayPalPayment = async (
       totalAmount: convertedAmount,
       currency: currency,
       // payMethod: 'PAYPAL', // SDK V2에서는 uiType으로 결정됨
-      // element: elementSelector, // SDK가 자동으로 portone-ui-container를 찾으므로 생략
+      element: elementSelector, // Always use the global container explicitly
       customer: {
         fullName: params.buyerName || 'Guest',
         email: params.buyerEmail,

@@ -76,7 +76,7 @@ function AppInner({
           onCashChargeToggle={() => setIsCashModalOpen(true)}
         />
         {/* Global PortOne UI container for PayPal payments - always present in DOM */}
-        <div className="portone-ui-container" id="portone-ui-root" style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }} />
+        <div id="portone-ui-container" className="portone-ui-container" data-portone-ui-type="paypal" style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }} />
       </RouteErrorBoundary>
     </Suspense>
   );
