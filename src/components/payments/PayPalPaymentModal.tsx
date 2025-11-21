@@ -24,8 +24,8 @@ export default function PayPalPaymentModal({
     const { t, i18n } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    // Use unique container ID for each modal instance
-    const containerId = useRef(`paypal-container-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`).current;
+    // Use fixed container ID - must match portone.ts
+    const containerId = 'portone-ui-container';
     const initializedRef = useRef(false);
 
     const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
@@ -46,19 +46,37 @@ export default function PayPalPaymentModal({
 
         try {
             // DOM 렌더링 확보를 위한 지연
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => setTimeout(resolve, 0));
 
-            const container = document.getElementById(containerId);
+            const container = document.querySelector('.portone-ui-container');
             console.log('[PayPalPaymentModal] Container check:', {
                 containerId,
                 found: !!container,
+                innerHTML: container?.innerHTML?.substring(0, 100),
             });
 
             if (!container) {
-                throw new Error(`Container element #${containerId} not found`);
+                throw new Error(`Container element .portone-ui-container not found`);
+            }
+
+            // Check for duplicate containers
+            const allContainers = document.querySelectorAll('.portone-ui-container');
+            if (allContainers.length > 1) {
+                console.warn(`[PayPalPaymentModal] Warning: Found ${allContainers.length} containers with class="portone-ui-container"`);
             }
 
             await initiatePayment(containerId);
+
+            // Check container content after loadPaymentUI
+            setTimeout(() => {
+                const el = document.querySelector('.portone-ui-container');
+                console.log('[PayPalPaymentModal] After loadPaymentUI innerHTML:', {
+                    found: !!el,
+                    innerHTML: el?.innerHTML?.substring(0, 200),
+                    hasContent: !!el?.innerHTML && el.innerHTML.length > 0,
+                });
+            }, 1000);
+
             setLoading(false);
         } catch (err) {
             console.error('PayPal initialization failed:', err);
@@ -72,6 +90,11 @@ export default function PayPalPaymentModal({
 
     useEffect(() => {
         if (open) {
+            const el = document.querySelector('.portone-ui-container');
+            console.log('[PayPalPaymentModal] Container check on mount:', {
+                found: !!el,
+                innerHTML: el?.innerHTML?.substring(0, 100),
+            });
             loadPayPalButtons();
         } else {
             initializedRef.current = false;
@@ -114,8 +137,12 @@ export default function PayPalPaymentModal({
                                     <p className="text-sm text-gray-500">Loading PayPal...</p>
                                 </div>
                             )}
-                            {/* Single PortOne SDK PayPal container - must be unique in DOM */}
-                            <div id={containerId} className="w-full" style={{ minHeight: '150px' }} />
+                            {/* PortOne SDK PayPal container - must have class and visible */}
+                            <div
+                                id={containerId}
+                                className="portone-ui-container"
+                                style={{ width: '100%', minHeight: '45px' }}
+                            />
                         </div>
                     )}
                 </div>

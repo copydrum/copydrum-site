@@ -1,8 +1,23 @@
 import { getSiteCurrency, convertFromKrw } from '../../lib/currency';
-import { loadPaymentUI } from '@portone/browser-sdk/v2';
+import * as PortOne from '@portone/browser-sdk/v2';
 import { isGlobalSiteHost } from '../../config/hostType';
 import { getActiveCurrency } from './getActiveCurrency';
 import { DEFAULT_USD_RATE } from '../priceFormatter';
+
+// PortOne currency type
+type PortOneCurrency = 'CURRENCY_KRW' | 'CURRENCY_USD' | 'CURRENCY_JPY';
+
+// Convert our currency format to PortOne format
+function toPortOneCurrency(currency: 'KRW' | 'USD' | 'JPY'): PortOneCurrency {
+  switch (currency) {
+    case 'USD':
+      return 'CURRENCY_USD';
+    case 'JPY':
+      return 'CURRENCY_JPY';
+    default:
+      return 'CURRENCY_KRW';
+  }
+}
 
 // 포트원 스크립트 URL (최신 버전 사용)
 const PORTONE_SCRIPT_URL = 'https://cdn.iamport.kr/js/iamport.payment-1.2.0.js';
@@ -247,10 +262,8 @@ export const requestPayPalPayment = async (
     // 리턴 URL 설정
     const returnUrl = params.returnUrl || getPortOneReturnUrl();
 
-    // Use provided elementId or fallback to global container
-    const elementSelector = params.elementId
-      ? (params.elementId.startsWith('#') ? params.elementId : `#${params.elementId}`)
-      : '#portone-ui-container';
+    // Always use the fixed container - PortOne SDK will find .portone-ui-container automatically
+    // But we can also specify it explicitly via element parameter
 
     // 현재 활성 통화 가져오기
     const hostname = window.location.hostname;
@@ -263,45 +276,51 @@ export const requestPayPalPayment = async (
 
     // KRW 금액을 타겟 통화로 변환
     const convertedAmount = convertFromKrw(params.amount, currency);
+    const portOneCurrency = toPortOneCurrency(currency);
 
-    console.log('[portone-paypal] loadPaymentUI 호출', {
+    // Request data와 콜백을 분리하여 전달
+    // PortOne SDK는 자동으로 .portone-ui-container를 찾지만, 명시적으로 지정할 수도 있음
+    const requestData: any = {
+      uiType: 'PAYPAL_SPB' as const,
       storeId,
       channelKey,
       paymentId: params.orderId,
-      element: elementSelector,
-      currency,
+      orderName: params.description,
+      totalAmount: Math.round(convertedAmount),
+      currency: portOneCurrency,
+      customer: {
+        customerId: params.userId ?? undefined,
+        email: params.buyerEmail ?? undefined,
+        fullName: params.buyerName ?? undefined,
+        phoneNumber: params.buyerTel ?? undefined,
+      },
+      redirectUrl: returnUrl,
+    };
+
+    // element 파라미터는 선택사항이지만, 명시적으로 지정하면 더 안전함
+    if (params.elementId) {
+      requestData.element = params.elementId.startsWith('#') ? params.elementId : `#${params.elementId}`;
+    } else {
+      requestData.element = '#portone-ui-container';
+    }
+
+    console.log('[portone-paypal] loadPaymentUI requestData', {
+      ...requestData,
       originalAmount: params.amount,
       convertedAmount,
     });
 
     // 포트원 V2 SDK로 PayPal 결제 UI 로드
-    // loadPaymentUI는 Promise를 반환할 수 있으므로 await 사용
-    // @ts-ignore: SDK 타입 정의 불일치 회피
-    await loadPaymentUI({
-      uiType: 'PAYPAL_SPB',
-      storeId,
-      channelKey,
-      paymentId: params.orderId,
-      orderName: params.description,
-      totalAmount: convertedAmount,
-      currency: currency,
-      // @ts-ignore - SDK types may not include element, but it's required for container targeting
-      element: elementSelector, // Always use the global container explicitly
-      customer: {
-        fullName: params.buyerName || 'Guest',
-        email: params.buyerEmail,
-        phoneNumber: params.buyerTel,
-      },
-      redirectUrl: returnUrl,
-    }, {
-      onPaymentSuccess: (paymentResult: any) => {
-        console.log('[portone-paypal] 결제 성공', paymentResult);
+    // loadPaymentUI(requestData, { callbacks }) 형태로 호출
+    await PortOne.loadPaymentUI(requestData, {
+      onPaymentSuccess: async (paymentResult: any) => {
+        console.log('[portone-paypal] onPaymentSuccess', paymentResult);
         if (params.onSuccess) {
           params.onSuccess(paymentResult);
         }
       },
       onPaymentFail: (error: any) => {
-        console.error('[portone-paypal] 결제 실패', error);
+        console.error('[portone-paypal] onPaymentFail', error);
         if (params.onError) {
           params.onError(error);
         }
