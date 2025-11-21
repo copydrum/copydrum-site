@@ -24,8 +24,8 @@ export default function PayPalPaymentModal({
     const { t, i18n } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    // Use global container ID
-    const containerId = 'portone-ui-container';
+    // Use unique container ID for each modal instance
+    const containerId = useRef(`paypal-container-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`).current;
     const initializedRef = useRef(false);
 
     const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';

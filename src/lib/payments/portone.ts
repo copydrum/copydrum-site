@@ -246,8 +246,11 @@ export const requestPayPalPayment = async (
   try {
     // 리턴 URL 설정
     const returnUrl = params.returnUrl || getPortOneReturnUrl();
-    // Always use the global container
-    const elementSelector = '#portone-ui-container';
+
+    // Use provided elementId or fallback to global container
+    const elementSelector = params.elementId
+      ? (params.elementId.startsWith('#') ? params.elementId : `#${params.elementId}`)
+      : '#portone-ui-container';
 
     // 현재 활성 통화 가져오기
     const hostname = window.location.hostname;
