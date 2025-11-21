@@ -60,57 +60,24 @@ export default function PayPalPaymentModal({
             }
 
             await initiatePayment(containerId);
+            setLoading(false);
         } catch (err) {
             console.error('PayPal initialization failed:', err);
             setError(err instanceof Error ? err.message : 'Failed to load PayPal buttons');
             onError(err);
             // 실패 시 재시도 가능하도록 플래그 초기화
             initializedRef.current = false;
-        } finally {
             setLoading(false);
         }
-    }, [open, initiatePayment, onError]);
+    }, [open, initiatePayment, onError, containerId]);
 
     useEffect(() => {
-        const container = document.getElementById(containerId);
-        
         if (open) {
-            // Show global container when modal opens
-            if (container) {
-                // Move container to modal content area
-                const modalContent = document.querySelector('.paypal-modal-content');
-                if (modalContent && container.parentElement !== modalContent) {
-                    modalContent.appendChild(container);
-                }
-                // Reset container styles to make it visible
-                container.style.position = 'static';
-                container.style.top = 'auto';
-                container.style.left = 'auto';
-                container.style.width = '100%';
-                container.style.height = 'auto';
-                container.style.opacity = '1';
-                container.style.pointerEvents = 'auto';
-            }
             loadPayPalButtons();
         } else {
-            // Reset container to hidden state when modal closes
-            if (container) {
-                // Move container back to App root
-                const appRoot = document.getElementById('root');
-                if (appRoot && container.parentElement !== appRoot) {
-                    appRoot.appendChild(container);
-                }
-                container.style.position = 'fixed';
-                container.style.top = '-9999px';
-                container.style.left = '-9999px';
-                container.style.width = '1px';
-                container.style.height = '1px';
-                container.style.opacity = '0';
-                container.style.pointerEvents = 'none';
-            }
             initializedRef.current = false;
         }
-    }, [open, loadPayPalButtons, containerId]);
+    }, [open, loadPayPalButtons]);
 
     if (!open) return null;
 
@@ -141,15 +108,15 @@ export default function PayPalPaymentModal({
                             </button>
                         </div>
                     ) : (
-                        <div className="min-h-[150px] flex flex-col items-center justify-center paypal-modal-content relative">
+                        <div className="min-h-[150px] flex flex-col items-center justify-center relative">
                             {loading && (
                                 <div className="absolute flex flex-col items-center z-10">
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
                                     <p className="text-sm text-gray-500">Loading PayPal...</p>
                                 </div>
                             )}
-                            {/* Global container will be moved here when modal opens */}
-                            <div className="w-full" style={{ minHeight: '150px' }} />
+                            {/* PortOne SDK PayPal container */}
+                            <div id={containerId} className="w-full" style={{ minHeight: '150px' }} />
                         </div>
                     )}
                 </div>

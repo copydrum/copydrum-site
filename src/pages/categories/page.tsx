@@ -13,7 +13,7 @@ import { fetchUserFavorites, toggleFavorite } from '../../lib/favorites';
 import MainHeader from '../../components/common/MainHeader';
 import { processCashPurchase } from '../../lib/cashPurchases';
 import { hasPurchasedSheet } from '../../lib/purchaseCheck';
-import { BankTransferInfoModal, PaymentMethodSelector, InsufficientCashModal } from '../../components/payments';
+import { BankTransferInfoModal, PaymentMethodSelector, InsufficientCashModal, PayPalPaymentModal } from '../../components/payments';
 import type { PaymentMethod } from '../../components/payments';
 import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
@@ -89,6 +89,7 @@ const CategoriesPage: React.FC = () => {
   const [selectedTopSheetId, setSelectedTopSheetId] = useState<string | null>(null);
   const [showInsufficientCashModal, setShowInsufficientCashModal] = useState(false);
   const [insufficientCashInfo, setInsufficientCashInfo] = useState<{ currentBalance: number; requiredAmount: number } | null>(null);
+  const [showPayPalModal, setShowPayPalModal] = useState(false);
   const { i18n, t } = useTranslation();
 
   // 통합 통화 로직 적용
@@ -351,7 +352,7 @@ const CategoriesPage: React.FC = () => {
       }
 
       if (method === 'paypal') {
-        await completeOnlinePurchase('paypal');
+        setShowPayPalModal(true);
         return;
       }
 
@@ -382,6 +383,25 @@ const CategoriesPage: React.FC = () => {
       setBuyingSheetId(null);
       setPendingPurchaseSheet(null);
     }
+  };
+
+  const handlePayPalInitiate = async (elementId: string) => {
+    if (!user || !pendingPurchaseSheet) return;
+
+    const sheet = pendingPurchaseSheet;
+    const event = getEventForSheet(sheet.id);
+    const price = Math.max(0, (event?.discount_price ?? sheet.price) ?? 0);
+
+    await startSheetPurchase({
+      userId: user.id,
+      items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
+      amount: price,
+      paymentMethod: 'paypal',
+      description: t('categoriesPage.purchaseDescription', { title: sheet.title }),
+      buyerName: user.email ?? null,
+      buyerEmail: user.email ?? null,
+      elementId, // PayPal SPB 렌더링을 위한 컨테이너 ID 전달
+    });
   };
 
   const loadEventDiscounts = async () => {
@@ -1998,6 +2018,31 @@ const CategoriesPage: React.FC = () => {
             setShowInsufficientCashModal(false);
             setInsufficientCashInfo(null);
           }}
+        />
+      )}
+
+      {showPayPalModal && pendingPurchaseSheet && (
+        <PayPalPaymentModal
+          open={showPayPalModal}
+          amount={Math.max(
+            0,
+            (getEventForSheet(pendingPurchaseSheet.id)?.discount_price ?? pendingPurchaseSheet.price) ?? 0,
+          )}
+          orderTitle={pendingPurchaseSheet.title}
+          onClose={() => {
+            setShowPayPalModal(false);
+            setPendingPurchaseSheet(null);
+            setBuyingSheetId(null);
+          }}
+          onSuccess={(response) => {
+            setShowPayPalModal(false);
+            // PayPal은 리다이렉트되므로 여기서 추가 처리 불필요할 수 있음
+          }}
+          onError={(error) => {
+            console.error('PayPal 결제 오류:', error);
+            alert(t('categoriesPage.purchaseError'));
+          }}
+          initiatePayment={handlePayPalInitiate}
         />
       )}
     </div>
