@@ -15,56 +15,6 @@ import { processCashPurchase } from '../../lib/cashPurchases';
 import { isFavorite, toggleFavorite } from '../../lib/favorites';
 import { hasPurchasedSheet } from '../../lib/purchaseCheck';
 import { BankTransferInfoModal, PaymentMethodSelector, InsufficientCashModal, PayPalPaymentModal } from '../../components/payments';
-
-// ... (inside component)
-const [showPayPalModal, setShowPayPalModal] = useState(false);
-
-// ... (inside handlePaymentMethodSelect)
-if (method === 'paypal') {
-  setShowPayPalModal(true);
-  return;
-}
-
-// ... (add handlePayPalInitiate)
-const handlePayPalInitiate = async (elementId: string) => {
-  if (!user || !sheet) return;
-
-  const price = getSheetPrice();
-
-  await startSheetPurchase({
-    userId: user.id,
-    items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
-    amount: price,
-    paymentMethod: 'paypal',
-    description: t('sheetDetail.purchaseDescription', { title: sheet.title }),
-    buyerName: user.email ?? null,
-    buyerEmail: user.email ?? null,
-    elementId, // PayPal SPB 렌더링을 위한 컨테이너 ID 전달
-  });
-};
-
-// ... (render PayPalPaymentModal)
-{
-  showPayPalModal && sheet && (
-    <PayPalPaymentModal
-      open={showPayPalModal}
-      amount={getSheetPrice()}
-      orderTitle={sheet.title}
-      onClose={() => setShowPayPalModal(false)}
-      onSuccess={(response) => {
-        setShowPayPalModal(false);
-        // PayPal은 리다이렉트되므로 여기서 추가 처리 불필요할 수 있음
-        // 하지만 SPB가 리다이렉트 없이 완료되는 경우를 대비해 성공 메시지 표시 가능
-        // 현재 로직상 리다이렉트가 기본이므로 모달만 닫음
-      }}
-      onError={(error) => {
-        console.error('PayPal 결제 오류:', error);
-        alert(t('sheetDetail.purchaseError'));
-      }}
-      initiatePayment={handlePayPalInitiate}
-    />
-  )
-}
 import type { PaymentMethod } from '../../components/payments';
 import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
@@ -513,10 +463,7 @@ export default function SheetDetailPage() {
       return;
     }
 
-    const success = await addToCart(sheet.id);
-    if (success) {
-      alert(t('sheetDetail.addedToCart'));
-    }
+    await addToCart(sheet.id);
   };
 
   const handleToggleFavorite = async () => {
