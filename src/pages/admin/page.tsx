@@ -173,7 +173,7 @@ const formatDateToYMD = (date: Date) => {
 };
 
 const getRangeForQuickKey = (key: CopyrightQuickRangeKey) => {
-    const now = new Date();
+  const now = new Date();
   const start = new Date(now);
   const end = new Date(now);
 
@@ -693,9 +693,8 @@ const renderTranslationEditor = (
               key={lang.code}
               type="button"
               onClick={() => setActiveLang(lang.code)}
-              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                activeLang === lang.code ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-200'
-              }`}
+              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${activeLang === lang.code ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-200'
+                }`}
             >
               <span className="mr-1" aria-hidden="true">
                 {lang.flagEmoji}
@@ -1009,7 +1008,8 @@ const AdminPage: React.FC = () => {
   const [orderPaymentFilter, setOrderPaymentFilter] = useState<'all' | string>('all');
   const [orderStartDate, setOrderStartDate] = useState('');
   const [orderEndDate, setOrderEndDate] = useState('');
-  const [orderSortKey, setOrderSortKey] = useState<OrderSortKey>('date_desc');
+  const [orderSortKey, setOrderSortKey] = useState<OrderSortKey>('created_at_desc');
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isOrderDetailModalOpen, setIsOrderDetailModalOpen] = useState(false);
   const [orderActionLoading, setOrderActionLoading] = useState<'delete' | 'refund' | 'confirm' | null>(null);
@@ -1234,10 +1234,10 @@ const AdminPage: React.FC = () => {
   const checkAdminStatus = async (currentUser: User) => {
     try {
       const userEmail = currentUser.email || '';
-      
+
       // 1. 먼저 이메일로 관리자 여부 확인 (빠른 체크)
       const isAdminEmail = ADMIN_EMAILS.includes(userEmail);
-      
+
       // 2. 프로필 조회 시도
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -1247,11 +1247,11 @@ const AdminPage: React.FC = () => {
 
       if (error) {
         console.log('프로필 조회 오류:', error);
-        
+
         if (error.code === 'PGRST116') {
           // 프로필이 없으면 생성
           const isAdmin = isAdminEmail; // 이메일로 관리자 여부 결정
-          
+
           const { error: insertError } = await supabase
             .from('profiles')
             .insert([{
@@ -1281,14 +1281,14 @@ const AdminPage: React.FC = () => {
             await loadDashboardData();
             return;
           }
-          
+
           // 일반 사용자로 설정
           setIsAdmin(false);
           setAuthChecked(true);
           window.location.href = '/';
           return;
         }
-        
+
         // 프로필 조회 실패 시 이메일로 체크
         console.log('프로필 조회 실패, 이메일로 관리자 체크:', userEmail);
         if (isAdminEmail) {
@@ -1297,7 +1297,7 @@ const AdminPage: React.FC = () => {
           await loadDashboardData();
           return;
         }
-        
+
         // 프로필 조회 실패하고 관리자 이메일도 아니면 로그인으로
         console.error('프로필 조회 오류:', error);
         window.location.href = LOGIN_PATH;
@@ -1337,7 +1337,7 @@ const AdminPage: React.FC = () => {
     try {
       // 1. 먼저 세션 확인
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
+
       if (sessionError) {
         console.error('세션 확인 오류:', sessionError);
         window.location.href = LOGIN_PATH;
@@ -1458,7 +1458,7 @@ const AdminPage: React.FC = () => {
       for (let page = 0; page < totalPages; page++) {
         const to = from + pageSize - 1;
         console.log(`[${page + 1}/${totalPages}] 회원 데이터 로드 중: ${from} ~ ${to}`);
-        
+
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
@@ -1483,7 +1483,7 @@ const AdminPage: React.FC = () => {
 
       setMembers(allMembers);
       console.log(`🎉 최종 로드 완료: 총 ${allMembers.length}명의 회원을 로드했습니다. (예상: ${totalCount}명)`);
-      
+
       if (allMembers.length !== totalCount) {
         console.warn(`⚠️ 경고: 로드된 회원 수(${allMembers.length})와 총 개수(${totalCount})가 일치하지 않습니다.`);
       }
@@ -1747,7 +1747,7 @@ const AdminPage: React.FC = () => {
       for (let page = 0; page < totalPages; page++) {
         const to = from + pageSize - 1;
         console.log(`[${page + 1}/${totalPages}] 악보 데이터 로드 중: ${from} ~ ${to}`);
-        
+
         const { data, error } = await supabase
           .from('drum_sheets')
           .select('id, title, artist, difficulty, price, category_id, created_at, is_active, thumbnail_url, album_name, page_count, tempo, youtube_url, categories (id, name)')
@@ -1785,16 +1785,16 @@ const AdminPage: React.FC = () => {
         difficultyStats[key] = (difficultyStats[key] || 0) + 1;
       });
       console.log('📊 난이도 필드 통계:', difficultyStats);
-      
+
       // 난이도가 없는 악보 샘플 출력
       const sheetsWithoutDifficulty = allSheets.filter((sheet: any) => !sheet.difficulty).slice(0, 5);
       if (sheetsWithoutDifficulty.length > 0) {
         console.warn(`⚠️ 난이도가 없는 악보 (최대 5개):`, sheetsWithoutDifficulty.map((s: any) => ({ id: s.id, title: s.title })));
       }
-      
+
       setSheets(allSheets);
       console.log(`🎉 최종 로드 완료: 총 ${allSheets.length}개의 악보를 로드했습니다. (예상: ${totalCount}개)`);
-      
+
       if (allSheets.length !== totalCount) {
         console.warn(`⚠️ 경고: 로드된 악보 수(${allSheets.length})와 총 개수(${totalCount})가 일치하지 않습니다.`);
       }
@@ -1885,10 +1885,10 @@ const AdminPage: React.FC = () => {
           order_type: order.order_type ?? null, // 주문 타입 추가
           order_items: Array.isArray(order.order_items)
             ? order.order_items.map((item: any) => ({
-                ...item,
-                sheet_id: item.drum_sheet_id ?? item.sheet_id ?? null,
-                drum_sheets: item.drum_sheets ?? null,
-              }))
+              ...item,
+              sheet_id: item.drum_sheet_id ?? item.sheet_id ?? null,
+              drum_sheets: item.drum_sheets ?? null,
+            }))
             : [],
         })) ?? [];
 
@@ -1977,12 +1977,12 @@ const AdminPage: React.FC = () => {
         },
       });
 
-    if (cancelError) {
-      throw cancelError;
+      if (cancelError) {
+        throw cancelError;
       }
 
       await loadOrders();
-    alert(cancelResult?.status === 'cancelled' ? '주문이 환불 없이 취소되었습니다.' : '주문 처리가 완료되었습니다.');
+      alert(cancelResult?.status === 'cancelled' ? '주문이 환불 없이 취소되었습니다.' : '주문 처리가 완료되었습니다.');
       handleCloseOrderDetail();
     } catch (error: any) {
       console.error('주문 취소 오류:', error);
@@ -2057,12 +2057,12 @@ const AdminPage: React.FC = () => {
         },
       });
 
-    if (refundError) {
-      throw refundError;
+      if (refundError) {
+        throw refundError;
       }
 
       await loadOrders();
-    alert(refundResult?.status === 'refunded' ? '환불 처리가 완료되었습니다.' : '주문 처리가 완료되었습니다.');
+      alert(refundResult?.status === 'refunded' ? '환불 처리가 완료되었습니다.' : '주문 처리가 완료되었습니다.');
       handleCloseOrderDetail();
     } catch (error: any) {
       console.error('주문 환불 오류:', error);
@@ -2126,9 +2126,9 @@ const AdminPage: React.FC = () => {
 
       // 공통 함수를 사용하여 주문 완료 처리
       const { completeOrderAfterPayment } = await import('../../lib/payments/completeOrderAfterPayment');
-      
+
       const paymentMethod = (selectedOrder.payment_method as any) || 'bank_transfer';
-      
+
       await completeOrderAfterPayment(selectedOrder.id, paymentMethod, {
         transactionId: manualTransactionId,
         paymentConfirmedAt: nowIso,
@@ -2145,7 +2145,7 @@ const AdminPage: React.FC = () => {
         (selectedOrder.metadata?.type === 'cash_charge' ||
           selectedOrder.metadata?.purpose === 'cash_charge') &&
         (selectedOrder.order_items?.length ?? 0) === 0;
-      
+
       if (isCashCharge) {
         await loadCashOverview();
       }
@@ -2207,19 +2207,68 @@ const AdminPage: React.FC = () => {
       return stringValue;
     };
 
-    const csv = [headers, ...rows]
-      .map((row) => row.map((cell) => escapeCsv(cell)).join(','))
-      .join('\r\n');
-
-    const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const csvRows = [headers, ...rows]
+      .map((row) => row.map((cell) => escapeCsv(cell)).join(','));
+    const csvContent = '\uFEFF' + csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = url;
-    link.download = `orders_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.setAttribute('href', url);
+    link.setAttribute('download', `orders_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handleSelectOrder = (orderId: string) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllOrders = (checked: boolean) => {
+    if (checked) {
+      // 현재 필터링/정렬된 주문 전체 선택
+      const allIds = sortedOrders.map((o) => o.id);
+      setSelectedOrderIds(new Set(allIds));
+    } else {
+      setSelectedOrderIds(new Set());
+    }
+  };
+
+  const handleBulkDeleteOrders = async () => {
+    if (selectedOrderIds.size === 0) return;
+
+    if (
+      !window.confirm(
+        `선택한 ${selectedOrderIds.size}개의 주문을 삭제하시겠습니까?\n삭제된 주문은 복구할 수 없습니다.`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .in('id', Array.from(selectedOrderIds));
+
+      if (error) throw error;
+
+      alert('선택한 주문이 삭제되었습니다.');
+      setSelectedOrderIds(new Set());
+      void loadOrders(); // 목록 새로고침
+    } catch (error) {
+      console.error('Error deleting orders:', error);
+      alert('주문 삭제 중 오류가 발생했습니다.');
+    }
   };
   const loadCopyrightReport = useCallback(
     async (rangeOverride?: { start: string; end: string }) => {
@@ -3194,12 +3243,12 @@ const AdminPage: React.FC = () => {
     const searchLower = collectionSheetSearchTerm.toLowerCase();
     const artistLower = collectionArtistSearchTerm.toLowerCase();
     const selectedIds = new Set(selectedSheetsForNewCollection.map(s => s.id));
-    
+
     return sheets.filter(sheet => {
-      const matchesSearch = !collectionSheetSearchTerm || 
+      const matchesSearch = !collectionSheetSearchTerm ||
         sheet.title.toLowerCase().includes(searchLower) ||
         sheet.artist.toLowerCase().includes(searchLower);
-      const matchesArtist = !collectionArtistSearchTerm || 
+      const matchesArtist = !collectionArtistSearchTerm ||
         sheet.artist.toLowerCase().includes(artistLower);
       const notSelected = !selectedIds.has(sheet.id);
       return matchesSearch && matchesArtist && notSelected;
@@ -3232,7 +3281,7 @@ const AdminPage: React.FC = () => {
 
   const handleSelectArtistSheets = (artist: string) => {
     const artistSheets = sheetsByArtist[artist] || [];
-    const newSheets = artistSheets.filter(sheet => 
+    const newSheets = artistSheets.filter(sheet =>
       !selectedSheetsForNewCollection.some(s => s.id === sheet.id)
     );
     const updated = [...selectedSheetsForNewCollection, ...newSheets];
@@ -3262,10 +3311,10 @@ const AdminPage: React.FC = () => {
       );
 
       // category_ids 처리: 빈 배열이면 null, 있으면 배열로
-      const categoryIds = newCollection.category_ids && newCollection.category_ids.length > 0 
-        ? newCollection.category_ids 
+      const categoryIds = newCollection.category_ids && newCollection.category_ids.length > 0
+        ? newCollection.category_ids
         : null;
-      
+
       // category_id는 첫 번째 선택된 카테고리 또는 null
       const categoryId = categoryIds && categoryIds.length > 0 ? categoryIds[0] : null;
 
@@ -3348,10 +3397,10 @@ const AdminPage: React.FC = () => {
       );
 
       // category_ids 처리: 빈 배열이면 null, 있으면 배열로
-      const categoryIds = editingCollectionData.category_ids && editingCollectionData.category_ids.length > 0 
-        ? editingCollectionData.category_ids 
+      const categoryIds = editingCollectionData.category_ids && editingCollectionData.category_ids.length > 0
+        ? editingCollectionData.category_ids
         : null;
-      
+
       // category_id는 첫 번째 선택된 카테고리 또는 null
       const categoryId = categoryIds && categoryIds.length > 0 ? categoryIds[0] : null;
 
@@ -3721,7 +3770,7 @@ const AdminPage: React.FC = () => {
   // 유튜브 URL에서 영상 ID 추출
   const extractVideoId = (url: string): string | null => {
     if (!url) return null;
-    
+
     // 다양한 유튜브 URL 형식 지원
     const patterns = [
       /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([^&\n?#]+)/,
@@ -3748,11 +3797,11 @@ const AdminPage: React.FC = () => {
 
     // 먼저 maxresdefault.jpg 시도
     const maxResUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
-    
+
     try {
       // 이미지 존재 여부 확인
       const response = await fetch(maxResUrl, { method: 'HEAD' });
-      
+
       if (response.ok) {
         if (isEditing) {
           setEditingSheetData(prev => ({ ...prev, thumbnail_url: maxResUrl }));
@@ -4170,7 +4219,7 @@ const AdminPage: React.FC = () => {
   // 메뉴별 데이터 로드
   useEffect(() => {
     if (!isAdmin) return;
-    
+
     switch (activeMenu) {
       case 'dashboard':
         loadCustomOrders();
@@ -4276,11 +4325,10 @@ const AdminPage: React.FC = () => {
                   key={status}
                   type="button"
                   onClick={() => setInquiryStatusFilter(status)}
-                  className={`rounded-full px-4 py-2 text-sm font-medium ${
-                    inquiryStatusFilter === status
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                  className={`rounded-full px-4 py-2 text-sm font-medium ${inquiryStatusFilter === status
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
                 >
                   {status === 'all' ? '전체' : getInquiryStatusLabel(status)}
                 </button>
@@ -4433,10 +4481,10 @@ const AdminPage: React.FC = () => {
     // 검색어 필터
     const matchesSearch = sheet.title.toLowerCase().includes(sheetSearchTerm.toLowerCase()) ||
       sheet.artist.toLowerCase().includes(sheetSearchTerm.toLowerCase());
-    
+
     // 카테고리 필터
     const matchesCategory = sheetCategoryFilter === 'all' || sheet.category_id === sheetCategoryFilter;
-    
+
     return matchesSearch && matchesCategory;
   });
 
@@ -4486,8 +4534,8 @@ const AdminPage: React.FC = () => {
       orderStatusFilter === 'all'
         ? true
         : orderStatusFilter === 'awaiting_deposit'
-        ? order.status === 'awaiting_deposit' || order.payment_status === 'awaiting_deposit'
-        : order.status === orderStatusFilter;
+          ? order.status === 'awaiting_deposit' || order.payment_status === 'awaiting_deposit'
+          : order.status === orderStatusFilter;
 
     const paymentKey = order.payment_method ? normalizePaymentMethodKey(order.payment_method) : '';
     const matchesPayment = orderPaymentFilter === 'all' ? true : paymentKey === orderPaymentFilter;
@@ -4633,11 +4681,10 @@ const AdminPage: React.FC = () => {
                   key={option.value}
                   type="button"
                   onClick={() => setDashboardAnalyticsPeriod(option.value)}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                    dashboardAnalyticsPeriod === option.value
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${dashboardAnalyticsPeriod === option.value
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
                 >
                   {option.label}
                 </button>
@@ -4751,8 +4798,8 @@ const AdminPage: React.FC = () => {
                           <AreaChart data={chartData} margin={{ top: 12, right: 24, left: 16, bottom: 8 }}>
                             <defs>
                               <linearGradient id="colorPageViews" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
+                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                               </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -4762,7 +4809,7 @@ const AdminPage: React.FC = () => {
                               tick={{ fontSize: 12 }}
                               tickFormatter={(value) => Number(value).toLocaleString('ko-KR')}
                             />
-                            <Tooltip 
+                            <Tooltip
                               formatter={(value: number) => [`${value.toLocaleString('ko-KR')}`, '']}
                               labelFormatter={(label) => `일자: ${label}`}
                             />
@@ -4975,15 +5022,14 @@ const AdminPage: React.FC = () => {
                     </div>
                     <div className="text-right">
                       <span
-                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                          order.status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : order.status === 'in_progress'
-                              ? 'bg-blue-100 text-blue-800'
-                              : order.status === 'completed'
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                        }`}
+                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${order.status === 'pending'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : order.status === 'in_progress'
+                            ? 'bg-blue-100 text-blue-800'
+                            : order.status === 'completed'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}
                       >
                         {order.status === 'pending'
                           ? '대기중'
@@ -5189,11 +5235,10 @@ const AdminPage: React.FC = () => {
                 <button
                   onClick={() => setCashCurrentPage((prev) => Math.max(1, prev - 1))}
                   disabled={cashCurrentPage === 1}
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                    cashCurrentPage === 1
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                  }`}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${cashCurrentPage === 1
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    }`}
                 >
                   <i className="ri-arrow-left-s-line"></i>
                 </button>
@@ -5207,11 +5252,10 @@ const AdminPage: React.FC = () => {
                       <button
                         key={page}
                         onClick={() => setCashCurrentPage(page)}
-                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                          cashCurrentPage === page
-                            ? 'bg-orange-500 text-white'
-                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                        }`}
+                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${cashCurrentPage === page
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                          }`}
                       >
                         {page}
                       </button>
@@ -5229,11 +5273,10 @@ const AdminPage: React.FC = () => {
                 <button
                   onClick={() => setCashCurrentPage((prev) => Math.min(cashTotalPages, prev + 1))}
                   disabled={cashCurrentPage === cashTotalPages}
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                    cashCurrentPage === cashTotalPages
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                  }`}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${cashCurrentPage === cashTotalPages
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    }`}
                 >
                   <i className="ri-arrow-right-s-line"></i>
                 </button>
@@ -5270,22 +5313,20 @@ const AdminPage: React.FC = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       onClick={() => setCashAdjustType('admin_add')}
-                      className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-semibold transition-colors ${
-                        cashAdjustType === 'admin_add'
-                          ? 'border-orange-500 bg-orange-50 text-orange-600'
-                          : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                      }`}
+                      className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-semibold transition-colors ${cashAdjustType === 'admin_add'
+                        ? 'border-orange-500 bg-orange-50 text-orange-600'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                        }`}
                     >
                       <i className="ri-add-circle-line"></i>
                       캐쉬 추가
                     </button>
                     <button
                       onClick={() => setCashAdjustType('admin_deduct')}
-                      className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-semibold transition-colors ${
-                        cashAdjustType === 'admin_deduct'
-                          ? 'border-rose-500 bg-rose-50 text-rose-600'
-                          : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                      }`}
+                      className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-semibold transition-colors ${cashAdjustType === 'admin_deduct'
+                        ? 'border-rose-500 bg-rose-50 text-rose-600'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                        }`}
                     >
                       <i className="ri-subtract-line"></i>
                       캐쉬 차감
@@ -5413,9 +5454,8 @@ const AdminPage: React.FC = () => {
                               </span>
                             </td>
                             <td
-                              className={`px-6 py-4 text-sm font-semibold ${
-                                transaction.amount >= 0 ? 'text-orange-600' : 'text-rose-600'
-                              }`}
+                              className={`px-6 py-4 text-sm font-semibold ${transaction.amount >= 0 ? 'text-orange-600' : 'text-rose-600'
+                                }`}
                             >
                               {amountDisplay}
                             </td>
@@ -5431,8 +5471,8 @@ const AdminPage: React.FC = () => {
                               {transaction.description
                                 ? transaction.description
                                 : transaction.sheet?.title
-                                ? `악보: ${transaction.sheet.title}`
-                                : '-'}
+                                  ? `악보: ${transaction.sheet.title}`
+                                  : '-'}
                             </td>
                           </tr>
                         );
@@ -5450,11 +5490,10 @@ const AdminPage: React.FC = () => {
                   <button
                     onClick={() => handleChangeCashHistoryPage(Math.max(1, cashHistoryPage - 1))}
                     disabled={cashHistoryPage === 1}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                      cashHistoryPage === 1
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                    }`}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${cashHistoryPage === 1
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
                   >
                     <i className="ri-arrow-left-s-line"></i>
                   </button>
@@ -5466,11 +5505,10 @@ const AdminPage: React.FC = () => {
                       handleChangeCashHistoryPage(Math.min(historyTotalPages, cashHistoryPage + 1))
                     }
                     disabled={cashHistoryPage === historyTotalPages}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                      cashHistoryPage === historyTotalPages
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                    }`}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${cashHistoryPage === historyTotalPages
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
                   >
                     <i className="ri-arrow-right-s-line"></i>
                   </button>
@@ -5553,73 +5591,72 @@ const AdminPage: React.FC = () => {
                   const hasKakao = member.kakao_id && member.kakao_id.trim() !== '';
                   const hasGoogle = member.google_id && member.google_id.trim() !== '';
                   const loginMethod = hasKakao && hasGoogle ? '카카오+구글' :
-                                     hasKakao ? '카카오' :
-                                     hasGoogle ? '구글' : '이메일';
-                  
+                    hasKakao ? '카카오' :
+                      hasGoogle ? '구글' : '이메일';
+
                   return (
-                  <tr key={member.id} className="hover:bg-gray-50">
-                    <td className="px-3 md:px-6 py-3 md:py-4">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-8 w-8 md:h-10 md:w-10">
-                          <div className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                            <i className="ri-user-line text-blue-600 w-4 h-4 md:w-5 md:h-5"></i>
+                    <tr key={member.id} className="hover:bg-gray-50">
+                      <td className="px-3 md:px-6 py-3 md:py-4">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-8 w-8 md:h-10 md:w-10">
+                            <div className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                              <i className="ri-user-line text-blue-600 w-4 h-4 md:w-5 md:h-5"></i>
+                            </div>
+                          </div>
+                          <div className="ml-2 md:ml-4 min-w-0">
+                            <div className="text-xs md:text-sm font-medium text-gray-900 truncate">{member.name || '이름 없음'}</div>
+                            <div className="text-xs md:text-sm text-gray-500 truncate">{member.email}</div>
                           </div>
                         </div>
-                        <div className="ml-2 md:ml-4 min-w-0">
-                          <div className="text-xs md:text-sm font-medium text-gray-900 truncate">{member.name || '이름 없음'}</div>
-                          <div className="text-xs md:text-sm text-gray-500 truncate">{member.email}</div>
+                      </td>
+                      <td className="px-3 md:px-6 py-3 md:py-4">
+                        <div className="flex items-center flex-wrap gap-1 md:space-x-2">
+                          {hasKakao && (
+                            <span className="inline-flex items-center px-1.5 md:px-2 py-0.5 md:py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              <i className="ri-kakao-talk-fill w-2.5 h-2.5 md:w-3 md:h-3 mr-0.5 md:mr-1"></i>
+                              <span className="hidden sm:inline">카카오</span>
+                              <span className="sm:hidden">K</span>
+                            </span>
+                          )}
+                          {hasGoogle && (
+                            <span className="inline-flex items-center px-1.5 md:px-2 py-0.5 md:py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              <i className="ri-google-fill w-2.5 h-2.5 md:w-3 md:h-3 mr-0.5 md:mr-1"></i>
+                              <span className="hidden sm:inline">구글</span>
+                              <span className="sm:hidden">G</span>
+                            </span>
+                          )}
+                          {!hasKakao && !hasGoogle && (
+                            <span className="inline-flex items-center px-1.5 md:px-2 py-0.5 md:py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                              <i className="ri-mail-line w-2.5 h-2.5 md:w-3 md:h-3 mr-0.5 md:mr-1"></i>
+                              <span className="hidden sm:inline">이메일</span>
+                              <span className="sm:hidden">E</span>
+                            </span>
+                          )}
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-3 md:px-6 py-3 md:py-4">
-                      <div className="flex items-center flex-wrap gap-1 md:space-x-2">
-                        {hasKakao && (
-                          <span className="inline-flex items-center px-1.5 md:px-2 py-0.5 md:py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                            <i className="ri-kakao-talk-fill w-2.5 h-2.5 md:w-3 md:h-3 mr-0.5 md:mr-1"></i>
-                            <span className="hidden sm:inline">카카오</span>
-                            <span className="sm:hidden">K</span>
-                          </span>
-                        )}
-                        {hasGoogle && (
-                          <span className="inline-flex items-center px-1.5 md:px-2 py-0.5 md:py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            <i className="ri-google-fill w-2.5 h-2.5 md:w-3 md:h-3 mr-0.5 md:mr-1"></i>
-                            <span className="hidden sm:inline">구글</span>
-                            <span className="sm:hidden">G</span>
-                          </span>
-                        )}
-                        {!hasKakao && !hasGoogle && (
-                          <span className="inline-flex items-center px-1.5 md:px-2 py-0.5 md:py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            <i className="ri-mail-line w-2.5 h-2.5 md:w-3 md:h-3 mr-0.5 md:mr-1"></i>
-                            <span className="hidden sm:inline">이메일</span>
-                            <span className="sm:hidden">E</span>
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-3 md:px-6 py-3 md:py-4 text-xs md:text-sm text-gray-900">
-                      {new Date(member.created_at).toLocaleDateString()}
-                    </td>
-                  <td className="px-3 md:px-6 py-3 md:py-4">
-                    <span className={`inline-flex px-1.5 md:px-2 py-0.5 md:py-1 text-xs font-semibold rounded-full ${
-                      member.is_admin 
-                        ? 'bg-purple-100 text-purple-800' 
-                        : 'bg-green-100 text-green-800'
-                    }`}>
-                      {member.is_admin ? '관리자' : '일반회원'}
-                    </span>
-                  </td>
-                  <td className="px-3 md:px-6 py-3 md:py-4 text-xs md:text-sm font-medium">
-                    <div className="flex space-x-1 md:space-x-2">
-                      <button
-                        onClick={() => handleDeleteMember(member.id)}
-                        className="text-red-600 hover:text-red-900 p-1.5 md:p-0"
-                        aria-label="회원 삭제"
-                      >
-                        <i className="ri-delete-bin-line w-4 h-4 md:w-4 md:h-4"></i>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                      </td>
+                      <td className="px-3 md:px-6 py-3 md:py-4 text-xs md:text-sm text-gray-900">
+                        {new Date(member.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-3 md:px-6 py-3 md:py-4">
+                        <span className={`inline-flex px-1.5 md:px-2 py-0.5 md:py-1 text-xs font-semibold rounded-full ${member.is_admin
+                          ? 'bg-purple-100 text-purple-800'
+                          : 'bg-green-100 text-green-800'
+                          }`}>
+                          {member.is_admin ? '관리자' : '일반회원'}
+                        </span>
+                      </td>
+                      <td className="px-3 md:px-6 py-3 md:py-4 text-xs md:text-sm font-medium">
+                        <div className="flex space-x-1 md:space-x-2">
+                          <button
+                            onClick={() => handleDeleteMember(member.id)}
+                            className="text-red-600 hover:text-red-900 p-1.5 md:p-0"
+                            aria-label="회원 삭제"
+                          >
+                            <i className="ri-delete-bin-line w-4 h-4 md:w-4 md:h-4"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })
               )}
@@ -5637,15 +5674,14 @@ const AdminPage: React.FC = () => {
               <button
                 onClick={() => setMemberCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={memberCurrentPage === 1}
-                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                  memberCurrentPage === 1
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                }`}
+                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${memberCurrentPage === 1
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
               >
                 <i className="ri-arrow-left-s-line"></i>
               </button>
-              
+
               {Array.from({ length: memberTotalPages }, (_, i) => i + 1).map((page) => {
                 // 현재 페이지 주변 2페이지씩만 표시
                 if (
@@ -5657,11 +5693,10 @@ const AdminPage: React.FC = () => {
                     <button
                       key={page}
                       onClick={() => setMemberCurrentPage(page)}
-                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                        memberCurrentPage === page
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                      }`}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${memberCurrentPage === page
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                        }`}
                     >
                       {page}
                     </button>
@@ -5678,15 +5713,14 @@ const AdminPage: React.FC = () => {
                 }
                 return null;
               })}
-              
+
               <button
                 onClick={() => setMemberCurrentPage(prev => Math.min(memberTotalPages, prev + 1))}
                 disabled={memberCurrentPage === memberTotalPages}
-                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                  memberCurrentPage === memberTotalPages
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                }`}
+                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${memberCurrentPage === memberTotalPages
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
               >
                 <i className="ri-arrow-right-s-line"></i>
               </button>
@@ -5708,7 +5742,7 @@ const AdminPage: React.FC = () => {
                 <i className="ri-close-line w-5 h-5"></i>
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -5721,7 +5755,7 @@ const AdminPage: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div className="text-sm text-gray-600">
                 <p className="mb-2">CSV 파일 형식:</p>
                 <ul className="list-disc list-inside space-y-1">
@@ -5731,7 +5765,7 @@ const AdminPage: React.FC = () => {
                   <li>google_id (선택)</li>
                 </ul>
               </div>
-              
+
               <button
                 onClick={downloadMemberCsvSample}
                 className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2"
@@ -5767,7 +5801,7 @@ const AdminPage: React.FC = () => {
                 <i className="ri-close-line w-5 h-5"></i>
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -5776,12 +5810,12 @@ const AdminPage: React.FC = () => {
                 <input
                   type="email"
                   value={newMember.email}
-                  onChange={(e) => setNewMember({...newMember, email: e.target.value})}
+                  onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   이름
@@ -5789,24 +5823,24 @@ const AdminPage: React.FC = () => {
                 <input
                   type="text"
                   value={newMember.name}
-                  onChange={(e) => setNewMember({...newMember, name: e.target.value})}
+                  onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div className="flex items-center">
                 <input
                   type="checkbox"
                   id="isAdmin"
                   checked={newMember.is_admin}
-                  onChange={(e) => setNewMember({...newMember, is_admin: e.target.checked})}
+                  onChange={(e) => setNewMember({ ...newMember, is_admin: e.target.checked })}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
                 <label htmlFor="isAdmin" className="ml-2 block text-sm text-gray-900">
                   관리자 권한 부여
                 </label>
               </div>
-              
+
               <div className="flex space-x-3 pt-4">
                 <button
                   type="button"
@@ -5989,118 +6023,117 @@ const AdminPage: React.FC = () => {
                   const category = (sheet as any).categories;
                   const isSelected = selectedSheetIds.includes(sheet.id);
                   return (
-                  <tr key={sheet.id} className={`hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={(e) => handleSelectSheet(sheet.id, e.target.checked)}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <img
-                        src={(sheet as any).thumbnail_url || `https://readdy.ai/api/search-image?query=drum%20sheet%20music%20${sheet.title}%20modern%20minimalist%20background&width=60&height=60&seq=${sheet.id}&orientation=square`}
-                        alt={sheet.title}
-                        className="w-12 h-12 object-cover rounded border border-gray-200"
-                      />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{sheet.title}</div>
-                        <div className="text-sm text-gray-500">{sheet.artist}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                        {category?.name || '미분류'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                    {(() => {
-                      // 난이도 값 가져오기 및 정규화
-                      const rawDifficulty = sheet.difficulty;
-                      if (!rawDifficulty) {
-                        console.warn(`⚠️ 난이도 없음: 악보 ID ${sheet.id}, 제목: ${sheet.title}`);
-                        return (
-                          <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
-                            미설정
-                          </span>
-                        );
-                      }
-                      
-                      // 문자열로 변환하고 정규화
-                      const difficulty = String(rawDifficulty).toLowerCase().trim();
-                      
-                      let displayText = '미설정';
-                      let bgColor = 'bg-gray-100 text-gray-800';
-                      
-                      // 다양한 형식 지원
-                      if (difficulty === 'beginner' || difficulty === '초급') {
-                        displayText = '초급';
-                        bgColor = 'bg-green-100 text-green-800';
-                      } else if (difficulty === 'intermediate' || difficulty === '중급') {
-                        displayText = '중급';
-                        bgColor = 'bg-yellow-100 text-yellow-800';
-                      } else if (difficulty === 'advanced' || difficulty === '고급') {
-                        displayText = '고급';
-                        bgColor = 'bg-red-100 text-red-800';
-                      } else {
-                        // 예상치 못한 값인 경우 원본 값 표시 (디버깅용)
-                        console.warn(`⚠️ 예상치 못한 난이도 값: "${rawDifficulty}" (악보 ID: ${sheet.id}, 제목: ${sheet.title})`);
-                        displayText = `미설정 (${rawDifficulty})`;
-                        bgColor = 'bg-gray-100 text-gray-800';
-                      }
-                      
-                      return (
-                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${bgColor}`}>
-                          {displayText}
+                    <tr key={sheet.id} className={`hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => handleSelectSheet(sheet.id, e.target.checked)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <img
+                          src={(sheet as any).thumbnail_url || `https://readdy.ai/api/search-image?query=drum%20sheet%20music%20${sheet.title}%20modern%20minimalist%20background&width=60&height=60&seq=${sheet.id}&orientation=square`}
+                          alt={sheet.title}
+                          className="w-12 h-12 object-cover rounded border border-gray-200"
+                        />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{sheet.title}</div>
+                          <div className="text-sm text-gray-500">{sheet.artist}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                          {category?.name || '미분류'}
                         </span>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ₩{sheet.price.toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                      sheet.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {sheet.is_active ? '활성' : '비활성'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(sheet.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
-                      <button 
-                        onClick={() => {
-                          setEditingSheet(sheet);
-                          setEditingSheetData({
-                            title: sheet.title,
-                            artist: sheet.artist,
-                            difficulty: sheet.difficulty,
-                            price: sheet.price,
-                            category_id: sheet.category_id,
-                            thumbnail_url: (sheet as any).thumbnail_url || '',
-                            album_name: (sheet as any).album_name || '',
-                            page_count: (sheet as any).page_count || 0,
-                            tempo: (sheet as any).tempo || 0,
-                            youtube_url: (sheet as any).youtube_url || '',
-                            is_active: sheet.is_active
-                          });
-                        }}
-                        className="text-blue-600 hover:text-blue-900 transition-colors"
-                      >
-                        <i className="ri-edit-line w-4 h-4"></i>
-                      </button>
-                      <button className="text-red-600 hover:text-red-900 transition-colors">
-                        <i className="ri-delete-bin-line w-4 h-4"></i>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {(() => {
+                          // 난이도 값 가져오기 및 정규화
+                          const rawDifficulty = sheet.difficulty;
+                          if (!rawDifficulty) {
+                            console.warn(`⚠️ 난이도 없음: 악보 ID ${sheet.id}, 제목: ${sheet.title}`);
+                            return (
+                              <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                                미설정
+                              </span>
+                            );
+                          }
+
+                          // 문자열로 변환하고 정규화
+                          const difficulty = String(rawDifficulty).toLowerCase().trim();
+
+                          let displayText = '미설정';
+                          let bgColor = 'bg-gray-100 text-gray-800';
+
+                          // 다양한 형식 지원
+                          if (difficulty === 'beginner' || difficulty === '초급') {
+                            displayText = '초급';
+                            bgColor = 'bg-green-100 text-green-800';
+                          } else if (difficulty === 'intermediate' || difficulty === '중급') {
+                            displayText = '중급';
+                            bgColor = 'bg-yellow-100 text-yellow-800';
+                          } else if (difficulty === 'advanced' || difficulty === '고급') {
+                            displayText = '고급';
+                            bgColor = 'bg-red-100 text-red-800';
+                          } else {
+                            // 예상치 못한 값인 경우 원본 값 표시 (디버깅용)
+                            console.warn(`⚠️ 예상치 못한 난이도 값: "${rawDifficulty}" (악보 ID: ${sheet.id}, 제목: ${sheet.title})`);
+                            displayText = `미설정 (${rawDifficulty})`;
+                            bgColor = 'bg-gray-100 text-gray-800';
+                          }
+
+                          return (
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${bgColor}`}>
+                              {displayText}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ₩{sheet.price.toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${sheet.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                          }`}>
+                          {sheet.is_active ? '활성' : '비활성'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(sheet.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => {
+                              setEditingSheet(sheet);
+                              setEditingSheetData({
+                                title: sheet.title,
+                                artist: sheet.artist,
+                                difficulty: sheet.difficulty,
+                                price: sheet.price,
+                                category_id: sheet.category_id,
+                                thumbnail_url: (sheet as any).thumbnail_url || '',
+                                album_name: (sheet as any).album_name || '',
+                                page_count: (sheet as any).page_count || 0,
+                                tempo: (sheet as any).tempo || 0,
+                                youtube_url: (sheet as any).youtube_url || '',
+                                is_active: sheet.is_active
+                              });
+                            }}
+                            className="text-blue-600 hover:text-blue-900 transition-colors"
+                          >
+                            <i className="ri-edit-line w-4 h-4"></i>
+                          </button>
+                          <button className="text-red-600 hover:text-red-900 transition-colors">
+                            <i className="ri-delete-bin-line w-4 h-4"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })
               )}
@@ -6118,15 +6151,14 @@ const AdminPage: React.FC = () => {
               <button
                 onClick={() => setSheetCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={sheetCurrentPage === 1}
-                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                  sheetCurrentPage === 1
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                }`}
+                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${sheetCurrentPage === 1
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
               >
                 <i className="ri-arrow-left-s-line"></i>
               </button>
-              
+
               {Array.from({ length: sheetTotalPages }, (_, i) => i + 1).map((page) => {
                 // 현재 페이지 주변 2페이지씩만 표시
                 if (
@@ -6138,11 +6170,10 @@ const AdminPage: React.FC = () => {
                     <button
                       key={page}
                       onClick={() => setSheetCurrentPage(page)}
-                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                        sheetCurrentPage === page
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                      }`}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${sheetCurrentPage === page
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                        }`}
                     >
                       {page}
                     </button>
@@ -6159,15 +6190,14 @@ const AdminPage: React.FC = () => {
                 }
                 return null;
               })}
-              
+
               <button
                 onClick={() => setSheetCurrentPage(prev => Math.min(sheetTotalPages, prev + 1))}
                 disabled={sheetCurrentPage === sheetTotalPages}
-                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                  sheetCurrentPage === sheetTotalPages
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                }`}
+                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${sheetCurrentPage === sheetTotalPages
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
               >
                 <i className="ri-arrow-right-s-line"></i>
               </button>
@@ -6189,7 +6219,7 @@ const AdminPage: React.FC = () => {
                 <i className="ri-close-line w-5 h-5"></i>
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -6202,7 +6232,7 @@ const AdminPage: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              
+
               <div className="text-sm text-gray-600">
                 <p className="mb-2">CSV 파일 형식:</p>
                 <ul className="list-disc list-inside space-y-1">
@@ -6214,7 +6244,7 @@ const AdminPage: React.FC = () => {
                   <li>is_active (선택) - true/false (기본값: true)</li>
                 </ul>
               </div>
-              
+
               <button
                 onClick={downloadSheetCsvSample}
                 className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2"
@@ -6281,7 +6311,7 @@ const AdminPage: React.FC = () => {
                   </button>
                 </div>
               </div>
-              
+
               {/* Spotify 정보 표시 */}
               {(newSheet.thumbnail_url || newSheet.album_name) && (
                 <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -6308,7 +6338,7 @@ const AdminPage: React.FC = () => {
                   )}
                 </div>
               )}
-              
+
               {/* 유튜브 URL */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">유튜브 URL (선택)</label>
@@ -6339,7 +6369,7 @@ const AdminPage: React.FC = () => {
                   )}
                 </div>
               </div>
-              
+
               {/* 썸네일 URL 직접 입력 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 URL (선택)</label>
@@ -6371,7 +6401,7 @@ const AdminPage: React.FC = () => {
                   </div>
                 )}
               </div>
-              
+
               {/* PDF 파일 업로드 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">PDF 파일</label>
@@ -6404,7 +6434,7 @@ const AdminPage: React.FC = () => {
                   </div>
                 )}
               </div>
-              
+
               {/* 페이지수 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">페이지수</label>
@@ -6416,7 +6446,7 @@ const AdminPage: React.FC = () => {
                   min="0"
                 />
               </div>
-              
+
               {/* 템포 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">템포 (BPM)</label>
@@ -6528,7 +6558,7 @@ const AdminPage: React.FC = () => {
                 <i className="ri-close-line w-5 h-5"></i>
               </button>
             </div>
-            
+
             <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -6540,7 +6570,7 @@ const AdminPage: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">아티스트 *</label>
                   <input
@@ -6565,7 +6595,7 @@ const AdminPage: React.FC = () => {
                     <option value="advanced">고급</option>
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">카테고리 *</label>
                   <select
@@ -6591,7 +6621,7 @@ const AdminPage: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">페이지수</label>
                   <input
@@ -6602,7 +6632,7 @@ const AdminPage: React.FC = () => {
                     min="0"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">템포 (BPM)</label>
                   <input
@@ -6679,7 +6709,7 @@ const AdminPage: React.FC = () => {
                 </label>
               </div>
             </div>
-            
+
             <div className="flex justify-end space-x-3 mt-6 border-t border-gray-200 pt-4">
               <button
                 onClick={() => {
@@ -6705,12 +6735,12 @@ const AdminPage: React.FC = () => {
               <button
                 onClick={async () => {
                   if (!editingSheet) return;
-                  
+
                   if (!editingSheetData.title || !editingSheetData.artist || !editingSheetData.category_id) {
                     alert('제목, 아티스트, 카테고리는 필수입니다.');
                     return;
                   }
-                  
+
                   try {
                     const updateData: any = {
                       title: editingSheetData.title,
@@ -6726,19 +6756,19 @@ const AdminPage: React.FC = () => {
                     } else {
                       updateData.thumbnail_url = null;
                     }
-                    
+
                     if (editingSheetData.album_name) {
                       updateData.album_name = editingSheetData.album_name;
                     }
-                    
+
                     if (editingSheetData.page_count > 0) {
                       updateData.page_count = editingSheetData.page_count;
                     }
-                    
+
                     if (editingSheetData.tempo > 0) {
                       updateData.tempo = editingSheetData.tempo;
                     }
-                    
+
                     if (editingSheetData.youtube_url) {
                       updateData.youtube_url = editingSheetData.youtube_url;
                     }
@@ -6801,12 +6831,12 @@ const AdminPage: React.FC = () => {
                 <i className="ri-close-line w-5 h-5"></i>
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <p className="text-sm text-gray-600 mb-4">
                 선택한 {selectedSheetIds.length}개의 악보에 대해 수정할 항목만 입력하세요. 빈 항목은 변경되지 않습니다.
               </p>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
                 <select
@@ -6852,9 +6882,9 @@ const AdminPage: React.FC = () => {
                   value={bulkEditData.is_active === null ? '' : bulkEditData.is_active ? 'true' : 'false'}
                   onChange={(e) => {
                     const value = e.target.value;
-                    setBulkEditData({ 
-                      ...bulkEditData, 
-                      is_active: value === '' ? null : value === 'true' 
+                    setBulkEditData({
+                      ...bulkEditData,
+                      is_active: value === '' ? null : value === 'true'
                     });
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
@@ -6865,7 +6895,7 @@ const AdminPage: React.FC = () => {
                 </select>
               </div>
             </div>
-            
+
             <div className="flex justify-end space-x-3 mt-6 border-t border-gray-200 pt-4">
               <button
                 onClick={() => {
@@ -6932,13 +6962,13 @@ const AdminPage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      <button 
+                      <button
                         onClick={() => setEditingCategory(category)}
                         className="text-blue-600 hover:text-blue-900 transition-colors"
                       >
                         <i className="ri-edit-line w-4 h-4"></i>
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleDeleteCategory(category.id)}
                         className="text-red-600 hover:text-red-900 transition-colors"
                       >
@@ -7113,7 +7143,7 @@ const AdminPage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      <button 
+                      <button
                         onClick={() => {
                           setEditingCollection(collection);
                           setEditingCollectionData({
@@ -7139,7 +7169,7 @@ const AdminPage: React.FC = () => {
                       >
                         <i className="ri-edit-line w-4 h-4"></i>
                       </button>
-                      <button 
+                      <button
                         onClick={() => {
                           setSelectedCollectionId(collection.id);
                           loadCollectionSheets(collection.id);
@@ -7150,7 +7180,7 @@ const AdminPage: React.FC = () => {
                       >
                         <i className="ri-file-music-line w-4 h-4"></i>
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleDeleteCollection(collection.id)}
                         className="text-red-600 hover:text-red-900 transition-colors"
                         title="삭제"
@@ -7236,7 +7266,7 @@ const AdminPage: React.FC = () => {
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      정가 (원) 
+                      정가 (원)
                       <span className="text-xs text-gray-500 ml-2">
                         (선택된 악보: {selectedSheetsForNewCollection.length}개)
                       </span>
@@ -7246,8 +7276,8 @@ const AdminPage: React.FC = () => {
                       value={newCollection.original_price}
                       onChange={(e) => {
                         const price = parseInt(e.target.value) || 0;
-                        setNewCollection({ 
-                          ...newCollection, 
+                        setNewCollection({
+                          ...newCollection,
                           original_price: price,
                           discount_percentage: calculateDiscountPercentage(price, newCollection.sale_price)
                         });
@@ -7269,8 +7299,8 @@ const AdminPage: React.FC = () => {
                       onChange={(e) => {
                         const salePrice = parseInt(e.target.value) || 0;
                         const discount = calculateDiscountPercentage(newCollection.original_price, salePrice);
-                        setNewCollection({ 
-                          ...newCollection, 
+                        setNewCollection({
+                          ...newCollection,
                           sale_price: salePrice,
                           discount_percentage: discount
                         });
@@ -7327,7 +7357,7 @@ const AdminPage: React.FC = () => {
               {/* 악보 검색 및 선택 */}
               <div className="border-t pt-4">
                 <h4 className="text-sm font-semibold text-gray-900 mb-3">악보 추가</h4>
-                
+
                 {/* 검색 필터 */}
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
@@ -7435,9 +7465,8 @@ const AdminPage: React.FC = () => {
               <button
                 onClick={handleAddCollection}
                 disabled={isAddingCollectionLoading}
-                className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 ${
-                  isAddingCollectionLoading ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
+                className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 ${isAddingCollectionLoading ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
               >
                 {isAddingCollectionLoading ? (
                   <>
@@ -7847,9 +7876,8 @@ const AdminPage: React.FC = () => {
                 </section>
 
                 <section
-                  className={`rounded-xl border p-6 ${
-                    isBankTransfer ? 'border-amber-200 bg-amber-50' : 'border-gray-100'
-                  }`}
+                  className={`rounded-xl border p-6 ${isBankTransfer ? 'border-amber-200 bg-amber-50' : 'border-gray-100'
+                    }`}
                 >
                   <h4 className="text-lg font-semibold text-gray-900">무통장입금 안내</h4>
                   {isBankTransfer ? (
@@ -7884,7 +7912,7 @@ const AdminPage: React.FC = () => {
                 {isBankTransfer && ['awaiting_deposit', 'pending'].includes(normalizedSelectedStatus) ? (
                   <section className="sticky top-4 rounded-xl border border-amber-200 bg-amber-50 p-6 space-y-4 shadow-lg">
                     <h4 className="text-lg font-semibold text-amber-900">무통장입금 수동 확인</h4>
-                    
+
                     {/* 주문 요약 */}
                     <div className="rounded-lg border border-amber-300 bg-white/80 p-4 text-sm text-amber-900">
                       <div className="font-semibold text-amber-800 mb-2">주문 요약</div>
@@ -7985,10 +8013,10 @@ const AdminPage: React.FC = () => {
                       {orderActionLoading === 'delete'
                         ? '취소 처리 중...'
                         : normalizedSelectedStatus === 'refunded'
-                        ? '환불 완료됨'
-                        : normalizedSelectedStatus === 'cancelled'
-                        ? '이미 취소됨'
-                        : '환불 없이 취소'}
+                          ? '환불 완료됨'
+                          : normalizedSelectedStatus === 'cancelled'
+                            ? '이미 취소됨'
+                            : '환불 없이 취소'}
                     </button>
                     <button
                       type="button"
@@ -7999,8 +8027,8 @@ const AdminPage: React.FC = () => {
                       {orderActionLoading === 'refund'
                         ? '환불 처리 중...'
                         : disableRefund
-                        ? '환불 불가'
-                        : '환불 후 취소'}
+                          ? '환불 불가'
+                          : '환불 후 취소'}
                     </button>
                   </div>
                 </section>
@@ -8046,6 +8074,16 @@ const AdminPage: React.FC = () => {
               </button>
             </div>
             <div className="flex items-center gap-2">
+              {selectedOrderIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void handleBulkDeleteOrders()}
+                  className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+                >
+                  <i className="ri-delete-bin-line text-base"></i>
+                  선택 삭제 ({selectedOrderIds.size})
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => loadOrders()}
@@ -8070,55 +8108,50 @@ const AdminPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setOrderStatusFilter('all')}
-              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
-                orderStatusFilter === 'all'
-                  ? 'border-blue-500 text-blue-600 bg-blue-50'
-                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
-              }`}
+              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${orderStatusFilter === 'all'
+                ? 'border-blue-500 text-blue-600 bg-blue-50'
+                : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                }`}
             >
               전체
             </button>
             <button
               type="button"
               onClick={() => setOrderStatusFilter('pending')}
-              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
-                orderStatusFilter === 'pending'
-                  ? 'border-yellow-500 text-yellow-600 bg-yellow-50'
-                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
-              }`}
+              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${orderStatusFilter === 'pending'
+                ? 'border-yellow-500 text-yellow-600 bg-yellow-50'
+                : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                }`}
             >
               결제 대기
             </button>
             <button
               type="button"
               onClick={() => setOrderStatusFilter('awaiting_deposit')}
-              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
-                orderStatusFilter === 'awaiting_deposit'
-                  ? 'border-amber-500 text-amber-600 bg-amber-50'
-                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
-              }`}
+              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${orderStatusFilter === 'awaiting_deposit'
+                ? 'border-amber-500 text-amber-600 bg-amber-50'
+                : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                }`}
             >
               입금 확인 필요
             </button>
             <button
               type="button"
               onClick={() => setOrderStatusFilter('completed')}
-              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
-                orderStatusFilter === 'completed'
-                  ? 'border-blue-500 text-blue-600 bg-blue-50'
-                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
-              }`}
+              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${orderStatusFilter === 'completed'
+                ? 'border-blue-500 text-blue-600 bg-blue-50'
+                : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                }`}
             >
               완료
             </button>
             <button
               type="button"
               onClick={() => setOrderStatusFilter('refunded')}
-              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
-                orderStatusFilter === 'refunded'
-                  ? 'border-purple-500 text-purple-600 bg-purple-50'
-                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
-              }`}
+              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${orderStatusFilter === 'refunded'
+                ? 'border-purple-500 text-purple-600 bg-purple-50'
+                : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                }`}
             >
               환불
             </button>
@@ -8202,6 +8235,17 @@ const AdminPage: React.FC = () => {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-4 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={
+                      sortedOrders.length > 0 &&
+                      selectedOrderIds.size === sortedOrders.length
+                    }
+                    onChange={(e) => handleSelectAllOrders(e.target.checked)}
+                  />
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">고객명</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">주문 타입</th>
@@ -8260,6 +8304,14 @@ const AdminPage: React.FC = () => {
                         className={`cursor-pointer hover:bg-gray-50 transition-colors ${expanded ? 'bg-gray-50/80' : ''}`}
                         onClick={() => handleOpenOrderDetail(order)}
                       >
+                        <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            checked={selectedOrderIds.has(order.id)}
+                            onChange={() => handleSelectOrder(order.id)}
+                          />
+                        </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span
                             className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${statusMeta.className}`}
@@ -8771,20 +8823,18 @@ const AdminPage: React.FC = () => {
                             <button
                               onClick={() => handleToggleEventDiscount(event)}
                               disabled={updatingEventId === event.id}
-                              className={`px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${
-                                event.is_active
-                                  ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                  : 'bg-green-100 text-green-700 hover:bg-green-200'
-                              } ${updatingEventId === event.id ? 'opacity-70 cursor-not-allowed' : ''}`}
+                              className={`px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${event.is_active
+                                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                } ${updatingEventId === event.id ? 'opacity-70 cursor-not-allowed' : ''}`}
                             >
                               {event.is_active ? '비활성화' : '활성화'}
                             </button>
                             <button
                               onClick={() => handleDeleteEventDiscount(event.id)}
                               disabled={deletingEventId === event.id}
-                              className={`px-3 py-2 text-sm font-semibold text-red-600 hover:text-red-700 transition-colors ${
-                                deletingEventId === event.id ? 'opacity-60 cursor-not-allowed' : ''
-                              }`}
+                              className={`px-3 py-2 text-sm font-semibold text-red-600 hover:text-red-700 transition-colors ${deletingEventId === event.id ? 'opacity-60 cursor-not-allowed' : ''
+                                }`}
                             >
                               삭제
                             </button>
@@ -8854,9 +8904,8 @@ const AdminPage: React.FC = () => {
                           <button
                             key={sheet.id}
                             onClick={() => handleSelectEventCandidate(sheet)}
-                            className={`w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors ${
-                              selectedEventSheet?.id === sheet.id ? 'bg-blue-50' : ''
-                            }`}
+                            className={`w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors ${selectedEventSheet?.id === sheet.id ? 'bg-blue-50' : ''
+                              }`}
                           >
                             <div className="flex items-center justify-between gap-3">
                               <div>
@@ -9512,11 +9561,10 @@ const AdminPage: React.FC = () => {
                       key={tab}
                       type="button"
                       onClick={() => setActiveSettingsTab(tab)}
-                      className={`flex-1 min-w-[160px] border-b border-gray-100 px-4 py-3 text-sm font-medium transition-colors last:border-b-0 lg:min-w-full lg:border-b-0 ${
-                        isActive
-                          ? 'bg-blue-50 text-blue-700 lg:border-l-4 lg:border-blue-500'
-                          : 'text-gray-600 hover:bg-gray-50 lg:border-l-4 lg:border-transparent'
-                      }`}
+                      className={`flex-1 min-w-[160px] border-b border-gray-100 px-4 py-3 text-sm font-medium transition-colors last:border-b-0 lg:min-w-full lg:border-b-0 ${isActive
+                        ? 'bg-blue-50 text-blue-700 lg:border-l-4 lg:border-blue-500'
+                        : 'text-gray-600 hover:bg-gray-50 lg:border-l-4 lg:border-transparent'
+                        }`}
                     >
                       <div className="flex items-center justify-center gap-2 lg:justify-start">
                         <i className={`${config.icon} text-base`}></i>
@@ -9601,39 +9649,39 @@ const AdminPage: React.FC = () => {
 
     const kpiItems = analyticsData
       ? [
-          {
-            title: '총 매출',
-            value: formatCurrency(analyticsData.summary.totalRevenue),
-            change: analyticsData.summary.revenueGrowth,
-            caption: '완료된 주문 기준',
-            icon: 'ri-coins-line',
-            iconWrapperClass: 'bg-amber-100 text-amber-600',
-          },
-          {
-            title: '총 주문 수',
-            value: analyticsData.summary.totalOrders.toLocaleString('ko-KR'),
-            change: analyticsData.summary.orderGrowth,
-            caption: '기간 내 완료된 주문',
-            icon: 'ri-shopping-bag-3-line',
-            iconWrapperClass: 'bg-blue-100 text-blue-600',
-          },
-          {
-            title: '총 회원 수',
-            value: analyticsData.summary.totalCustomers.toLocaleString('ko-KR'),
-            change: analyticsData.summary.customerGrowth,
-            caption: '신규 회원 증감률',
-            icon: 'ri-user-3-line',
-            iconWrapperClass: 'bg-sky-100 text-sky-600',
-          },
-          {
-            title: '평균 주문 금액',
-            value: formatCurrency(analyticsData.summary.averageOrderValue),
-            change: analyticsData.summary.averageOrderGrowth,
-            caption: '주문당 평균 매출',
-            icon: 'ri-line-chart-line',
-            iconWrapperClass: 'bg-emerald-100 text-emerald-600',
-          },
-        ]
+        {
+          title: '총 매출',
+          value: formatCurrency(analyticsData.summary.totalRevenue),
+          change: analyticsData.summary.revenueGrowth,
+          caption: '완료된 주문 기준',
+          icon: 'ri-coins-line',
+          iconWrapperClass: 'bg-amber-100 text-amber-600',
+        },
+        {
+          title: '총 주문 수',
+          value: analyticsData.summary.totalOrders.toLocaleString('ko-KR'),
+          change: analyticsData.summary.orderGrowth,
+          caption: '기간 내 완료된 주문',
+          icon: 'ri-shopping-bag-3-line',
+          iconWrapperClass: 'bg-blue-100 text-blue-600',
+        },
+        {
+          title: '총 회원 수',
+          value: analyticsData.summary.totalCustomers.toLocaleString('ko-KR'),
+          change: analyticsData.summary.customerGrowth,
+          caption: '신규 회원 증감률',
+          icon: 'ri-user-3-line',
+          iconWrapperClass: 'bg-sky-100 text-sky-600',
+        },
+        {
+          title: '평균 주문 금액',
+          value: formatCurrency(analyticsData.summary.averageOrderValue),
+          change: analyticsData.summary.averageOrderGrowth,
+          caption: '주문당 평균 매출',
+          icon: 'ri-line-chart-line',
+          iconWrapperClass: 'bg-emerald-100 text-emerald-600',
+        },
+      ]
       : [];
 
     const isExportDisabled = !analyticsData || analyticsLoading || analyticsExporting;
@@ -9647,11 +9695,10 @@ const AdminPage: React.FC = () => {
                 key={option.value}
                 type="button"
                 onClick={() => handleAnalyticsPeriodChange(option.value)}
-                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
-                  analyticsPeriod === option.value
-                    ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
-                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100'
-                }`}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${analyticsPeriod === option.value
+                  ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
+                  : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100'
+                  }`}
                 disabled={analyticsLoading && analyticsPeriod === option.value}
               >
                 {option.label}
@@ -9735,276 +9782,276 @@ const AdminPage: React.FC = () => {
               ))}
             </div>
 
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">매출 추이</h3>
-                  <p className="text-sm text-gray-500">기간 내 매출 흐름</p>
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">매출 추이</h3>
+                    <p className="text-sm text-gray-500">기간 내 매출 흐름</p>
+                  </div>
+                </div>
+                <div className="mt-6 h-[300px]">
+                  {revenueData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={revenueData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                        <YAxis tickFormatter={(value: number) => `₩${value.toLocaleString('ko-KR')}`} />
+                        <Tooltip
+                          formatter={(value: number, name: string) => {
+                            if (name === 'revenue') {
+                              return [`₩${value.toLocaleString('ko-KR')}`, '매출'];
+                            }
+                            if (name === 'orders') {
+                              return [`${value.toLocaleString('ko-KR')}건`, '주문 수'];
+                            }
+                            return value;
+                          }}
+                        />
+                        <Line type="monotone" dataKey="revenue" name="매출" stroke="#2563eb" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                      표시할 데이터가 없습니다.
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="mt-6 h-[300px]">
-                {revenueData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={revenueData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-                      <YAxis tickFormatter={(value: number) => `₩${value.toLocaleString('ko-KR')}`} />
-                      <Tooltip
-                        formatter={(value: number, name: string) => {
-                          if (name === 'revenue') {
-                            return [`₩${value.toLocaleString('ko-KR')}`, '매출'];
+
+              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">주문 추이</h3>
+                    <p className="text-sm text-gray-500">기간 내 주문 수 변화</p>
+                  </div>
+                </div>
+                <div className="mt-6 h-[300px]">
+                  {revenueData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={revenueData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                        <YAxis tickFormatter={(value: number) => `${value.toLocaleString('ko-KR')}건`} />
+                        <Tooltip formatter={(value: number) => [`${value.toLocaleString('ko-KR')}건`, '주문 수']} />
+                        <Area type="monotone" dataKey="orders" name="주문 수" stroke="#22c55e" fill="#bbf7d0" fillOpacity={0.6} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                      표시할 데이터가 없습니다.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">인기 악보 Top 10</h3>
+                    <p className="text-sm text-gray-500">주문 수 기준 상위 악보</p>
+                  </div>
+                </div>
+                <div className="h-[320px]">
+                  {popularData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={popularData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="title"
+                          tickFormatter={(value: string) => (value.length > 8 ? `${value.slice(0, 8)}…` : value)}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis tickFormatter={(value: number) => `${value.toLocaleString('ko-KR')}건`} />
+                        <Tooltip
+                          formatter={(value: number, name: string) =>
+                            name === 'orders'
+                              ? [`${value.toLocaleString('ko-KR')}건`, '주문 수']
+                              : [`₩${value.toLocaleString('ko-KR')}`, '매출']
                           }
-                          if (name === 'orders') {
-                            return [`${value.toLocaleString('ko-KR')}건`, '주문 수'];
-                          }
-                          return value;
-                        }}
-                      />
-                      <Line type="monotone" dataKey="revenue" name="매출" stroke="#2563eb" strokeWidth={2} dot={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-gray-500">
-                    표시할 데이터가 없습니다.
+                        />
+                        <Legend />
+                        <Bar dataKey="orders" name="주문 수" fill="#2563eb" radius={[6, 6, 0, 0]} />
+                        <Bar dataKey="revenue" name="매출" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                      표시할 데이터가 없습니다.
+                    </div>
+                  )}
+                </div>
+                <div className="mt-6 divide-y divide-gray-100 rounded-lg border border-gray-100">
+                  {popularData.slice(0, 5).map((sheet, index) => (
+                    <div key={sheet.sheetId} className="flex items-center justify-between px-4 py-3 text-sm">
+                      <div>
+                        <p className="font-semibold text-gray-900">
+                          {index + 1}. {sheet.title}
+                        </p>
+                        <p className="text-xs text-gray-500">{sheet.artist}</p>
+                      </div>
+                      <div className="text-right text-xs text-gray-500">
+                        <p>주문 {sheet.orders.toLocaleString('ko-KR')}건</p>
+                        <p className="text-gray-600">매출 {formatCurrency(sheet.revenue)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">카테고리별 판매 비중</h3>
+                    <p className="text-sm text-gray-500">매출 기준 분포</p>
                   </div>
-                )}
+                </div>
+                <div className="h-[320px]">
+                  {categoryData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={categoryData}
+                          dataKey="revenue"
+                          nameKey="categoryName"
+                          innerRadius={60}
+                          outerRadius={100}
+                          paddingAngle={4}
+                        >
+                          {categoryData.map((entry, index) => (
+                            <Cell
+                              key={entry.categoryId ?? `category-${index}`}
+                              fill={pieColors[index % pieColors.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number) => `₩${value.toLocaleString('ko-KR')}`} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                      표시할 데이터가 없습니다.
+                    </div>
+                  )}
+                </div>
+                <div className="mt-6 space-y-3">
+                  {categoryData.map((category, index) => (
+                    <div
+                      key={category.categoryId ?? `category-${index}`}
+                      className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3 text-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="inline-flex h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: pieColors[index % pieColors.length] }}
+                        ></span>
+                        <span className="font-medium text-gray-900">{category.categoryName}</span>
+                      </div>
+                      <div className="text-right text-xs text-gray-500">
+                        <p>매출 {formatCurrency(category.revenue)}</p>
+                        <p>주문 {category.orders.toLocaleString('ko-KR')}건</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">주문 추이</h3>
-                  <p className="text-sm text-gray-500">기간 내 주문 수 변화</p>
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">커스텀 주문 현황</h3>
+                    <p className="text-sm text-gray-500">상태별 분포와 평균 견적</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                    <p className="text-xs text-gray-500">총 요청</p>
+                    <p className="mt-1 text-xl font-semibold text-gray-900">
+                      {analyticsData.customOrder.metrics.totalCount.toLocaleString('ko-KR')}건
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                    <p className="text-xs text-gray-500">진행 중</p>
+                    <p className="mt-1 text-xl font-semibold text-gray-900">
+                      {analyticsData.customOrder.metrics.activeCount.toLocaleString('ko-KR')}건
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                    <p className="text-xs text-gray-500">평균 견적 금액</p>
+                    <p className="mt-1 text-xl font-semibold text-gray-900">
+                      {formatCurrency(analyticsData.customOrder.metrics.averageEstimatedPrice)}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-6 h-[280px]">
+                  {customStatusData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={customStatusData} dataKey="count" nameKey="status" innerRadius={60} outerRadius={100} paddingAngle={4}>
+                          {customStatusData.map((entry, index) => (
+                            <Cell
+                              key={entry.status}
+                              fill={statusColorMap[entry.status] ?? pieColors[index % pieColors.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number) => `${value.toLocaleString('ko-KR')}건`} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                      표시할 데이터가 없습니다.
+                    </div>
+                  )}
+                </div>
+                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {customStatusData.map((entry) => (
+                    <div
+                      key={entry.status}
+                      className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3 text-sm"
+                    >
+                      <span className="font-medium text-gray-700">
+                        {getCustomOrderStatusLabel(entry.status)}
+                      </span>
+                      <span className="font-semibold text-gray-900">
+                        {entry.count.toLocaleString('ko-KR')}건
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div className="mt-6 h-[300px]">
-                {revenueData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={revenueData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-                      <YAxis tickFormatter={(value: number) => `${value.toLocaleString('ko-KR')}건`} />
-                      <Tooltip formatter={(value: number) => [`${value.toLocaleString('ko-KR')}건`, '주문 수']} />
-                      <Area type="monotone" dataKey="orders" name="주문 수" stroke="#22c55e" fill="#bbf7d0" fillOpacity={0.6} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-gray-500">
-                    표시할 데이터가 없습니다.
+
+              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">신규 회원 추이</h3>
+                    <p className="text-sm text-gray-500">기간 내 가입한 회원 수</p>
                   </div>
-                )}
+                </div>
+                <div className="h-[320px]">
+                  {newUsersData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={newUsersData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                        <YAxis tickFormatter={(value: number) => `${value.toLocaleString('ko-KR')}명`} />
+                        <Tooltip formatter={(value: number) => [`${value.toLocaleString('ko-KR')}명`, '신규 회원']} />
+                        <Line type="monotone" dataKey="count" name="신규 회원" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                      표시할 데이터가 없습니다.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="mb-6 flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">인기 악보 Top 10</h3>
-                  <p className="text-sm text-gray-500">주문 수 기준 상위 악보</p>
-                </div>
-              </div>
-              <div className="h-[320px]">
-                {popularData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={popularData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="title"
-                        tickFormatter={(value: string) => (value.length > 8 ? `${value.slice(0, 8)}…` : value)}
-                        tick={{ fontSize: 12 }}
-                      />
-                      <YAxis tickFormatter={(value: number) => `${value.toLocaleString('ko-KR')}건`} />
-                      <Tooltip
-                        formatter={(value: number, name: string) =>
-                          name === 'orders'
-                            ? [`${value.toLocaleString('ko-KR')}건`, '주문 수']
-                            : [`₩${value.toLocaleString('ko-KR')}`, '매출']
-                        }
-                      />
-                      <Legend />
-                      <Bar dataKey="orders" name="주문 수" fill="#2563eb" radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="revenue" name="매출" fill="#f59e0b" radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-gray-500">
-                    표시할 데이터가 없습니다.
-                  </div>
-                )}
-              </div>
-              <div className="mt-6 divide-y divide-gray-100 rounded-lg border border-gray-100">
-                {popularData.slice(0, 5).map((sheet, index) => (
-                  <div key={sheet.sheetId} className="flex items-center justify-between px-4 py-3 text-sm">
-                    <div>
-                      <p className="font-semibold text-gray-900">
-                        {index + 1}. {sheet.title}
-                      </p>
-                      <p className="text-xs text-gray-500">{sheet.artist}</p>
-                    </div>
-                    <div className="text-right text-xs text-gray-500">
-                      <p>주문 {sheet.orders.toLocaleString('ko-KR')}건</p>
-                      <p className="text-gray-600">매출 {formatCurrency(sheet.revenue)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="mb-6 flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">카테고리별 판매 비중</h3>
-                  <p className="text-sm text-gray-500">매출 기준 분포</p>
-                </div>
-              </div>
-              <div className="h-[320px]">
-                {categoryData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={categoryData}
-                        dataKey="revenue"
-                        nameKey="categoryName"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={4}
-                      >
-                        {categoryData.map((entry, index) => (
-                          <Cell
-                            key={entry.categoryId ?? `category-${index}`}
-                            fill={pieColors[index % pieColors.length]}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value: number) => `₩${value.toLocaleString('ko-KR')}`} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-gray-500">
-                    표시할 데이터가 없습니다.
-                  </div>
-                )}
-              </div>
-              <div className="mt-6 space-y-3">
-                {categoryData.map((category, index) => (
-                  <div
-                    key={category.categoryId ?? `category-${index}`}
-                    className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3 text-sm"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="inline-flex h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: pieColors[index % pieColors.length] }}
-                      ></span>
-                      <span className="font-medium text-gray-900">{category.categoryName}</span>
-                    </div>
-                    <div className="text-right text-xs text-gray-500">
-                      <p>매출 {formatCurrency(category.revenue)}</p>
-                      <p>주문 {category.orders.toLocaleString('ko-KR')}건</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="mb-6 flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">커스텀 주문 현황</h3>
-                  <p className="text-sm text-gray-500">상태별 분포와 평균 견적</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-                  <p className="text-xs text-gray-500">총 요청</p>
-                  <p className="mt-1 text-xl font-semibold text-gray-900">
-                    {analyticsData.customOrder.metrics.totalCount.toLocaleString('ko-KR')}건
-                  </p>
-                </div>
-                <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-                  <p className="text-xs text-gray-500">진행 중</p>
-                  <p className="mt-1 text-xl font-semibold text-gray-900">
-                    {analyticsData.customOrder.metrics.activeCount.toLocaleString('ko-KR')}건
-                  </p>
-                </div>
-                <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-                  <p className="text-xs text-gray-500">평균 견적 금액</p>
-                  <p className="mt-1 text-xl font-semibold text-gray-900">
-                    {formatCurrency(analyticsData.customOrder.metrics.averageEstimatedPrice)}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-6 h-[280px]">
-                {customStatusData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={customStatusData} dataKey="count" nameKey="status" innerRadius={60} outerRadius={100} paddingAngle={4}>
-                        {customStatusData.map((entry, index) => (
-                          <Cell
-                            key={entry.status}
-                            fill={statusColorMap[entry.status] ?? pieColors[index % pieColors.length]}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value: number) => `${value.toLocaleString('ko-KR')}건`} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-gray-500">
-                    표시할 데이터가 없습니다.
-                  </div>
-                )}
-              </div>
-              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                {customStatusData.map((entry) => (
-                  <div
-                    key={entry.status}
-                    className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3 text-sm"
-                  >
-                    <span className="font-medium text-gray-700">
-                      {getCustomOrderStatusLabel(entry.status)}
-                    </span>
-                    <span className="font-semibold text-gray-900">
-                      {entry.count.toLocaleString('ko-KR')}건
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="mb-6 flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">신규 회원 추이</h3>
-                  <p className="text-sm text-gray-500">기간 내 가입한 회원 수</p>
-                </div>
-              </div>
-              <div className="h-[320px]">
-                {newUsersData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={newUsersData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-                      <YAxis tickFormatter={(value: number) => `${value.toLocaleString('ko-KR')}명`} />
-                      <Tooltip formatter={(value: number) => [`${value.toLocaleString('ko-KR')}명`, '신규 회원']} />
-                      <Line type="monotone" dataKey="count" name="신규 회원" stroke="#8b5cf6" strokeWidth={2} dot={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-gray-500">
-                    표시할 데이터가 없습니다.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
         ) : (
           <div className="rounded-xl border border-gray-200 bg-white p-12 text-center text-gray-500">
             아직 집계된 데이터가 없습니다.
@@ -10073,11 +10120,10 @@ const AdminPage: React.FC = () => {
                 key={range.key}
                 type="button"
                 onClick={() => handleSelectCopyrightQuickRange(range.key)}
-                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
-                  copyrightQuickRange === range.key
-                    ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
-                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100'
-                }`}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${copyrightQuickRange === range.key
+                  ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
+                  : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100'
+                  }`}
                 disabled={copyrightReportLoading}
               >
                 {range.label}
@@ -10464,9 +10510,8 @@ const AdminPage: React.FC = () => {
       )}
 
       {/* 사이드바 */}
-      <div className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-white shadow-sm border-r border-gray-200 flex flex-col transform transition-transform duration-300 ease-in-out md:transform-none ${
-        isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-      }`}>
+      <div className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-white shadow-sm border-r border-gray-200 flex flex-col transform transition-transform duration-300 ease-in-out md:transform-none ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}>
         <div className="p-4 md:p-6 border-b border-gray-200 flex items-center justify-between">
           <h1 className="text-lg md:text-xl font-bold text-gray-900">관리자 패널</h1>
           <button
@@ -10481,9 +10526,8 @@ const AdminPage: React.FC = () => {
         <nav className="flex-1 p-3 md:p-4 space-y-2 overflow-y-auto">
           <button
             onClick={() => handleMenuClick('dashboard')}
-            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeMenu === 'dashboard' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${activeMenu === 'dashboard' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <i className="ri-home-line w-5 h-5"></i>
             <span className="text-sm md:text-base">대시보드</span>
@@ -10491,9 +10535,8 @@ const AdminPage: React.FC = () => {
 
           <button
             onClick={() => handleMenuClick('member-list')}
-            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeMenu === 'member-list' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${activeMenu === 'member-list' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <i className="ri-user-line w-5 h-5"></i>
             <span className="text-sm md:text-base">회원 관리</span>
@@ -10501,9 +10544,8 @@ const AdminPage: React.FC = () => {
 
           <button
             onClick={() => handleMenuClick('sheets')}
-            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeMenu === 'sheets' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${activeMenu === 'sheets' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <i className="ri-music-line w-5 h-5"></i>
             <span className="text-sm md:text-base">악보 관리</span>
@@ -10511,9 +10553,8 @@ const AdminPage: React.FC = () => {
 
           <button
             onClick={() => handleMenuClick('categories')}
-            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeMenu === 'categories' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${activeMenu === 'categories' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <i className="ri-folder-open-line w-5 h-5"></i>
             <span className="text-sm md:text-base">카테고리 관리</span>
@@ -10521,9 +10562,8 @@ const AdminPage: React.FC = () => {
 
           <button
             onClick={() => handleMenuClick('collections')}
-            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeMenu === 'collections' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${activeMenu === 'collections' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <i className="ri-bookmark-line w-5 h-5"></i>
             <span className="text-sm md:text-base">악보모음집 관리</span>
@@ -10531,9 +10571,8 @@ const AdminPage: React.FC = () => {
 
           <button
             onClick={() => handleMenuClick('event-discounts')}
-            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeMenu === 'event-discounts' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${activeMenu === 'event-discounts' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <i className="ri-fire-line w-5 h-5"></i>
             <span className="text-sm md:text-base">이벤트 할인악보</span>
@@ -10541,9 +10580,8 @@ const AdminPage: React.FC = () => {
 
           <button
             onClick={() => handleMenuClick('orders')}
-            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeMenu === 'orders' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${activeMenu === 'orders' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <i className="ri-shopping-cart-line w-5 h-5"></i>
             <span className="text-sm md:text-base">주문 관리</span>
@@ -10551,9 +10589,8 @@ const AdminPage: React.FC = () => {
 
           <button
             onClick={() => handleMenuClick('inquiries')}
-            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeMenu === 'inquiries' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${activeMenu === 'inquiries' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <span className="flex items-center gap-3">
               <i className="ri-customer-service-2-line w-5 h-5"></i>
@@ -10568,9 +10605,8 @@ const AdminPage: React.FC = () => {
 
           <button
             onClick={() => handleMenuClick('custom-orders')}
-            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeMenu === 'custom-orders' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${activeMenu === 'custom-orders' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <span className="flex items-center gap-3">
               <i className="ri-clipboard-line w-5 h-5"></i>
@@ -10585,9 +10621,8 @@ const AdminPage: React.FC = () => {
 
           <button
             onClick={() => handleMenuClick('points')}
-            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeMenu === 'points' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${activeMenu === 'points' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <i className="ri-star-line w-5 h-5"></i>
             <span className="text-sm md:text-base">적립금 관리</span>
@@ -10595,11 +10630,10 @@ const AdminPage: React.FC = () => {
 
           <button
             onClick={() => handleMenuClick('copyright-report')}
-            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeMenu === 'copyright-report'
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${activeMenu === 'copyright-report'
+              ? 'bg-blue-100 text-blue-700'
+              : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <i className="ri-file-chart-line w-5 h-5"></i>
             <span className="text-sm md:text-base">저작권 보고</span>
@@ -10607,9 +10641,8 @@ const AdminPage: React.FC = () => {
 
           <button
             onClick={() => handleMenuClick('analytics')}
-            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeMenu === 'analytics' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${activeMenu === 'analytics' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <i className="ri-bar-chart-line w-5 h-5"></i>
             <span className="text-sm md:text-base">분석</span>
@@ -10617,9 +10650,8 @@ const AdminPage: React.FC = () => {
 
           <button
             onClick={() => handleMenuClick('settings')}
-            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-              activeMenu === 'settings' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${activeMenu === 'settings' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <i className="ri-settings-line w-5 h-5"></i>
             <span className="text-sm md:text-base">설정</span>
@@ -10653,18 +10685,18 @@ const AdminPage: React.FC = () => {
                 </button>
                 <h2 className="text-base md:text-lg font-semibold text-gray-900 truncate">
                   {activeMenu === 'dashboard' ? '대시보드' :
-                   activeMenu === 'member-list' ? '회원 관리' :
-                   activeMenu === 'sheets' ? '악보 관리' :
-                   activeMenu === 'categories' ? '카테고리 관리' :
-                   activeMenu === 'collections' ? '악보모음집 관리' :
-                   activeMenu === 'event-discounts' ? '이벤트 할인악보 관리' :
-                   activeMenu === 'orders' ? '주문 관리' :
-                   activeMenu === 'inquiries' ? '채팅 상담 관리' :
-                   activeMenu === 'custom-orders' ? '주문 제작 관리' :
-                   activeMenu === 'points' ? '적립금 관리' :
-                   activeMenu === 'copyright-report' ? '저작권 보고' :
-                   activeMenu === 'analytics' ? '분석' :
-                   activeMenu === 'settings' ? '설정' : '대시보드'}
+                    activeMenu === 'member-list' ? '회원 관리' :
+                      activeMenu === 'sheets' ? '악보 관리' :
+                        activeMenu === 'categories' ? '카테고리 관리' :
+                          activeMenu === 'collections' ? '악보모음집 관리' :
+                            activeMenu === 'event-discounts' ? '이벤트 할인악보 관리' :
+                              activeMenu === 'orders' ? '주문 관리' :
+                                activeMenu === 'inquiries' ? '채팅 상담 관리' :
+                                  activeMenu === 'custom-orders' ? '주문 제작 관리' :
+                                    activeMenu === 'points' ? '적립금 관리' :
+                                      activeMenu === 'copyright-report' ? '저작권 보고' :
+                                        activeMenu === 'analytics' ? '분석' :
+                                          activeMenu === 'settings' ? '설정' : '대시보드'}
                 </h2>
               </div>
               <div className="flex items-center">

@@ -10,6 +10,7 @@ import { getUserDisplayName } from '../../utils/userDisplayName';
 import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
 import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
 import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
+import { useUserCashBalance } from '../../hooks/useUserCashBalance';
 
 interface MobileMenuSidebarProps {
   isOpen: boolean;
@@ -39,8 +40,10 @@ export default function MobileMenuSidebar({
   const navigate = useNavigate();
   const location = useLocation();
   const { t, i18n } = useTranslation();
-  const [userCash, setUserCash] = useState(0);
   const [profile, setProfile] = useState<Profile | null>(null);
+
+  // 마이페이지와 동일한 훅 사용 (통일된 캐시 잔액 조회)
+  const { credits: userCash, loading: cashLoading, error: cashError } = useUserCashBalance(user);
 
   const greeting = useMemo(() => {
     if (!user) {
@@ -62,41 +65,38 @@ export default function MobileMenuSidebar({
     [i18n.language],
   );
 
-  const loadUserCash = useCallback(async () => {
+  // 프로필 정보 로드 (display_name, email 등)
+  useEffect(() => {
     if (!user) {
-      setUserCash(0);
       setProfile(null);
       return;
     }
 
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('credits, display_name, email')
-        .eq('id', user.id)
-        .single();
+    const loadProfile = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('display_name, email')
+          .eq('id', user.id)
+          .single();
 
-      if (error) {
-        console.error('모바일 캐쉬 조회 오류:', error);
-        setUserCash(0);
-        return;
+        if (error) {
+          console.error('모바일 프로필 조회 오류:', error);
+          return;
+        }
+
+        if (data) {
+          setProfile(data as Profile);
+        }
+      } catch (error) {
+        console.error('모바일 프로필 로드 오류:', error);
       }
+    };
 
-      setUserCash(data?.credits || 0);
-      if (data) {
-        setProfile(data as Profile);
-      }
-    } catch (error) {
-      console.error('모바일 캐쉬 로드 오류:', error);
-      setUserCash(0);
+    if (isOpen) {
+      void loadProfile();
     }
-  }, [user]);
-
-  useEffect(() => {
-    if (isOpen && user) {
-      void loadUserCash();
-    }
-  }, [isOpen, user, loadUserCash]);
+  }, [isOpen, user]);
 
   const handleNavigate = (href: string) => {
     navigate(href);
@@ -144,7 +144,13 @@ export default function MobileMenuSidebar({
                 <div className="mt-2 flex items-center gap-2">
                   <i className="ri-wallet-3-line text-blue-600"></i>
                   <span className="text-xs text-gray-600">보유 악보캐쉬</span>
-                  <span className="text-sm font-bold text-blue-600">{formatCurrency(userCash)}</span>
+                  {cashLoading ? (
+                    <span className="text-sm font-bold text-blue-400 animate-pulse">{t('sidebar.loading')}</span>
+                  ) : cashError ? (
+                    <span className="text-sm font-bold text-red-500">{t('sidebar.error')}</span>
+                  ) : (
+                    <span className="text-sm font-bold text-blue-600">{formatCurrency(userCash)}</span>
+                  )}
                 </div>
               </>
             ) : (

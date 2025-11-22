@@ -21,6 +21,7 @@ import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import { calculatePointPrice } from '../../lib/pointPrice';
+import { useSiteLanguage } from '../../hooks/useSiteLanguage';
 
 interface DrumSheet {
   id: string;
@@ -62,11 +63,11 @@ export default function SheetDetailPage() {
   const [showPayPalModal, setShowPayPalModal] = useState(false);
   const eventIsActive = eventDiscount ? isEventActive(eventDiscount) : false;
   const { i18n, t } = useTranslation();
+  const { isKoreanSite } = useSiteLanguage();
 
   // Phase 4: 통합 통화 로직 적용 (currency를 먼저 선언)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
   const currency = getSiteCurrency(hostname);
-  const isKoreanSite = currency === 'KRW';
 
   const displayPrice = sheet ? (eventDiscount && eventIsActive ? eventDiscount.discount_price : sheet.price) : 0;
 
@@ -857,19 +858,22 @@ export default function SheetDetailPage() {
                     <i className={`ri-heart-${isFavoriteSheet ? 'fill' : 'line'} text-xl`} />
                   </button>
                 </div>
-                <button
-                  onClick={handlePurchase}
-                  disabled={purchasing || paymentProcessing}
-                  className="w-full bg-blue-600 text-white py-4 px-6 rounded-lg hover:bg-blue-700 font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer transition-colors"
-                >
-                  {paymentProcessing
-                    ? t('categories.paymentPreparing')
-                    : purchasing
-                      ? t('categories.processing')
-                      : eventDiscount && eventIsActive
-                        ? t('categories.eventBuyNow')
-                        : t('categories.buyNow')}
-                </button>
+                {/* Buy Now 버튼: 한국어 사이트에서만 표시 */}
+                {isKoreanSite && (
+                  <button
+                    onClick={handlePurchase}
+                    disabled={purchasing || paymentProcessing}
+                    className="w-full bg-blue-600 text-white py-4 px-6 rounded-lg hover:bg-blue-700 font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer transition-colors"
+                  >
+                    {paymentProcessing
+                      ? t('categories.paymentPreparing')
+                      : purchasing
+                        ? t('categories.processing')
+                        : eventDiscount && eventIsActive
+                          ? t('categories.eventBuyNow')
+                          : t('categories.buyNow')}
+                  </button>
+                )}
 
                 <button
                   onClick={handleAddToCart}

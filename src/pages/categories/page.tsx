@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { calculatePointPrice } from '../../lib/pointPrice';
 
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
+import { useSiteLanguage } from '../../hooks/useSiteLanguage';
 
 interface Category {
   id: string;
@@ -91,13 +92,11 @@ const CategoriesPage: React.FC = () => {
   const [insufficientCashInfo, setInsufficientCashInfo] = useState<{ currentBalance: number; requiredAmount: number } | null>(null);
   const [showPayPalModal, setShowPayPalModal] = useState(false);
   const { i18n, t } = useTranslation();
+  const { isKoreanSite } = useSiteLanguage();
 
   // 통합 통화 로직 적용
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
   const currency = getSiteCurrency(hostname);
-
-  // 한국어 사이트 여부 확인
-  const isKoreanSite = currency === 'KRW';
 
   // 장르 목록 (순서대로) - 한글 원본 (한글 사이트용)
   const genreListKo = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
@@ -1009,13 +1008,16 @@ const CategoriesPage: React.FC = () => {
                             >
                               {t('categoriesPage.addToCart')}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleBuyNow(sheet.id)}
-                              className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700"
-                            >
-                              {t('categoriesPage.buyNow')}
-                            </button>
+                            {/* Buy Now 버튼: 한국어 사이트에서만 표시 */}
+                            {isKoreanSite && (
+                              <button
+                                type="button"
+                                onClick={() => handleBuyNow(sheet.id)}
+                                className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700"
+                              >
+                                {t('categoriesPage.buyNow')}
+                              </button>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1216,13 +1218,16 @@ const CategoriesPage: React.FC = () => {
                 >
                   {t('categoriesPage.addToCart')}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleBuyNow(selectedSheet.id)}
-                  className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow hover:bg-blue-700"
-                >
-                  {t('categoriesPage.buyNow')}
-                </button>
+                {/* Buy Now 버튼: 한국어 사이트에서만 표시 */}
+                {isKoreanSite && (
+                  <button
+                    type="button"
+                    onClick={() => handleBuyNow(selectedSheet.id)}
+                    className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow hover:bg-blue-700"
+                  >
+                    {t('categoriesPage.buyNow')}
+                  </button>
+                )}
               </div>
               <button
                 type="button"
@@ -1529,13 +1534,16 @@ const CategoriesPage: React.FC = () => {
                           >
                             {t('categoriesPage.addToCartFull')}
                           </button>
-                          <button
-                            onClick={() => handleBuyNow(selectedSheet.id)}
-                            disabled={buyingSheetId === selectedSheet.id}
-                            className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {buyingSheetId === selectedSheet.id ? t('categoriesPage.processing') : t('categoriesPage.buyNow')}
-                          </button>
+                          {/* Buy Now 버튼: 한국어 사이트에서만 표시 */}
+                          {isKoreanSite && (
+                            <button
+                              onClick={() => handleBuyNow(selectedSheet.id)}
+                              disabled={buyingSheetId === selectedSheet.id}
+                              className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {buyingSheetId === selectedSheet.id ? t('categoriesPage.processing') : t('categoriesPage.buyNow')}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1843,20 +1851,23 @@ const CategoriesPage: React.FC = () => {
                               >
                                 {t('categoriesPage.addToCart')}
                               </button>
-                              <button
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  await handleBuyNow(sheet.id);
-                                }}
-                                disabled={buyingSheetId === sheet.id || paymentProcessing}
-                                className="px-4 py-2.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {buyingSheetId === sheet.id
-                                  ? paymentProcessing
-                                    ? t('categoriesPage.paymentPreparing')
-                                    : t('categoriesPage.processing')
-                                  : t('categoriesPage.buyNow')}
-                              </button>
+                              {/* Buy Now 버튼: 한국어 사이트에서만 표시 */}
+                              {isKoreanSite && (
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    await handleBuyNow(sheet.id);
+                                  }}
+                                  disabled={buyingSheetId === sheet.id || paymentProcessing}
+                                  className="px-4 py-2.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {buyingSheetId === sheet.id
+                                    ? paymentProcessing
+                                      ? t('categoriesPage.paymentPreparing')
+                                      : t('categoriesPage.processing')
+                                    : t('categoriesPage.buyNow')}
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>

@@ -56,6 +56,7 @@ Object.keys(jsonMessages).forEach((lang) => {
 });
 
 import { getLocaleFromHost } from './getLocaleFromHost';
+import { getLanguageFromPath } from './languages';
 
 const getCurrentHostLanguage = () => {
   if (typeof window === 'undefined') {
@@ -72,7 +73,13 @@ const getCurrentHostLanguage = () => {
     return 'en';
   }
 
-  // 2. Hostname Check (New logic)
+  // 2. URL Path Check (Check for /en/, /jp/, /ko/ etc.)
+  const pathLang = getLanguageFromPath(window.location.pathname);
+  if (pathLang && supportedLanguages.includes(pathLang)) {
+    return pathLang;
+  }
+
+  // 3. Hostname Check (Fallback to hostname-based detection)
   return getLocaleFromHost(window.location.host);
 };
 
