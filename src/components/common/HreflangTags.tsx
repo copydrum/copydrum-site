@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 const ALT_LINKS = [
   { hreflang: 'ko', baseUrl: 'https://copydrum.com' },
   { hreflang: 'en', baseUrl: 'https://en.copydrum.com' },
+  { hreflang: 'ja', baseUrl: 'https://jp.copydrum.com' },
 ];
 
 export default function HreflangTags() {
