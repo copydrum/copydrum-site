@@ -316,28 +316,7 @@ export default function SheetDetailPage() {
     }
   };
 
-  const handlePurchase = async () => {
-    if (!user) {
-      navigate('/auth/login');
-      return;
-    }
 
-    if (!sheet) return;
-
-    try {
-      const alreadyPurchased = await hasPurchasedSheet(user.id, sheet.id);
-      if (alreadyPurchased) {
-        alert(t('sheetDetail.alreadyPurchased'));
-        return;
-      }
-    } catch (error) {
-      console.error('구매 이력 확인 오류:', error);
-      alert(t('sheetDetail.purchaseCheckError'));
-      return;
-    }
-
-    setShowPaymentSelector(true);
-  };
 
   const handlePayPalInitiate = async (elementId: string) => {
     if (!user || !sheet) return;
@@ -858,22 +837,7 @@ export default function SheetDetailPage() {
                     <i className={`ri-heart-${isFavoriteSheet ? 'fill' : 'line'} text-xl`} />
                   </button>
                 </div>
-                {/* Buy Now 버튼: 한국어 사이트에서만 표시 */}
-                {isKoreanSite && (
-                  <button
-                    onClick={handlePurchase}
-                    disabled={purchasing || paymentProcessing}
-                    className="w-full bg-blue-600 text-white py-4 px-6 rounded-lg hover:bg-blue-700 font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer transition-colors"
-                  >
-                    {paymentProcessing
-                      ? t('categories.paymentPreparing')
-                      : purchasing
-                        ? t('categories.processing')
-                        : eventDiscount && eventIsActive
-                          ? t('categories.eventBuyNow')
-                          : t('categories.buyNow')}
-                  </button>
-                )}
+
 
                 <button
                   onClick={handleAddToCart}

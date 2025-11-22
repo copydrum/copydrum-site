@@ -608,38 +608,7 @@ const CategoriesPage: React.FC = () => {
     await addToCart(sheetId);
   };
 
-  const handleBuyNow = async (sheetId: string) => {
-    if (!user) {
-      navigate('/auth/login');
-      return;
-    }
 
-    const sheet = drumSheets.find((item) => item.id === sheetId);
-    if (!sheet) {
-      alert(t('categoriesPage.sheetNotFound'));
-      return;
-    }
-
-    setBuyingSheetId(sheetId);
-    setBankTransferInfo(null);
-    try {
-      const alreadyPurchased = await hasPurchasedSheet(user.id, sheetId);
-      if (alreadyPurchased) {
-        alert(t('categoriesPage.alreadyPurchasedGeneric'));
-        setBuyingSheetId(null);
-        return;
-      }
-
-      setPendingPurchaseSheet(sheet);
-      setShowPaymentSelector(true);
-    } catch (error) {
-      console.error('바로구매 사전 확인 오류:', error);
-      alert(t('categoriesPage.purchaseCheckError'));
-      setBuyingSheetId(null);
-    } finally {
-      // keep buyingSheetId while modal is open
-    }
-  };
 
   const handleToggleFavorite = async (sheetId: string) => {
     if (!user) {
@@ -1008,16 +977,6 @@ const CategoriesPage: React.FC = () => {
                             >
                               {t('categoriesPage.addToCart')}
                             </button>
-                            {/* Buy Now 버튼: 한국어 사이트에서만 표시 */}
-                            {isKoreanSite && (
-                              <button
-                                type="button"
-                                onClick={() => handleBuyNow(sheet.id)}
-                                className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700"
-                              >
-                                {t('categoriesPage.buyNow')}
-                              </button>
-                            )}
                           </div>
                         </div>
                       )}
@@ -1116,130 +1075,122 @@ const CategoriesPage: React.FC = () => {
       </div>
 
       {/* Mobile Detail Bottom Sheet */}
-      {selectedSheet && isMobileDetailOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex items-end bg-black/60 backdrop-blur-sm">
-          <div className="w-full rounded-t-3xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">{selectedSheet.title}</h3>
-              <button
-                type="button"
-                onClick={closeMobileDetail}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <i className="ri-close-fill text-2xl" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div className="overflow-hidden rounded-2xl">
-                <img
-                  src={getThumbnailUrl(selectedSheet)}
-                  alt={selectedSheet.title}
-                  className="w-full object-cover"
-                  onError={(event) => {
-                    const img = event.target as HTMLImageElement;
-                    img.src = generateDefaultThumbnail(640, 480);
-                  }}
-                />
+      {
+        selectedSheet && isMobileDetailOpen && (
+          <div className="md:hidden fixed inset-0 z-50 flex items-end bg-black/60 backdrop-blur-sm">
+            <div className="w-full rounded-t-3xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-gray-900">{selectedSheet.title}</h3>
+                <button
+                  type="button"
+                  onClick={closeMobileDetail}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <i className="ri-close-fill text-2xl" />
+                </button>
               </div>
-              <div className="space-y-2 text-sm text-gray-600">
-                <p className="font-semibold text-gray-900">{selectedSheet.artist}</p>
-                {selectedSheet.album_name && <p>{t('categoriesPage.albumLabel')}: {selectedSheet.album_name}</p>}
-                {selectedSheet.difficulty && <p>{t('categoriesPage.difficultyLabel')}: {getDifficultyName(selectedSheet.difficulty)}</p>}
-                {selectedSheet.page_count ? <p>{t('categoriesPage.pageLabel')}: {selectedSheet.page_count}{t('categoriesPage.pageUnit')}</p> : null}
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="space-y-1 text-right">
-                  {selectedEventInfo ? (
-                    <>
-                      <span className="text-sm text-gray-400 line-through">
-                        {formatCurrency(selectedSheet.price)}
-                      </span>
-                      <span className="text-2xl font-extrabold text-red-500">
+              <div className="space-y-4">
+                <div className="overflow-hidden rounded-2xl">
+                  <img
+                    src={getThumbnailUrl(selectedSheet)}
+                    alt={selectedSheet.title}
+                    className="w-full object-cover"
+                    onError={(event) => {
+                      const img = event.target as HTMLImageElement;
+                      img.src = generateDefaultThumbnail(640, 480);
+                    }}
+                  />
+                </div>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <p className="font-semibold text-gray-900">{selectedSheet.artist}</p>
+                  {selectedSheet.album_name && <p>{t('categoriesPage.albumLabel')}: {selectedSheet.album_name}</p>}
+                  {selectedSheet.difficulty && <p>{t('categoriesPage.difficultyLabel')}: {getDifficultyName(selectedSheet.difficulty)}</p>}
+                  {selectedSheet.page_count ? <p>{t('categoriesPage.pageLabel')}: {selectedSheet.page_count}{t('categoriesPage.pageUnit')}</p> : null}
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1 text-right">
+                    {selectedEventInfo ? (
+                      <>
+                        <span className="text-sm text-gray-400 line-through">
+                          {formatCurrency(selectedSheet.price)}
+                        </span>
+                        <span className="text-2xl font-extrabold text-red-500">
+                          {formatCurrency(selectedDisplayPrice)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-2xl font-extrabold text-blue-600">
                         {formatCurrency(selectedDisplayPrice)}
                       </span>
-                    </>
-                  ) : (
-                    <span className="text-2xl font-extrabold text-blue-600">
-                      {formatCurrency(selectedDisplayPrice)}
-                    </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleFavorite(selectedSheet.id)}
+                    disabled={selectedSheetFavoriteLoading}
+                    className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${selectedSheetIsFavorite
+                      ? 'border-red-200 bg-red-50 text-red-500'
+                      : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
+                      } ${selectedSheetFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  >
+                    <i className={`ri-heart-${selectedSheetIsFavorite ? 'fill' : 'line'} text-xl`} />
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(selectedSheet.preview_image_url || selectedSheet.pdf_url) && (
+                    <button
+                      type="button"
+                      onClick={() => handlePreviewOpen(selectedSheet)}
+                      className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                    >
+                      {t('categoriesPage.previewSheet')}
+                    </button>
+                  )}
+                  {selectedSheet.youtube_url && (
+                    <button
+                      type="button"
+                      onClick={() => handleYoutubeOpen(selectedSheet)}
+                      className="flex-1 rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white shadow transition hover:bg-red-600"
+                    >
+                      {t('categoriesPage.playYoutube')}
+                    </button>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleFavorite(selectedSheet.id)}
-                  disabled={selectedSheetFavoriteLoading}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${selectedSheetIsFavorite
-                    ? 'border-red-200 bg-red-50 text-red-500'
-                    : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
-                    } ${selectedSheetFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                >
-                  <i className={`ri-heart-${selectedSheetIsFavorite ? 'fill' : 'line'} text-xl`} />
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(selectedSheet.preview_image_url || selectedSheet.pdf_url) && (
-                  <button
-                    type="button"
-                    onClick={() => handlePreviewOpen(selectedSheet)}
-                    className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-                  >
-                    {t('categoriesPage.previewSheet')}
-                  </button>
-                )}
-                {selectedSheet.youtube_url && (
-                  <button
-                    type="button"
-                    onClick={() => handleYoutubeOpen(selectedSheet)}
-                    className="flex-1 rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white shadow transition hover:bg-red-600"
-                  >
-                    {t('categoriesPage.playYoutube')}
-                  </button>
-                )}
-              </div>
-              {bankTransferInfo ? (
-                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700">
-                  <h4 className="font-semibold text-blue-900 mb-2">{t('categoriesPage.bankTransferInfo')}</h4>
-                  <div className="space-y-1">
-                    <p>{t('categoriesPage.bank')}: {bankTransferInfo.bankName}</p>
-                    <p>{t('categoriesPage.accountNumber')}: {bankTransferInfo.accountNumber}</p>
-                    <p>{t('categoriesPage.accountHolder')}: {bankTransferInfo.depositor}</p>
-                    <p>{t('categoriesPage.depositAmount')}: {formatCurrency(bankTransferInfo.amount ?? 0)}</p>
+                {bankTransferInfo ? (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700">
+                    <h4 className="font-semibold text-blue-900 mb-2">{t('categoriesPage.bankTransferInfo')}</h4>
+                    <div className="space-y-1">
+                      <p>{t('categoriesPage.bank')}: {bankTransferInfo.bankName}</p>
+                      <p>{t('categoriesPage.accountNumber')}: {bankTransferInfo.accountNumber}</p>
+                      <p>{t('categoriesPage.accountHolder')}: {bankTransferInfo.depositor}</p>
+                      <p>{t('categoriesPage.depositAmount')}: {formatCurrency(bankTransferInfo.amount ?? 0)}</p>
+                    </div>
                   </div>
-                </div>
-              ) : null}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleAddToCart(selectedSheet.id);
-                    closeMobileDetail();
-                  }}
-                  className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-                >
-                  {t('categoriesPage.addToCart')}
-                </button>
-                {/* Buy Now 버튼: 한국어 사이트에서만 표시 */}
-                {isKoreanSite && (
+                ) : null}
+                <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => handleBuyNow(selectedSheet.id)}
-                    className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow hover:bg-blue-700"
+                    onClick={() => {
+                      handleAddToCart(selectedSheet.id);
+                      closeMobileDetail();
+                    }}
+                    className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
                   >
-                    {t('categoriesPage.buyNow')}
+                    {t('categoriesPage.addToCart')}
                   </button>
-                )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/sheet-detail/${selectedSheet.id}`)}
+                  className="w-full rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                >
+                  {t('categoriesPage.goToDetail')}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => navigate(`/sheet-detail/${selectedSheet.id}`)}
-                className="w-full rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-              >
-                {t('categoriesPage.goToDetail')}
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Desktop Layout */}
       <div className="hidden md:block md:mr-0 lg:mr-64">
@@ -1534,16 +1485,6 @@ const CategoriesPage: React.FC = () => {
                           >
                             {t('categoriesPage.addToCartFull')}
                           </button>
-                          {/* Buy Now 버튼: 한국어 사이트에서만 표시 */}
-                          {isKoreanSite && (
-                            <button
-                              onClick={() => handleBuyNow(selectedSheet.id)}
-                              disabled={buyingSheetId === selectedSheet.id}
-                              className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {buyingSheetId === selectedSheet.id ? t('categoriesPage.processing') : t('categoriesPage.buyNow')}
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -1851,23 +1792,7 @@ const CategoriesPage: React.FC = () => {
                               >
                                 {t('categoriesPage.addToCart')}
                               </button>
-                              {/* Buy Now 버튼: 한국어 사이트에서만 표시 */}
-                              {isKoreanSite && (
-                                <button
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    await handleBuyNow(sheet.id);
-                                  }}
-                                  disabled={buyingSheetId === sheet.id || paymentProcessing}
-                                  className="px-4 py-2.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {buyingSheetId === sheet.id
-                                    ? paymentProcessing
-                                      ? t('categoriesPage.paymentPreparing')
-                                      : t('categoriesPage.processing')
-                                    : t('categoriesPage.buyNow')}
-                                </button>
-                              )}
+
                             </div>
                           </td>
                         </tr>
@@ -2020,43 +1945,47 @@ const CategoriesPage: React.FC = () => {
         context="buyNow"
       />
 
-      {insufficientCashInfo && (
-        <InsufficientCashModal
-          open={showInsufficientCashModal}
-          currentBalance={insufficientCashInfo.currentBalance}
-          requiredAmount={insufficientCashInfo.requiredAmount}
-          onClose={() => {
-            setShowInsufficientCashModal(false);
-            setInsufficientCashInfo(null);
-          }}
-        />
-      )}
+      {
+        insufficientCashInfo && (
+          <InsufficientCashModal
+            open={showInsufficientCashModal}
+            currentBalance={insufficientCashInfo.currentBalance}
+            requiredAmount={insufficientCashInfo.requiredAmount}
+            onClose={() => {
+              setShowInsufficientCashModal(false);
+              setInsufficientCashInfo(null);
+            }}
+          />
+        )
+      }
 
-      {showPayPalModal && pendingPurchaseSheet && (
-        <PayPalPaymentModal
-          open={showPayPalModal}
-          amount={Math.max(
-            0,
-            (getEventForSheet(pendingPurchaseSheet.id)?.discount_price ?? pendingPurchaseSheet.price) ?? 0,
-          )}
-          orderTitle={pendingPurchaseSheet.title}
-          onClose={() => {
-            setShowPayPalModal(false);
-            setPendingPurchaseSheet(null);
-            setBuyingSheetId(null);
-          }}
-          onSuccess={(response) => {
-            setShowPayPalModal(false);
-            // PayPal은 리다이렉트되므로 여기서 추가 처리 불필요할 수 있음
-          }}
-          onError={(error) => {
-            console.error('PayPal 결제 오류:', error);
-            alert(t('categoriesPage.purchaseError'));
-          }}
-          initiatePayment={handlePayPalInitiate}
-        />
-      )}
-    </div>
+      {
+        showPayPalModal && pendingPurchaseSheet && (
+          <PayPalPaymentModal
+            open={showPayPalModal}
+            amount={Math.max(
+              0,
+              (getEventForSheet(pendingPurchaseSheet.id)?.discount_price ?? pendingPurchaseSheet.price) ?? 0,
+            )}
+            orderTitle={pendingPurchaseSheet.title}
+            onClose={() => {
+              setShowPayPalModal(false);
+              setPendingPurchaseSheet(null);
+              setBuyingSheetId(null);
+            }}
+            onSuccess={(response) => {
+              setShowPayPalModal(false);
+              // PayPal은 리다이렉트되므로 여기서 추가 처리 불필요할 수 있음
+            }}
+            onError={(error) => {
+              console.error('PayPal 결제 오류:', error);
+              alert(t('categoriesPage.purchaseError'));
+            }}
+            initiatePayment={handlePayPalInitiate}
+          />
+        )
+      }
+    </div >
   );
 };
 

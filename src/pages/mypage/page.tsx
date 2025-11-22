@@ -1368,7 +1368,10 @@ export default function MyPage() {
                                   <div className="flex flex-wrap items-center gap-3">
                                     {renderOrderStatusBadge(order.status)}
                                     <p className="text-base font-semibold text-gray-900">
-                                      {t('mypage.purchases.total')} {formatCurrency(order.total_amount)}
+                                      {t('mypage.purchases.total')}{' '}
+                                      {order.payment_method === 'cash'
+                                        ? `${order.total_amount.toLocaleString('en-US')} P`
+                                        : formatCurrency(order.total_amount)}
                                     </p>
                                     {hasSelectableItems ? (
                                       <button
@@ -1482,6 +1485,11 @@ export default function MyPage() {
                                           </div>
                                         </div>
                                         <div className="flex items-center gap-3">
+                                          <span className="text-sm font-semibold text-gray-900">
+                                            {order.payment_method === 'cash'
+                                              ? `${(item.price ?? 0).toLocaleString('en-US')} P`
+                                              : formatCurrency(item.price ?? 0)}
+                                          </span>
                                           <button
                                             onClick={() => handleDownload(downloadItem)}
                                             disabled={isDownloading}

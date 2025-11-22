@@ -48,14 +48,10 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   // EN/JP 사이트: 포인트로 표시 (예: 230,500 P)
   const formatCash = useCallback(
     (value: number) => {
-      if (currency === 'KRW') {
-        const converted = convertFromKrw(value, currency);
-        return formatCurrencyUtil(converted, currency);
-      }
-      // EN/JP 사이트: 포인트로 표시
+      // 모든 사이트: 포인트로 표시 (예: 230,500 P)
       return `${value.toLocaleString('en-US')} P`;
     },
-    [currency],
+    [],
   );
 
   const handleLogout = async () => {
