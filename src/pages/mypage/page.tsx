@@ -1222,7 +1222,7 @@ export default function MyPage() {
                         </p>
                       ) : (
                         <p className="mt-2 text-3xl font-black text-gray-900">
-                          {formatCurrency(userCashBalance)}
+                          {userCashBalance.toLocaleString('en-US')} P
                         </p>
                       )}
                       <p className="mt-1 text-xs text-gray-500">{t('mypage.profile.cashBalanceDescription')}</p>
