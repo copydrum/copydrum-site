@@ -578,7 +578,7 @@ const MyOrdersPage = () => {
       if (error instanceof Error) {
         alert(error.message);
       } else {
-        alert('파일 다운로드에 실패했습니다. 잠시 후 다시 시도해주세요.');
+        alert(t('myOrders.messages.downloadError'));
       }
     } finally {
       finishDownloading(key);
@@ -597,9 +597,9 @@ const MyOrdersPage = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">로그인이 필요합니다</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('myOrders.loginRequired')}</h2>
           <p className="text-gray-600">
-            악보 구매 내역을 확인하려면 로그인해주세요.
+            {t('myOrders.loginRequiredMessage')}
           </p>
         </div>
       </div>
@@ -619,12 +619,12 @@ const MyOrdersPage = () => {
         <div className="bg-gray-50 py-8">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">악보 구매 내역</h1>
+            <h1 className="text-3xl font-bold text-gray-900">{t('myOrders.title')}</h1>
             <p className="mt-2 text-gray-600">
-              최근 순으로 정렬된 악보 구입 목록입니다.
+              {t('myOrders.description')}
               {orders.length > 0 && (
                 <span className="ml-1">
-                  총 {totalPurchasedSheets}개의 악보를 구매하셨습니다.
+                  {t('myOrders.totalPurchased', { count: totalPurchasedSheets })}
                 </span>
               )}
             </p>
@@ -636,17 +636,17 @@ const MyOrdersPage = () => {
               <i className="ri-shopping-bag-line text-2xl text-gray-400"></i>
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              구매한 악보가 없습니다
+              {t('myOrders.empty.title')}
             </h3>
             <p className="text-gray-600 mb-6">
-              마음에 드는 악보를 찾아 장바구니에 담아보세요.
+              {t('myOrders.empty.message')}
             </p>
             <a
               href="/categories"
               className="inline-flex items-center px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <i className="ri-music-2-line mr-2"></i>
-              악보 둘러보기
+              {t('myOrders.empty.browseButton')}
             </a>
           </div>
         ) : (
@@ -706,7 +706,7 @@ const MyOrdersPage = () => {
                           }`}
                         >
                           <i className="ri-stack-line text-base" />
-                          {bulkDownloading ? '다운로드 중...' : '이 주문 전체 다운로드'}
+                          {bulkDownloading ? t('myOrders.actions.downloading') : t('myOrders.actions.downloadAll')}
                         </button>
                       ) : null}
                     </div>
@@ -726,7 +726,7 @@ const MyOrdersPage = () => {
                           }`}
                         >
                           <i className="ri-checkbox-multiple-line text-base" />
-                          {allSelectableSelected ? '전체 해제' : '전체 선택'}
+                          {allSelectableSelected ? t('myOrders.actions.deselectAll') : t('myOrders.actions.selectAll')}
                         </button>
                         <button
                           type="button"
@@ -739,10 +739,10 @@ const MyOrdersPage = () => {
                           }`}
                         >
                           <i className="ri-close-circle-line text-base" />
-                          선택 해제
+                          {t('myOrders.actions.clearSelection')}
                         </button>
                         <span className="text-xs text-gray-500">
-                          선택 {selectedCount.toLocaleString('ko-KR')}개
+                          {t('myOrders.actions.selectedCount', { count: selectedCount })}
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -757,7 +757,7 @@ const MyOrdersPage = () => {
                           }`}
                         >
                           <i className="ri-download-2-line text-base" />
-                          {bulkDownloading ? '다운로드 중...' : '선택 다운로드'}
+                          {bulkDownloading ? t('myOrders.actions.downloading') : t('myOrders.actions.downloadSelected')}
                         </button>
                       </div>
                     </div>
@@ -771,7 +771,7 @@ const MyOrdersPage = () => {
                         generateDefaultThumbnail(
                           96,
                           96,
-                          sheet?.title ?? '악보 썸네일'
+                          sheet?.title ?? t('myOrders.deletedSheet')
                         );
 
                       const downloadKey = buildDownloadKey(order.id, item.id);
@@ -798,7 +798,7 @@ const MyOrdersPage = () => {
                             />
                             <img
                               src={thumbnailSrc}
-                              alt={sheet?.title ?? '악보 썸네일'}
+                              alt={sheet?.title ?? t('myOrders.deletedSheet')}
                               className="h-16 w-16 rounded-lg object-cover"
                               onError={(event) => {
                                 (event.target as HTMLImageElement).src =
@@ -816,7 +816,7 @@ const MyOrdersPage = () => {
                                 {sheet?.artist ?? '-'}
                               </p>
                               <p className="text-xs text-gray-400 mt-1">
-                                구매일 {formatDate(item.created_at)}
+                                {t('myOrders.actions.purchaseDate', { date: formatDate(item.created_at) })}
                               </p>
                             </div>
                           </div>
@@ -838,17 +838,17 @@ const MyOrdersPage = () => {
                             >
                               <i className="ri-download-line"></i>
                               {isDownloading
-                                ? '다운로드 중...'
+                                ? t('myOrders.actions.downloading')
                                 : DOWNLOADABLE_STATUSES.includes((order.status ?? '').toLowerCase())
-                                ? '다운로드'
-                                : '다운로드 불가'}
+                                ? t('myOrders.actions.download')
+                                : t('myOrders.actions.downloadNotAvailable')}
                             </button>
                             <a
                               href={`/sheet-detail/${item.sheet_id}`}
                               className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
                             >
                               <i className="ri-file-music-line"></i>
-                              상세보기
+                              {t('myOrders.actions.viewDetails')}
                             </a>
                           </div>
                         </article>
@@ -875,7 +875,7 @@ const MyOrdersPage = () => {
           className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-blue-600 text-white px-5 py-3 shadow-lg hover:bg-blue-700"
         >
           <i className="ri-shopping-cart-line text-lg" />
-          장바구니
+          {t('myOrders.actions.cart')}
           {cartItems.length > 0 ? (
             <span className="ml-2 rounded-full bg-white text-blue-600 text-xs font-bold px-2 py-0.5">
               {cartItems.length}
