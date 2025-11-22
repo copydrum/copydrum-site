@@ -248,7 +248,7 @@ export const requestPayPalPayment = async (
   });
 
   const storeId = import.meta.env.VITE_PORTONE_STORE_ID || 'store-21731740-b1df-492c-832a-8f38448d0ebd';
-  const channelKey = import.meta.env.VITE_PORTONE_CHANNEL_KEY_PAYPAL || 'channel-key-1530a3c5-16eb-44ff-bbb1-688cdde309af';
+  const channelKey = import.meta.env.VITE_PORTONE_CHANNEL_KEY_PAYPAL || 'channel-key-541220df-bf9f-4cb1-b189-679210076fe0';
 
   if (!storeId || !channelKey) {
     console.error('[portone-paypal] 환경변수 설정 오류', { storeId, channelKey });
