@@ -1948,7 +1948,7 @@ export default function MyPage() {
                           </p>
                         ) : (
                           <p className="mt-2 text-3xl font-bold text-blue-900">
-                            {formatCurrency(userCashBalance)}
+                            {userCashBalance.toLocaleString('en-US')} P
                           </p>
                         )}
                       </div>
@@ -1994,16 +1994,16 @@ export default function MyPage() {
                                 <div className="text-right min-w-[140px]">
                                   <p className={`text-lg font-bold ${meta.amountClass}`}>
                                     {amountSign}
-                                    {formatCurrency(Math.abs(amount))}
+                                    {Math.abs(amount).toLocaleString('en-US')} P
                                   </p>
                                   {entry.bonus_amount > 0 && (
                                     <p className="text-xs text-emerald-600 mt-1">
-                                      {t('mypage.cash.bonus')} +{formatCurrency(entry.bonus_amount)}
+                                      {t('mypage.cash.bonus')} +{entry.bonus_amount.toLocaleString('en-US')} P
                                     </p>
                                   )}
                                   {entry.balance_after !== undefined && (
                                     <p className="text-xs text-gray-400 mt-1">
-                                      {t('mypage.cash.balance')} {formatCurrency(entry.balance_after)}
+                                      {t('mypage.cash.balance')} {entry.balance_after.toLocaleString('en-US')} P
                                     </p>
                                   )}
                                 </div>

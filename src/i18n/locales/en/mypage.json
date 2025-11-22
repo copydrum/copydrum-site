@@ -19,8 +19,8 @@
       "description": "View your favorite sheet music."
     },
     "cash": {
-      "label": "Cash History",
-      "description": "Check your cash balance and usage history."
+      "label": "Point History",
+      "description": "Check your point balance and usage history."
     },
     "inquiries": {
       "label": "1:1 Inquiry",
@@ -43,9 +43,9 @@
     "memberInfo": "Member Information",
     "nameNotSet": "Name not set",
     "joinedOn": "Joined on",
-    "cashBalance": "Cash Balance",
+    "cashBalance": "Point Balance",
     "cashBalanceDescription": "Available for your next sheet music purchase.",
-    "chargeCash": "Charge Cash",
+    "chargeCash": "Charge Points",
     "email": "Email",
     "name": "Name",
     "namePlaceholder": "Enter your name",
@@ -138,16 +138,16 @@
     }
   },
   "cash": {
-    "title": "Cash History",
-    "description": "Check your cash balance and usage history.",
-    "chargeCash": "Charge Cash",
-    "availableCash": "Available Cash",
-    "loadingHistory": "Loading cash history...",
-    "noHistory": "No cash history to display.",
-    "noHistoryDescription": "Cash transactions will be recorded here when you charge or use cash.",
+    "title": "Point History",
+    "description": "Check your point balance and usage history.",
+    "chargeCash": "Charge Points",
+    "availableCash": "Available Points",
+    "loadingHistory": "Loading point history...",
+    "noHistory": "No point history to display.",
+    "noHistoryDescription": "Point transactions will be recorded here when you charge or use points.",
     "types": {
-      "charge": "Cash Charge",
-      "use": "Cash Use",
+      "charge": "Point Charge",
+      "use": "Point Use",
       "adminAdd": "Admin Addition",
       "adminDeduct": "Admin Deduction",
       "record": "Record"
@@ -285,9 +285,3 @@
   },
   "cart": "Cart"
 }
-
-
-
-
-
-

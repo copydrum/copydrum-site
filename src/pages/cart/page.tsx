@@ -317,7 +317,7 @@ export default function CartPage() {
       if (method === 'cash') {
         const cashResult = await processCashPurchase({
           userId: user.id,
-          totalPrice: pendingPurchase.amount,
+          totalPrice: calculatePointPrice(pendingPurchase.amount),
           description: pendingPurchase.description,
           items: pendingPurchase.items,
           sheetIdForTransaction:

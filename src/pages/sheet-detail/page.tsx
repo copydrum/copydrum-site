@@ -375,7 +375,7 @@ export default function SheetDetailPage() {
       if (method === 'cash') {
         const purchaseResult = await processCashPurchase({
           userId: user.id,
-          totalPrice: price,
+          totalPrice: calculatePointPrice(price),
           description: t('sheetDetail.purchaseDescription', { title: sheet.title }),
           items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
           sheetIdForTransaction: sheet.id,
