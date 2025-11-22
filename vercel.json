@@ -8,19 +8,5 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ],
-  "redirects": [
-    {
-      "source": "/",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.copydrum.com"
-        }
-      ],
-      "destination": "https://copydrum.com",
-      "permanent": true
-    }
   ]
 }
-

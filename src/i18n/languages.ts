@@ -51,7 +51,6 @@ export const languageCodeToPath: Record<string, string> = {
 
 // URL path -> 언어 코드 매핑
 export const pathToLanguageCode: Record<string, string> = {
-  '': 'en',
   ko: 'ko',
   ja: 'ja',
   'zh-cn': 'zh-CN',
@@ -82,10 +81,10 @@ export const getLanguageByCode = (code: string): Language | undefined => {
 };
 
 // URL path로 언어 코드 가져오기
-export const getLanguageFromPath = (path: string): string => {
+export const getLanguageFromPath = (path: string): string | undefined => {
   const segments = path.split('/').filter(Boolean);
   const firstSegment = segments[0] || '';
-  return pathToLanguageCode[firstSegment] || defaultLanguage;
+  return pathToLanguageCode[firstSegment];
 };
 
 // 언어 코드로 URL path 가져오기
