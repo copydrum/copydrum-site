@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import { useSiteLanguage } from '../../hooks/useSiteLanguage';
+import { useBuyNow } from '../../hooks/useBuyNow';
 
 interface Category {
   id: string;
@@ -265,146 +266,11 @@ const CategoriesPage: React.FC = () => {
     }
   };
 
-  const handlePurchaseMethodSelect = async (method: PaymentMethod) => {
-    if (!user || !pendingPurchaseSheet) return;
+  // ✅ 기존 handlePurchaseMethodSelect는 다른 용도로 사용되므로 유지
+  // Buy Now는 useBuyNow 훅을 사용
 
-    const sheet = pendingPurchaseSheet;
-    const sheetId = sheet.id;
-    const price = Math.max(0, sheet.price ?? 0);
-
-    setShowPaymentSelector(false);
-
-    if (method === 'bank') {
-      setShowBankTransferModal(true);
-      return;
-    }
-
-    setPaymentProcessing(true);
-
-    try {
-      if (method === 'cash') {
-        const result = await processCashPurchase({
-          userId: user.id,
-          totalPrice: price,
-          description: t('categoriesPage.purchaseDescription', { title: sheet.title }),
-          items: [{ sheetId, sheetTitle: sheet.title, price }],
-          sheetIdForTransaction: sheetId,
-        });
-
-        if (!result.success) {
-          if (result.reason === 'INSUFFICIENT_CREDIT') {
-            setInsufficientCashInfo({
-              currentBalance: result.currentCredits,
-              requiredAmount: price,
-            });
-            setShowInsufficientCashModal(true);
-          }
-          return;
-        }
-
-
-        alert(t('categoriesPage.purchaseComplete'));
-        navigate('/my-orders');
-        return;
-      }
-
-      if (method === 'paypal') {
-        setShowPayPalModal(true);
-        return;
-      }
-
-      await completeOnlinePurchase('card');
-    } catch (error) {
-      console.error('주문 처리 오류:', error);
-      alert(error instanceof Error ? error.message : t('categoriesPage.purchaseError'));
-    } finally {
-      setPaymentProcessing(false);
-      setBuyingSheetId(null);
-      setPendingPurchaseSheet(null);
-    }
-  };
-
-  const handleBankTransferConfirm = async (depositorName: string) => {
-    if (!user || !pendingPurchaseSheet) {
-      alert('로그인이 필요합니다.');
-      return;
-    }
-
-    // 필수값 검증
-    const trimmedDepositorName = depositorName?.trim();
-    if (!trimmedDepositorName) {
-      alert('입금자명을 입력해 주세요.');
-      return;
-    }
-
-    const price = Math.max(0, pendingPurchaseSheet.price ?? 0);
-    if (price <= 0) {
-      alert('결제 금액이 올바르지 않습니다.');
-      return;
-    }
-
-    setPaymentProcessing(true);
-
-    try {
-      const result = await buySheetNow({
-        user,
-        sheet: {
-          id: pendingPurchaseSheet.id,
-          title: pendingPurchaseSheet.title,
-          price,
-        },
-        description: t('categoriesPage.purchaseDescription', { title: pendingPurchaseSheet.title }),
-        depositorName: trimmedDepositorName,
-      });
-
-      if (result.paymentMethod === 'bank_transfer') {
-        // 주문 생성 성공 - 모달의 성공 상태로 전환
-        setBankTransferInfo(result.virtualAccountInfo ?? null);
-        
-        // 성공 메시지는 모달 내에서 표시됨
-        console.log('[CategoriesPage] 무통장입금 주문 생성 성공:', {
-          orderId: result.orderId,
-          orderNumber: result.orderNumber,
-          amount: result.amount,
-          depositorName: trimmedDepositorName,
-        });
-      }
-    } catch (error) {
-      console.error('[CategoriesPage] 무통장입금 주문 처리 오류:', error);
-      
-      // 에러 메시지 표시
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : t('categoriesPage.purchaseError') || '주문 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
-      
-      alert(errorMessage);
-      
-      // 에러 발생 시 모달 닫기
-      setShowBankTransferModal(false);
-      setBankTransferInfo(null);
-    } finally {
-      setPaymentProcessing(false);
-      setBuyingSheetId(null);
-    }
-  };
-
-  const handlePayPalInitiate = async (elementId: string) => {
-    if (!user || !pendingPurchaseSheet) return;
-
-    const sheet = pendingPurchaseSheet;
-    const price = Math.max(0, sheet.price ?? 0);
-
-    await startSheetPurchase({
-      userId: user.id,
-      items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
-      amount: price,
-      paymentMethod: 'paypal',
-      description: t('categoriesPage.purchaseDescription', { title: sheet.title }),
-      buyerName: user.email ?? null,
-      buyerEmail: user.email ?? null,
-      elementId, // PayPal SPB 렌더링을 위한 컨테이너 ID 전달
-    });
-  };
+  // ✅ 기존 handleBankTransferConfirm과 handlePayPalInitiate는 다른 용도로 사용되므로 유지
+  // Buy Now는 useBuyNow 훅을 사용
 
 
   const loadFavorites = useCallback(async () => {
@@ -576,28 +442,15 @@ const CategoriesPage: React.FC = () => {
 
   const [buyingNowSheetId, setBuyingNowSheetId] = useState<string | null>(null);
 
+  // ✅ 공유 useBuyNow 훅 사용
+  const buyNow = useBuyNow(user);
+
   const handleBuyNow = async (sheet: DrumSheet) => {
-    if (!user) {
-      navigate('/auth/login');
-      return;
-    }
-
-    try {
-      const alreadyPurchased = await hasPurchasedSheet(user.id, sheet.id);
-      if (alreadyPurchased) {
-        alert(t('categoriesPage.alreadyPurchased', { title: sheet.title }));
-        return;
-      }
-    } catch (error) {
-      console.error('바로구매 전 구매 이력 확인 오류:', error);
-      alert(t('categoriesPage.purchaseCheckError'));
-      return;
-    }
-
-    // 모든 사이트에서 결제수단 선택 모달 열기
-    // PaymentMethodSelector가 사이트 타입에 따라 적절한 결제수단만 표시
-    setPendingPurchaseSheet(sheet);
-    setShowPaymentSelector(true);
+    await buyNow.handleBuyNow({
+      id: sheet.id,
+      title: sheet.title,
+      price: Math.max(0, sheet.price ?? 0),
+    });
   };
 
 
@@ -1628,6 +1481,45 @@ const CategoriesPage: React.FC = () => {
         successMessage={t('categoriesPage.bankTransferCreated') || '무통장입금 계좌가 생성되었습니다. 입금을 완료해주세요.'}
       />
 
+      {/* ✅ 공유 useBuyNow 훅의 모달들 */}
+      <PaymentMethodSelector
+        open={buyNow.showPaymentSelector}
+        amount={buyNow.pendingSheet ? buyNow.pendingSheet.price : 0}
+        onSelect={buyNow.handlePaymentMethodSelect}
+        onClose={buyNow.closePaymentSelector}
+        context="buyNow"
+      />
+
+      <BankTransferInfoModal
+        open={buyNow.showBankTransferModal}
+        amount={buyNow.pendingSheet ? buyNow.pendingSheet.price : 0}
+        userName={(user?.user_metadata?.name as string | undefined) ?? user?.email ?? undefined}
+        onConfirm={buyNow.handleBankTransferConfirm}
+        onClose={buyNow.closeBankTransferModal}
+        processing={buyNow.paymentProcessing}
+        orderCreated={!!buyNow.bankTransferInfo}
+        successMessage={t('categoriesPage.bankTransferCreated') || '무통장입금 계좌가 생성되었습니다. 입금을 완료해주세요.'}
+      />
+
+      {buyNow.showPayPalModal && buyNow.pendingSheet && (
+        <PayPalPaymentModal
+          open={buyNow.showPayPalModal}
+          amount={buyNow.pendingSheet.price}
+          orderTitle={buyNow.pendingSheet.title}
+          onClose={buyNow.closePayPalModal}
+          onSuccess={(response) => {
+            buyNow.closePayPalModal();
+            // PayPal은 리다이렉트되므로 여기서 추가 처리 불필요할 수 있음
+          }}
+          onError={(error) => {
+            console.error('PayPal 결제 오류:', error);
+            alert(t('categoriesPage.purchaseError'));
+          }}
+          initiatePayment={buyNow.handlePayPalInitiate}
+        />
+      )}
+
+      {/* 기존 모달들 (다른 용도) */}
       <PaymentMethodSelector
         open={showPaymentSelector}
         amount={
@@ -1658,33 +1550,6 @@ const CategoriesPage: React.FC = () => {
               setShowInsufficientCashModal(false);
               setInsufficientCashInfo(null);
             }}
-          />
-        )
-      }
-
-      {
-        showPayPalModal && pendingPurchaseSheet && (
-          <PayPalPaymentModal
-            open={showPayPalModal}
-            amount={Math.max(
-              0,
-              pendingPurchaseSheet.price ?? 0,
-            )}
-            orderTitle={pendingPurchaseSheet.title}
-            onClose={() => {
-              setShowPayPalModal(false);
-              setPendingPurchaseSheet(null);
-              setBuyingSheetId(null);
-            }}
-            onSuccess={(response) => {
-              setShowPayPalModal(false);
-              // PayPal은 리다이렉트되므로 여기서 추가 처리 불필요할 수 있음
-            }}
-            onError={(error) => {
-              console.error('PayPal 결제 오류:', error);
-              alert(t('categoriesPage.purchaseError'));
-            }}
-            initiatePayment={handlePayPalInitiate}
           />
         )
       }
