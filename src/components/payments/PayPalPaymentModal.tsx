@@ -113,7 +113,7 @@ export default function PayPalPaymentModal({
         <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50 p-4">
             <div className="w-full max-w-md rounded-xl bg-white shadow-2xl overflow-hidden">
                 <div className="border-b border-gray-200 px-5 py-4 flex justify-between items-center">
-                    <h2 className="text-lg font-semibold text-gray-900">PayPal Payment</h2>
+                    <h2 className="text-lg font-semibold text-gray-900">{t('payments.modalTitle')}</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
                         <i className="ri-close-line text-xl"></i>
                     </button>
@@ -132,7 +132,7 @@ export default function PayPalPaymentModal({
                                 onClick={onClose}
                                 className="block w-full mt-3 px-4 py-2 bg-white border border-red-300 rounded text-red-700 hover:bg-red-50"
                             >
-                                Close
+                                {t('button.close')}
                             </button>
                         </div>
                     ) : (
@@ -140,7 +140,7 @@ export default function PayPalPaymentModal({
                             {loading && (
                                 <div className="absolute flex flex-col items-center z-10">
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
-                                    <p className="text-sm text-gray-500">Loading PayPal...</p>
+                                    <p className="text-sm text-gray-500">{t('payments.loadingPayPal')}</p>
                                 </div>
                             )}
                             {/* PortOne SDK PayPal container - must have class and visible */}

@@ -80,6 +80,13 @@ export default {
   'payment.success': 'Оплата пройшла успішно!',
   'payment.failed': 'Оплата не вдалася. Будь ласка, спробуйте знову.',
 
+  // Payments (PayPal modal)
+  'payments.methodSelectionTitle': 'Виберіть спосіб оплати',
+  'payments.amountLabel': 'Сума до оплати',
+  'payments.paypalDescription': 'Оплачуйте безпечно через PayPal. Швидка та зручна оплата.',
+  'payments.modalTitle': 'Оплата через PayPal',
+  'payments.loadingPayPal': 'Завантаження PayPal...',
+
   // Auth
   'auth.email': 'Електронна пошта',
   'auth.password': 'Пароль',

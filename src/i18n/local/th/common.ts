@@ -80,6 +80,13 @@ export default {
   'payment.success': 'ชำระเงินสำเร็จ!',
   'payment.failed': 'การชำระเงินล้มเหลว กรุณาลองอีกครั้ง',
 
+  // Payments (PayPal modal)
+  'payments.methodSelectionTitle': 'เลือกวิธีการชำระเงิน',
+  'payments.amountLabel': 'จำนวนเงินที่ต้องชำระ',
+  'payments.paypalDescription': 'ชำระเงินอย่างปลอดภัยด้วย PayPal รวดเร็วและสะดวก',
+  'payments.modalTitle': 'ชำระเงินผ่าน PayPal',
+  'payments.loadingPayPal': 'กำลังโหลด PayPal...',
+
   // Auth
   'auth.email': 'อีเมล',
   'auth.password': 'รหัสผ่าน',

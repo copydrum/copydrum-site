@@ -95,6 +95,13 @@ export default {
   'payment.cancelledMessage': '決済をキャンセルしました。請求は行われません。',
   'payment.redirecting': '注文履歴へ移動します...',
 
+  // Payments (PayPal modal)
+  'payments.methodSelectionTitle': 'お支払い方法の選択',
+  'payments.amountLabel': 'お支払い金額',
+  'payments.paypalDescription': 'PayPalで安全にお支払いください。スピーディーで簡単です。',
+  'payments.modalTitle': 'PayPal決済',
+  'payments.loadingPayPal': 'PayPalを読み込み中...',
+
   // Auth
   'auth.email': 'メールアドレス',
   'auth.password': 'パスワード',

@@ -80,6 +80,13 @@ export default {
   'payment.success': 'Pembayaran berhasil!',
   'payment.failed': 'Pembayaran gagal. Silakan coba lagi.',
 
+  // Payments (PayPal modal)
+  'payments.methodSelectionTitle': 'Pilih metode pembayaran',
+  'payments.amountLabel': 'Jumlah yang harus dibayar',
+  'payments.paypalDescription': 'Bayar dengan aman menggunakan PayPal. Cepat dan mudah.',
+  'payments.modalTitle': 'Pembayaran PayPal',
+  'payments.loadingPayPal': 'Memuat PayPal...',
+
   // Auth
   'auth.email': 'Email',
   'auth.password': 'Kata Sandi',

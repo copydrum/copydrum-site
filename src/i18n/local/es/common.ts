@@ -80,6 +80,13 @@ export default {
   'payment.success': '¡Pago exitoso!',
   'payment.failed': 'Pago fallido. Por favor, inténtelo de nuevo.',
 
+  // Payments (PayPal modal)
+  'payments.methodSelectionTitle': 'Seleccionar método de pago',
+  'payments.amountLabel': 'Importe a pagar',
+  'payments.paypalDescription': 'Paga de forma segura con PayPal. Pago rápido y sencillo.',
+  'payments.modalTitle': 'Pago con PayPal',
+  'payments.loadingPayPal': 'Cargando PayPal...',
+
   // Auth
   'auth.email': 'Correo electrónico',
   'auth.password': 'Contraseña',

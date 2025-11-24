@@ -80,6 +80,13 @@ export default {
   'payment.success': 'Ödeme başarılı!',
   'payment.failed': 'Ödeme başarısız. Lütfen tekrar deneyin.',
 
+  // Payments (PayPal modal)
+  'payments.methodSelectionTitle': 'Ödeme yöntemini seçin',
+  'payments.amountLabel': 'Ödenecek tutar',
+  'payments.paypalDescription': 'PayPal ile güvenli ödeme yapın. Hızlı ve kolay ödeme.',
+  'payments.modalTitle': 'PayPal Ödemesi',
+  'payments.loadingPayPal': 'PayPal yükleniyor...',
+
   // Auth
   'auth.email': 'E-posta',
   'auth.password': 'Şifre',

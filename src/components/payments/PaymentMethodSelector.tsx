@@ -48,7 +48,7 @@ function getAvailablePaymentMethods(
       {
         id: 'paypal',
         name: t('payment.paypal'),
-        description: t('payment.paypalDescription'),
+        description: t('payments.paypalDescription'),
         icon: 'ri-paypal-line',
         color: 'text-blue-700',
         disabled: false,
@@ -163,10 +163,10 @@ export const PaymentMethodSelector = ({
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
         <div className="border-b border-gray-200 px-5 py-4">
-          <h2 className="text-lg font-semibold text-gray-900">{t('payment.selectMethod')}</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{t('payments.methodSelectionTitle')}</h2>
           <div className="mt-1 space-y-1">
             <p className="text-sm text-gray-600">
-              {t('payment.amount')} <span className="font-semibold text-gray-900">{formatCurrency(amount)}</span>
+              {t('payments.amountLabel')} <span className="font-semibold text-gray-900">{formatCurrency(amount)}</span>
             </p>
           </div>
         </div>

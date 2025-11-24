@@ -95,6 +95,13 @@ export default {
   'payment.cancelledMessage': 'You cancelled the payment. No charges were made.',
   'payment.redirecting': 'Redirecting to order history...',
 
+  // Payments (PayPal modal)
+  'payments.methodSelectionTitle': 'Select Payment Method',
+  'payments.amountLabel': 'Amount to Pay',
+  'payments.paypalDescription': 'Pay safely with PayPal. Fast and easy checkout.',
+  'payments.modalTitle': 'PayPal Payment',
+  'payments.loadingPayPal': 'Loading PayPal...',
+
   // Auth
   'auth.email': 'Email',
   'auth.password': 'Password',

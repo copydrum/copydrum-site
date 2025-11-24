@@ -80,6 +80,13 @@ export default {
   'payment.success': '支付成功！',
   'payment.failed': '支付失败。请重试。',
 
+  // Payments (PayPal modal)
+  'payments.methodSelectionTitle': '选择支付方式',
+  'payments.amountLabel': '支付金额',
+  'payments.paypalDescription': '通过 PayPal 安全付款。快捷、方便的支付方式。',
+  'payments.modalTitle': 'PayPal 支付',
+  'payments.loadingPayPal': '正在加载 PayPal...',
+
   // Auth
   'auth.email': '邮箱',
   'auth.password': '密码',

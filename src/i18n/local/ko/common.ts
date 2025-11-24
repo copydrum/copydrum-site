@@ -95,6 +95,13 @@ export default {
   'payment.cancelledMessage': '결제를 취소하셨습니다. 요금이 청구되지 않았습니다.',
   'payment.redirecting': '주문 내역으로 이동 중...',
 
+  // Payments (PayPal modal)
+  'payments.methodSelectionTitle': '결제수단 선택',
+  'payments.amountLabel': '결제 금액',
+  'payments.paypalDescription': '페이팔로 안전하게 결제하세요. 빠르고 간편한 결제.',
+  'payments.modalTitle': 'PayPal 결제',
+  'payments.loadingPayPal': 'PayPal 로딩 중...',
+
   // Auth
   'auth.email': '이메일',
   'auth.password': '비밀번호',

@@ -80,6 +80,13 @@ export default {
   'payment.success': 'भुगतान सफल!',
   'payment.failed': 'भुगतान विफल। कृपया पुनः प्रयास करें।',
 
+  // Payments (PayPal modal)
+  'payments.methodSelectionTitle': 'भुगतान तरीका चुनें',
+  'payments.amountLabel': 'देय राशि',
+  'payments.paypalDescription': 'PayPal के साथ सुरक्षित भुगतान करें। तेज़ और आसान भुगतान।',
+  'payments.modalTitle': 'PayPal भुगतान',
+  'payments.loadingPayPal': 'PayPal लोड हो रहा है...',
+
   // Auth
   'auth.email': 'ईमेल',
   'auth.password': 'पासवर्ड',

@@ -80,6 +80,13 @@ export default {
   'payment.success': 'Thanh toán thành công!',
   'payment.failed': 'Thanh toán thất bại. Vui lòng thử lại.',
 
+  // Payments (PayPal modal)
+  'payments.methodSelectionTitle': 'Chọn phương thức thanh toán',
+  'payments.amountLabel': 'Số tiền thanh toán',
+  'payments.paypalDescription': 'Thanh toán an toàn qua PayPal. Nhanh chóng và dễ dàng.',
+  'payments.modalTitle': 'Thanh toán PayPal',
+  'payments.loadingPayPal': 'Đang tải PayPal...',
+
   // Auth
   'auth.email': 'Email',
   'auth.password': 'Mật khẩu',
