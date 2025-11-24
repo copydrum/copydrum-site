@@ -161,10 +161,10 @@ export default function Footer() {
                 <p>{t('footer.contactInfoGlobal')}</p>
               )}
               <div className="mt-8 pt-8 border-t border-gray-800 text-center text-gray-400 text-sm">
-                <p>&copy; {new Date().getFullYear()} CopyDrum. All rights reserved.</p>
+                <p>{t('footer.copyright', { year: new Date().getFullYear() })}</p>
                 {isGlobalSite && (
                   <p className="mt-2 text-xs text-gray-500">
-                    Global Service | English / Japanese / Vietnamese / French / German / Spanish / Portuguese
+                    {t('footer.globalService')}
                   </p>
                 )}
               </div>

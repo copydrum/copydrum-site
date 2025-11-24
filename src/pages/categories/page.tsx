@@ -75,11 +75,6 @@ const CategoriesPage: React.FC = () => {
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoriteLoadingIds, setFavoriteLoadingIds] = useState<Set<string>>(new Set());
   const [buyingSheetId, setBuyingSheetId] = useState<string | null>(null);
-  const [showPaymentSelector, setShowPaymentSelector] = useState(false);
-  const [pendingPurchaseSheet, setPendingPurchaseSheet] = useState<DrumSheet | null>(null);
-  const [paymentProcessing, setPaymentProcessing] = useState(false);
-  const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
-  const [showBankTransferModal, setShowBankTransferModal] = useState(false);
   const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
   const [showInsufficientCashModal, setShowInsufficientCashModal] = useState(false);
   const [insufficientCashInfo, setInsufficientCashInfo] = useState<{ currentBalance: number; requiredAmount: number } | null>(null);
@@ -233,44 +228,7 @@ const CategoriesPage: React.FC = () => {
     }
   };
 
-  const completeOnlinePurchase = async (
-    method: 'card' | 'bank_transfer' | 'paypal',
-    options?: { depositorName?: string },
-  ) => {
-    if (!user || !pendingPurchaseSheet) return;
-
-    const sheet = pendingPurchaseSheet;
-    const price = Math.max(0, sheet.price ?? 0);
-
-    const result = await startSheetPurchase({
-      userId: user.id,
-      items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
-      amount: price,
-      paymentMethod: method,
-      description: t('categoriesPage.purchaseDescription', { title: sheet.title }),
-      buyerName: user.email ?? null,
-      buyerEmail: user.email ?? null,
-      // returnUrl은 productPurchase에서 자동으로 Edge Function URL 사용
-      depositorName: options?.depositorName,
-    });
-
-    if (method === 'bank_transfer') {
-      setBankTransferInfo(result.virtualAccountInfo ?? null);
-      alert(t('categoriesPage.bankTransferCreated'));
-    } else if (method === 'paypal') {
-      setBankTransferInfo(null);
-      // PayPal은 리다이렉트되므로 알림 불필요
-    } else {
-      setBankTransferInfo(null);
-      alert(t('categoriesPage.paymentWindowOpen'));
-    }
-  };
-
-  // ✅ 기존 handlePurchaseMethodSelect는 다른 용도로 사용되므로 유지
-  // Buy Now는 useBuyNow 훅을 사용
-
-  // ✅ 기존 handleBankTransferConfirm과 handlePayPalInitiate는 다른 용도로 사용되므로 유지
-  // Buy Now는 useBuyNow 훅을 사용
+  // ✅ Buy Now는 useBuyNow 훅을 사용
 
 
   const loadFavorites = useCallback(async () => {
@@ -416,7 +374,8 @@ const CategoriesPage: React.FC = () => {
 
   const handleAddToCart = async (sheetId: string) => {
     if (!user) {
-      navigate('/auth/login');
+      const redirectPath = window.location.pathname + window.location.search;
+      navigate(`/auth/login?redirect=${encodeURIComponent(redirectPath)}`);
       return;
     }
 
@@ -444,6 +403,7 @@ const CategoriesPage: React.FC = () => {
 
   // ✅ 공유 useBuyNow 훅 사용
   const buyNow = useBuyNow(user);
+  const handleBankTransferConfirm = buyNow.handleBankTransferConfirm;
 
   const handleBuyNow = async (sheet: DrumSheet) => {
     await buyNow.handleBuyNow({
@@ -704,13 +664,13 @@ const CategoriesPage: React.FC = () => {
         </div>
         
         <div className="pt-4 pb-[96px] px-4 space-y-6">
-          {bankTransferInfo ? (
+          {buyNow.bankTransferInfo ? (
             <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-blue-900">{t('categoriesPage.bankTransferInfo')}</h3>
                 <button
                   type="button"
-                  onClick={() => setBankTransferInfo(null)}
+                  onClick={() => buyNow.closeBankTransferModal()}
                   className="text-blue-600 hover:text-blue-800 text-xs"
                 >
                   {t('categoriesPage.close')}
@@ -718,26 +678,26 @@ const CategoriesPage: React.FC = () => {
               </div>
               <div className="mt-3 space-y-2">
                 <div>
-                  <span className="font-medium text-gray-900">{t('categoriesPage.bank')}</span> {bankTransferInfo.bankName}
+                  <span className="font-medium text-gray-900">{t('categoriesPage.bank')}</span> {buyNow.bankTransferInfo.bankName}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-900">{t('categoriesPage.accountNumber')}</span> {bankTransferInfo.accountNumber}
+                  <span className="font-medium text-gray-900">{t('categoriesPage.accountNumber')}</span> {buyNow.bankTransferInfo.accountNumber}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-900">{t('categoriesPage.accountHolder')}</span> {bankTransferInfo.depositor}
+                  <span className="font-medium text-gray-900">{t('categoriesPage.accountHolder')}</span> {buyNow.bankTransferInfo.depositor}
                 </div>
                 <div>
                   <span className="font-medium text-gray-900">{t('categoriesPage.depositAmount')}</span>{' '}
-                  {formatCurrency(bankTransferInfo.amount ?? 0)}
+                  {formatCurrency(buyNow.bankTransferInfo.amount ?? 0)}
                 </div>
-                {bankTransferInfo.expectedDepositor ? (
+                {buyNow.bankTransferInfo.expectedDepositor ? (
                   <div>
                     <span className="font-medium text-gray-900">{t('categoriesPage.depositorName')}</span>{' '}
-                    <span className="text-blue-600 font-semibold">{bankTransferInfo.expectedDepositor}</span>
+                    <span className="text-blue-600 font-semibold">{buyNow.bankTransferInfo.expectedDepositor}</span>
                   </div>
                 ) : null}
-                {bankTransferInfo.message ? (
-                  <p className="text-xs text-gray-600">{bankTransferInfo.message}</p>
+                {buyNow.bankTransferInfo.message ? (
+                  <p className="text-xs text-gray-600">{buyNow.bankTransferInfo.message}</p>
                 ) : null}
               </div>
             </div>
@@ -903,14 +863,14 @@ const CategoriesPage: React.FC = () => {
                     </button>
                   )}
                 </div>
-                {bankTransferInfo ? (
+                {buyNow.bankTransferInfo ? (
                   <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700">
                     <h4 className="font-semibold text-blue-900 mb-2">{t('categoriesPage.bankTransferInfo')}</h4>
                     <div className="space-y-1">
-                      <p>{t('categoriesPage.bank')}: {bankTransferInfo.bankName}</p>
-                      <p>{t('categoriesPage.accountNumber')}: {bankTransferInfo.accountNumber}</p>
-                      <p>{t('categoriesPage.accountHolder')}: {bankTransferInfo.depositor}</p>
-                      <p>{t('categoriesPage.depositAmount')}: {formatCurrency(bankTransferInfo.amount ?? 0)}</p>
+                      <p>{t('categoriesPage.bank')}: {buyNow.bankTransferInfo.bankName}</p>
+                      <p>{t('categoriesPage.accountNumber')}: {buyNow.bankTransferInfo.accountNumber}</p>
+                      <p>{t('categoriesPage.accountHolder')}: {buyNow.bankTransferInfo.depositor}</p>
+                      <p>{t('categoriesPage.depositAmount')}: {formatCurrency(buyNow.bankTransferInfo.amount ?? 0)}</p>
                     </div>
                   </div>
                 ) : null}
@@ -958,13 +918,13 @@ const CategoriesPage: React.FC = () => {
       {/* Desktop Layout */}
       <div className="hidden md:block ">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-          {bankTransferInfo ? (
+          {buyNow.bankTransferInfo ? (
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-blue-900">{t('categoriesPage.bankTransferInfo')}</h3>
                 <button
                   type="button"
-                  onClick={() => setBankTransferInfo(null)}
+                  onClick={() => buyNow.closeBankTransferModal()}
                   className="text-blue-600 hover:text-blue-800 text-xs"
                 >
                   {t('categoriesPage.close')}
@@ -972,27 +932,27 @@ const CategoriesPage: React.FC = () => {
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <div>
-                  <span className="font-medium text-gray-900">{t('categoriesPage.bank')}</span> {bankTransferInfo.bankName}
+                  <span className="font-medium text-gray-900">{t('categoriesPage.bank')}</span> {buyNow.bankTransferInfo.bankName}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-900">{t('categoriesPage.accountNumber')}</span> {bankTransferInfo.accountNumber}
+                  <span className="font-medium text-gray-900">{t('categoriesPage.accountNumber')}</span> {buyNow.bankTransferInfo.accountNumber}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-900">{t('categoriesPage.accountHolder')}</span> {bankTransferInfo.depositor}
+                  <span className="font-medium text-gray-900">{t('categoriesPage.accountHolder')}</span> {buyNow.bankTransferInfo.depositor}
                 </div>
                 <div>
                   <span className="font-medium text-gray-900">{t('categoriesPage.depositAmount')}</span>{' '}
-                  {formatCurrency(bankTransferInfo.amount ?? 0)}
+                  {formatCurrency(buyNow.bankTransferInfo.amount ?? 0)}
                 </div>
-                {bankTransferInfo.expectedDepositor ? (
+                {buyNow.bankTransferInfo.expectedDepositor ? (
                   <div className="sm:col-span-2">
                     <span className="font-medium text-gray-900">{t('categoriesPage.depositorName')}</span>{' '}
-                    <span className="text-blue-600 font-semibold">{bankTransferInfo.expectedDepositor}</span>
+                    <span className="text-blue-600 font-semibold">{buyNow.bankTransferInfo.expectedDepositor}</span>
                   </div>
                 ) : null}
               </div>
-              {bankTransferInfo.message ? (
-                <p className="mt-3 text-xs text-gray-600">{bankTransferInfo.message}</p>
+              {buyNow.bankTransferInfo.message ? (
+                <p className="mt-3 text-xs text-gray-600">{buyNow.bankTransferInfo.message}</p>
               ) : null}
             </div>
           ) : null}
@@ -1455,31 +1415,6 @@ const CategoriesPage: React.FC = () => {
         </div>
       </div>
 
-      <BankTransferInfoModal
-        open={showBankTransferModal}
-        amount={
-          pendingPurchaseSheet
-            ? Math.max(
-              0,
-              pendingPurchaseSheet.price ?? 0,
-            )
-            : 0
-        }
-        userName={(user?.user_metadata?.name as string | undefined) ?? user?.email ?? undefined}
-        onConfirm={handleBankTransferConfirm}
-        onClose={() => {
-          setShowBankTransferModal(false);
-          if (!bankTransferInfo) {
-            setShowPaymentSelector(true);
-          } else {
-            setPendingPurchaseSheet(null);
-            setBankTransferInfo(null);
-          }
-        }}
-        processing={paymentProcessing}
-        orderCreated={!!bankTransferInfo}
-        successMessage={t('categoriesPage.bankTransferCreated') || '무통장입금 계좌가 생성되었습니다. 입금을 완료해주세요.'}
-      />
 
       {/* ✅ 공유 useBuyNow 훅의 모달들 */}
       <PaymentMethodSelector
@@ -1519,26 +1454,6 @@ const CategoriesPage: React.FC = () => {
         />
       )}
 
-      {/* 기존 모달들 (다른 용도) */}
-      <PaymentMethodSelector
-        open={showPaymentSelector}
-        amount={
-          pendingPurchaseSheet
-            ? Math.max(
-              0,
-              pendingPurchaseSheet.price ?? 0,
-            )
-            : 0
-        }
-        onClose={() => {
-          setShowPaymentSelector(false);
-          setPendingPurchaseSheet(null);
-          setBuyingSheetId(null);
-          setPaymentProcessing(false);
-        }}
-        onSelect={handlePurchaseMethodSelect}
-        context="buyNow"
-      />
 
       {
         insufficientCashInfo && (

@@ -464,7 +464,8 @@ export default function SheetDetailPage() {
 
   const handleAddToCart = async () => {
     if (!user) {
-      navigate('/auth/login');
+      const redirectPath = window.location.pathname + window.location.search;
+      navigate(`/auth/login?redirect=${encodeURIComponent(redirectPath)}`);
       return;
     }
 
@@ -792,7 +793,7 @@ export default function SheetDetailPage() {
                 <div className="flex justify-end gap-2 sm:gap-3 mt-4">
                   <button
                     onClick={handleAddToCart}
-                    disabled={!user || isInCart(sheet.id)}
+                    disabled={isInCart(sheet.id)}
                     className={`sheet-action-btn btn-cart px-4 py-2.5 sm:px-6 sm:py-3 text-sm sm:text-base w-1/2 sm:w-auto h-auto min-w-0 sm:min-w-[120px] ${isInCart(sheet.id) ? 'opacity-60' : ''}`}
                   >
                     <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5" />
@@ -801,7 +802,7 @@ export default function SheetDetailPage() {
 
                   <button
                     onClick={handleBuyNow}
-                    disabled={!user || buyingNow}
+                    disabled={buyingNow}
                     className="sheet-action-btn btn-buy px-4 py-2.5 sm:px-6 sm:py-3 text-sm sm:text-base w-1/2 sm:w-auto h-auto min-w-0 sm:min-w-[120px]"
                   >
                     <span>{buyingNow ? (t('sheetDetail.purchaseProcessing') || t('sheet.buyNowProcessing') || '처리 중...') : t('categoriesPage.buyNow')}</span>

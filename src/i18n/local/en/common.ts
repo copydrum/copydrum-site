@@ -120,7 +120,6 @@ export default {
   'footer.support': 'Support',
   'footer.legal': 'Legal',
   'footer.followUs': 'Follow Us',
-  'footer.copyright': '© 2025 CopyDrum. All rights reserved.',
 
   // Common
   'common.or': 'or',
@@ -421,7 +420,10 @@ export default {
   'footer.telecomLicense': 'Telecom Sales Business Registration: 2020-Sejong-0099',
   'footer.address': 'Address: 836, 8F, Gangnam Jeil Tower, 454 Namsejong-ro, Sejong',
   'footer.contactInfo': 'Contact: 070-7570-0028 (Please use 1:1 inquiry or KakaoTalk chat as phone contact is difficult during work hours.)',
+  'footer.email': 'Email: copydrum@hanmail.net',
   'footer.contactInfoGlobal': 'If you have any inquiries, please submit them through "1:1 Inquiry" in My Page.',
+  'footer.copyright': '© {{year}} CopyDrum. All rights reserved.',
+  'footer.globalService': 'Global Service | English / Japanese / Vietnamese / French / German / Spanish / Portuguese',
 
   // Home Page - Additional translations
   'home.eventSaleEvent': '100 Won Sale Event',

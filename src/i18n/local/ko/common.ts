@@ -409,6 +409,8 @@ export default {
   'footer.contactInfo': '연락처 070-7570-0028 (작업중에 연락이 어렵습니다. 1:1문의 또는 카카오톡 채팅을 이용해주세요.)',
   'footer.email': '이메일: copydrum@hanmail.net',
   'footer.contactInfoGlobal': '문의사항이 있으시면 마이페이지의 1:1 문의하기를 이용해 주세요.',
+  'footer.copyright': '© {{year}} 카피드럼. All rights reserved.',
+  'footer.globalService': '글로벌 서비스 | 영어 / 일본어 / 베트남어 / 프랑스어 / 독일어 / 스페인어 / 포르투갈어',
 
   // Home Page - Additional translations
   'home.eventSaleEvent': '100원 특가 이벤트',

@@ -548,22 +548,68 @@ export default function Home() {
                       });
 
                   return sortedCategories.map((category) => {
-                    // Translate genre name
-                    const getGenreName = (genreKo: string): string => {
-                      const genreMap: Record<string, string> = {
-                        '가요': t('category.kpop'),
-                        '팝': t('category.pop'),
-                        '락': t('category.rock'),
-                        'CCM': t('category.ccm'),
-                        '트로트/성인가요': t('category.trot'),
-                        '재즈': t('category.jazz'),
-                        'J-POP': t('category.jpop'),
-                        'OST': t('category.ost'),
-                        '드럼솔로': t('category.drumSolo'),
-                        '드럼커버': t('category.drumCover'),
-                      };
+                    // ✅ 장르 이름을 번역하는 함수 (Sheet Detail Page와 동일한 로직)
+                    const getGenreName = (categoryName: string | null | undefined): string => {
+                      if (!categoryName) return '';
 
-                      return genreMap[genreKo] || genreKo;
+                      // ✅ 한국어 사이트: 원본 한국어 반환
+                      if (i18n.language === 'ko') {
+                        return categoryName;
+                      }
+
+                      // ✅ 영어 사이트: categoriesPage.categories.* 키 사용
+                      if (i18n.language === 'en') {
+                        const categoryMap: Record<string, string> = {
+                          '가요': t('categoriesPage.categories.kpop'),
+                          '팝': t('categoriesPage.categories.pop'),
+                          '락': t('categoriesPage.categories.rock'),
+                          'CCM': t('categoriesPage.categories.ccm'),
+                          '트로트/성인가요': t('categoriesPage.categories.trot'),
+                          '재즈': t('categoriesPage.categories.jazz'),
+                          'J-POP': t('categoriesPage.categories.jpop'),
+                          'OST': t('categoriesPage.categories.ost'),
+                          '드럼솔로': t('categoriesPage.categories.drumSolo'),
+                          '드럼커버': t('categoriesPage.categories.drumCover'),
+                          '기타': t('categoriesPage.categories.other'),
+                        };
+                        return categoryMap[categoryName] || categoryName;
+                      }
+
+                      // ✅ 일본어 사이트: category.* 키 사용 (기존 로직 유지)
+                      if (i18n.language === 'ja') {
+                        const categoryMapJa: Record<string, string> = {
+                          '가요': t('category.kpop'),
+                          '팝': t('category.pop'),
+                          '락': t('category.rock'),
+                          'CCM': t('category.ccm'),
+                          '트로트/성인가요': t('category.trot'),
+                          '재즈': t('category.jazz'),
+                          'J-POP': t('category.jpop'),
+                          'OST': t('category.ost'),
+                          '드럼솔로': t('category.drumSolo'),
+                          '드럼커버': t('category.drumCover'),
+                          '기타': t('category.other'),
+                        };
+                        return categoryMapJa[categoryName] || categoryName;
+                      }
+
+                      // ✅ 나머지 모든 언어: categoriesPage.categories.* 키 사용
+                      const categoryMap: Record<string, string> = {
+                        '가요': t('categoriesPage.categories.kpop'),
+                        '팝': t('categoriesPage.categories.pop'),
+                        '락': t('categoriesPage.categories.rock'),
+                        'CCM': t('categoriesPage.categories.ccm'),
+                        '트로트/성인가요': t('categoriesPage.categories.trot'),
+                        '재즈': t('categoriesPage.categories.jazz'),
+                        'J-POP': t('categoriesPage.categories.jpop'),
+                        'OST': t('categoriesPage.categories.ost'),
+                        '드럼솔로': t('categoriesPage.categories.drumSolo'),
+                        '드럼커버': t('categoriesPage.categories.drumCover'),
+                        '기타': t('categoriesPage.categories.other'),
+                      };
+                      
+                      // 번역 키가 있으면 사용, 없으면 원본 반환
+                      return categoryMap[categoryName] || categoryName;
                     };
 
                     return (

@@ -52,7 +52,8 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
   const handleBuyNow = useCallback(
     async (sheet: SheetForBuyNow) => {
       if (!user) {
-        navigate('/auth/login');
+        const redirectPath = window.location.pathname + window.location.search;
+        navigate(`/auth/login?redirect=${encodeURIComponent(redirectPath)}`);
         return;
       }
 
