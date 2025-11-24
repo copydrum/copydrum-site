@@ -67,9 +67,16 @@ export default function SheetDetailPage() {
   };
 
   // 카테고리 이름을 번역하는 함수
+  // ✅ 모든 언어 지원: ko/en/ja는 기존 로직 유지, 나머지 언어는 categoriesPage.categories.* 키 사용
   const getCategoryName = (categoryName: string | null | undefined): string => {
     if (!categoryName) return '';
 
+    // ✅ 한국어 사이트: 원본 한국어 반환
+    if (i18n.language === 'ko') {
+      return categoryName;
+    }
+
+    // ✅ 영어 사이트: 기존 로직 유지
     if (i18n.language === 'en') {
       const categoryMap: Record<string, string> = {
         '가요': t('categoriesPage.categories.kpop'),
@@ -87,6 +94,7 @@ export default function SheetDetailPage() {
       return categoryMap[categoryName] || categoryName;
     }
 
+    // ✅ 일본어 사이트: 기존 로직 유지
     if (i18n.language === 'ja') {
       const categoryMapJa: Record<string, string> = {
         '가요': t('category.kpop'),
@@ -104,7 +112,23 @@ export default function SheetDetailPage() {
       return categoryMapJa[categoryName] || categoryName;
     }
 
-    return categoryName;
+    // ✅ 나머지 모든 언어: categoriesPage.categories.* 키 사용
+    const categoryMap: Record<string, string> = {
+      '가요': t('categoriesPage.categories.kpop'),
+      '팝': t('categoriesPage.categories.pop'),
+      '락': t('categoriesPage.categories.rock'),
+      'CCM': t('categoriesPage.categories.ccm'),
+      '트로트/성인가요': t('categoriesPage.categories.trot'),
+      '재즈': t('categoriesPage.categories.jazz'),
+      'J-POP': t('categoriesPage.categories.jpop'),
+      'OST': t('categoriesPage.categories.ost'),
+      '드럼솔로': t('categoriesPage.categories.drumSolo'),
+      '드럼커버': t('categoriesPage.categories.drumCover'),
+      '기타': t('categoriesPage.categories.other'),
+    };
+    
+    // 번역 키가 있으면 사용, 없으면 원본 반환
+    return categoryMap[categoryName] || categoryName;
   };
 
   useEffect(() => {
@@ -224,8 +248,13 @@ export default function SheetDetailPage() {
 
     const normalizedDifficulty = (difficulty || '').toLowerCase().trim();
 
-    // 영문 사이트(USD)에서 한글 난이도 값을 영어로 변환
-    if (currency === 'USD' || i18n.language === 'en') {
+    // ✅ 한국어 사이트: 원본 한글 값 그대로 반환
+    if (i18n.language === 'ko') {
+      return difficulty;
+    }
+
+    // ✅ 영어 사이트: 기존 로직 유지
+    if (i18n.language === 'en') {
       const difficultyMapEn: Record<string, string> = {
         '초급': 'Beginner',
         '중급': 'Intermediate',
@@ -238,8 +267,8 @@ export default function SheetDetailPage() {
       }
     }
 
-    // 일본어 사이트(JPY)
-    if (currency === 'JPY' || i18n.language === 'ja') {
+    // ✅ 일본어 사이트: 기존 로직 유지
+    if (i18n.language === 'ja') {
       const difficultyMapJa: Record<string, string> = {
         '초급': t('sheetDetail.difficulty.beginner'),
         '중급': t('sheetDetail.difficulty.intermediate'),
@@ -253,7 +282,28 @@ export default function SheetDetailPage() {
       }
     }
 
-    // 영어 값이거나 한국어 사이트인 경우
+    // ✅ 나머지 모든 언어: i18n 키 사용
+    // 한글 난이도 값을 영어 키로 매핑
+    const difficultyMap: Record<string, string> = {
+      '초급': 'beginner',
+      '중급': 'intermediate',
+      '고급': 'advanced',
+      'beginner': 'beginner',
+      'intermediate': 'intermediate',
+      'advanced': 'advanced',
+    };
+
+    const mappedKey = difficultyMap[normalizedDifficulty] || difficultyMap[difficulty];
+    if (mappedKey) {
+      // i18n 키로 번역 시도
+      const translated = t(`sheetDetail.difficulty.${mappedKey}`);
+      // 번역이 키와 다르면 번역된 값, 같으면 fallback
+      if (translated !== `sheetDetail.difficulty.${mappedKey}`) {
+        return translated;
+      }
+    }
+
+    // 영어 값인 경우 직접 번역
     switch (normalizedDifficulty) {
       case 'beginner':
         return t('sheetDetail.difficulty.beginner');
@@ -262,7 +312,7 @@ export default function SheetDetailPage() {
       case 'advanced':
         return t('sheetDetail.difficulty.advanced');
       default:
-        // 한국어 사이트에서는 원본 한글 값 그대로 반환
+        // fallback: 원본 값 반환
         return difficulty;
     }
   };
@@ -746,7 +796,7 @@ export default function SheetDetailPage() {
                     className={`sheet-action-btn btn-cart px-4 py-2.5 sm:px-6 sm:py-3 text-sm sm:text-base w-1/2 sm:w-auto h-auto min-w-0 sm:min-w-[120px] ${isInCart(sheet.id) ? 'opacity-60' : ''}`}
                   >
                     <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5" />
-                    <span>{isInCart(sheet.id) ? t('categories.alreadyInCart') : t('categories.addToCart')}</span>
+                    <span>{isInCart(sheet.id) ? t('categoriesPage.alreadyPurchasedGeneric') || t('categories.alreadyInCart') : t('categoriesPage.addToCart')}</span>
                   </button>
 
                   <button
@@ -754,7 +804,7 @@ export default function SheetDetailPage() {
                     disabled={!user || buyingNow}
                     className="sheet-action-btn btn-buy px-4 py-2.5 sm:px-6 sm:py-3 text-sm sm:text-base w-1/2 sm:w-auto h-auto min-w-0 sm:min-w-[120px]"
                   >
-                    <span>{buyingNow ? (t('sheet.buyNowProcessing') || '처리 중...') : t('sheet.buyNow')}</span>
+                    <span>{buyingNow ? (t('sheetDetail.purchaseProcessing') || t('sheet.buyNowProcessing') || '처리 중...') : t('categoriesPage.buyNow')}</span>
                   </button>
                 </div>
 
