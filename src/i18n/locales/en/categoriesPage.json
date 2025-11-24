@@ -82,6 +82,7 @@
   "alreadyPurchased": "{{title}} has already been purchased.",
   "alreadyPurchasedGeneric": "This sheet has already been purchased.",
   "purchaseComplete": "Purchase completed successfully!",
+  "purchaseSuccess": "Point payment completed! You can download the sheet music from My Page.",
   "purchaseError": "An error occurred during purchase. Please try again.",
   "purchaseCheckError": "An error occurred while checking purchase history. Please try again.",
   "insufficientCash": "Insufficient cash balance. Current balance: {{amount}}",

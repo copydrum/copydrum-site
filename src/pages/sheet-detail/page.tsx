@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import { useSiteLanguage } from '../../hooks/useSiteLanguage';
 import { useBuyNow } from '../../hooks/useBuyNow';
+import { useUserCredits } from '../../hooks/useUserCredits';
 
 interface DrumSheet {
   id: string;
@@ -452,6 +453,7 @@ export default function SheetDetailPage() {
 
   // ✅ 공유 useBuyNow 훅 사용
   const buyNow = useBuyNow(user);
+  const { credits } = useUserCredits(user);
 
   const handleBuyNow = async () => {
     if (!sheet) return;
@@ -943,6 +945,7 @@ export default function SheetDetailPage() {
         onSelect={buyNow.handlePaymentMethodSelect}
         onClose={buyNow.closePaymentSelector}
         context="buyNow"
+        userCredits={credits}
       />
 
       <BankTransferInfoModal

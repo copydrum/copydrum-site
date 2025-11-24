@@ -40,3 +40,4 @@ create policy "user_favorites_delete" on public.user_favorites
 
 
 
+

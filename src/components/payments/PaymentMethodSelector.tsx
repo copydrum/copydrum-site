@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
+import { isKoreanSiteHost } from '../../config/hostType';
 
 type PaymentMethod = 'cash' | 'card' | 'bank' | 'paypal';
 
@@ -24,6 +25,7 @@ interface PaymentMethodSelectorProps {
   allowCash?: boolean;
   disabledMethods?: PaymentMethod[];
   context?: PaymentContext; // 'buyNow' (바로구매) 또는 'cashCharge' (캐시 충전)
+  userCredits?: number; // 사용자 포인트 잔액 (한국어 사이트에서 포인트 결제 옵션 표시용)
 }
 
 export type { PaymentMethod, PaymentContext };
@@ -34,13 +36,14 @@ export type { PaymentMethod, PaymentContext };
  * @param siteType - 'ko' (한국어 사이트) 또는 'global' (글로벌 사이트)
  * @param context - 'buyNow' (바로구매) 또는 'cashCharge' (캐시 충전)
  * @param t - i18n 번역 함수
+ * @param userCredits - 사용자 포인트 잔액 (한국어 사이트에서 포인트 결제 옵션 표시용)
  * @returns 사용 가능한 결제수단 옵션 배열
  */
 function getAvailablePaymentMethods(
   siteType: 'ko' | 'global',
   context: PaymentContext,
   t: (key: string) => string,
-  allowCash: boolean = true,
+  userCredits: number = 0,
 ): PaymentMethodOption[] {
   // 글로벌 사이트: PayPal만 표시
   if (siteType === 'global') {
@@ -56,7 +59,7 @@ function getAvailablePaymentMethods(
     ];
   }
 
-  // 한국어 사이트: 무통장입금만 표시
+  // 한국어 사이트: 무통장입금 + 포인트 결제 (포인트가 있을 때만)
   if (siteType === 'ko') {
     const methods: PaymentMethodOption[] = [
       {
@@ -68,6 +71,18 @@ function getAvailablePaymentMethods(
         disabled: false,
       },
     ];
+
+    // 포인트 결제 옵션 추가 (포인트가 있을 때만)
+    if (userCredits > 0 && context === 'buyNow') {
+      methods.push({
+        id: 'cash',
+        name: t('payment.cash'),
+        description: t('payment.cashDescription'),
+        icon: 'ri-coins-line',
+        color: 'text-yellow-600',
+        disabled: false,
+      });
+    }
 
     // Feature flag: 향후 PG 심사 완료 후 카드/간편결제를 다시 노출할 수 있도록
     const enableCardInKR = import.meta.env.VITE_ENABLE_CARD_IN_KR === 'true';
@@ -107,6 +122,7 @@ export const PaymentMethodSelector = ({
   allowCash = true,
   disabledMethods = [],
   context = 'buyNow', // 기본값은 바로구매
+  userCredits = 0, // 사용자 포인트 잔액
 }: PaymentMethodSelectorProps) => {
   const { t, i18n: i18nInstance } = useTranslation();
 
@@ -136,7 +152,7 @@ export const PaymentMethodSelector = ({
   // 통합 통화 로직 적용 (locale 기반)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
   const currency = useMemo(() => getSiteCurrency(hostname, i18nInstance.language), [hostname, i18nInstance.language]);
-  const isKoreanSite = currency === 'KRW';
+  const isKoreanSite = isKoreanSiteHost(hostname);
   // 한국 사이트가 아니면 모두 글로벌 사이트로 처리
   const isGlobalSite = !isKoreanSite;
 
@@ -153,8 +169,8 @@ export const PaymentMethodSelector = ({
   }, [isGlobalSite]);
 
   const paymentMethodOptions: PaymentMethodOption[] = useMemo(() => {
-    return getAvailablePaymentMethods(siteType, context, t, allowCash);
-  }, [siteType, context, t, allowCash]);
+    return getAvailablePaymentMethods(siteType, context, t, userCredits);
+  }, [siteType, context, t, userCredits]);
 
 
   if (!open) return null;

@@ -10,6 +10,7 @@ import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import PayPalPaymentModal from '../../components/payments/PayPalPaymentModal';
+import { useUserCredits } from '../../hooks/useUserCredits';
 
 type PendingCartPurchase = {
   targetItemIds: string[];
@@ -26,6 +27,7 @@ export default function CartPage() {
   // 모든 훅을 최상단에 모아서 항상 동일한 순서로 호출되도록 함
   const { cartItems, loading, removeFromCart, removeSelectedItems, clearCart, getTotalPrice } = useCart();
   const { user } = useAuthStore();
+  const { credits } = useUserCredits(user);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [processing, setProcessing] = useState(false);
   const [showPaymentSelector, setShowPaymentSelector] = useState(false);
@@ -558,6 +560,7 @@ export default function CartPage() {
           }}
           onSelect={handlePaymentMethodSelect}
           context="buyNow"
+          userCredits={credits}
         />
 
         {showPayPalModal && pendingPurchase && (

@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import { useSiteLanguage } from '../../hooks/useSiteLanguage';
 import { useBuyNow } from '../../hooks/useBuyNow';
+import { useUserCredits } from '../../hooks/useUserCredits';
 
 interface Category {
   id: string;
@@ -405,6 +406,7 @@ const CategoriesPage: React.FC = () => {
   // ✅ 공유 useBuyNow 훅 사용
   const buyNow = useBuyNow(user);
   const handleBankTransferConfirm = buyNow.handleBankTransferConfirm;
+  const { credits } = useUserCredits(user);
 
   const handleBuyNow = async (sheet: DrumSheet) => {
     await buyNow.handleBuyNow({
@@ -1424,6 +1426,7 @@ const CategoriesPage: React.FC = () => {
         onSelect={buyNow.handlePaymentMethodSelect}
         onClose={buyNow.closePaymentSelector}
         context="buyNow"
+        userCredits={credits}
       />
 
       <BankTransferInfoModal

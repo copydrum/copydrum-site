@@ -14,6 +14,8 @@ import { buildDownloadKey, downloadFile, getDownloadFileName, requestSignedDownl
 import { useTranslation } from 'react-i18next';
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import { getUserDisplayName } from '../../utils/userDisplayName';
+import { useUserCredits } from '../../hooks/useUserCredits';
+import { isKoreanSiteHost } from '../../config/hostType';
 
 import type { VirtualAccountInfo } from '../../lib/payments';
 
@@ -106,8 +108,14 @@ export default function MyPage() {
   const { cartItems, addToCart, isInCart } = useCart();
   const { t, i18n } = useTranslation();
 
+  // user 상태를 최상단에 선언 (다른 훅에서 사용하기 전에 선언 필요)
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
   const currency = getSiteCurrency(hostname, i18n.language);
+  const isKoreanSite = isKoreanSiteHost(hostname);
+  const { credits, isLoading: creditsLoading } = useUserCredits(user);
 
   const formatCurrency = useCallback(
     (value: number) => {
@@ -152,9 +160,6 @@ export default function MyPage() {
     { id: 'inquiries', label: t('mypage.tabs.inquiries.label'), icon: 'ri-question-answer-line', description: t('mypage.tabs.inquiries.description') },
     { id: 'custom-orders', label: t('mypage.tabs.customOrders.label'), icon: 'ri-file-text-line', description: t('mypage.tabs.customOrders.description') },
   ], [t]);
-
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
 
   // URL 쿼리 파라미터에서 탭 정보 읽기
   const getInitialTab = useCallback((): TabKey => {
@@ -1116,6 +1121,16 @@ export default function MyPage() {
                     </div>
                   </div>
 
+                  {/* 보유 포인트 표시 (한국어 사이트만, credits > 0일 때만) */}
+                  {isKoreanSite && !creditsLoading && credits > 0 && (
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">{t('mypage.profile.cashBalance')}</h3>
+                      <p className="text-3xl font-extrabold text-blue-600 mb-2">{credits.toLocaleString('ko-KR')} P</p>
+                      <p className="text-xs text-gray-500" style={{ fontSize: 12, color: '#666' }}>
+                        * 포인트는 예전에 충전한 금액만 사용 가능하며, 새로운 포인트 충전은 제공되지 않습니다.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-4">

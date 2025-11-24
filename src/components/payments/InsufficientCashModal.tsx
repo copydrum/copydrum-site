@@ -89,12 +89,13 @@ export const InsufficientCashModal = ({
             >
               {t('common.cancel')}
             </button>
-            <button
+            {/* 포인트/캐시 충전 기능은 전체 사이트에서 비활성화됨 */}
+            {/* <button
               onClick={handleOpenCashChargeModal}
               className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
             >
               {t('payment.chargeCash')}
-            </button>
+            </button> */}
           </div>
         </div>
       </div>

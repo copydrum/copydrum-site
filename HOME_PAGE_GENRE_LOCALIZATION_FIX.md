@@ -198,3 +198,4 @@ const getGenreName = (categoryName: string | null | undefined): string => {
 
 이제 PC 메인 페이지의 "Popular Sheets" 섹션에서 모든 글로벌 사이트에서 장르가 올바르게 번역되어 표시됩니다.
 
+

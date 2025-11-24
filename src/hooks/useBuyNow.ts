@@ -6,6 +6,7 @@ import { hasPurchasedSheet } from '../lib/purchaseCheck';
 import { buySheetNow, startSheetPurchase } from '../lib/payments';
 import type { VirtualAccountInfo } from '../lib/payments';
 import type { PaymentMethod } from '../components/payments';
+import { processCashPurchase } from '../lib/cashPurchases';
 
 export interface SheetForBuyNow {
   id: string;
@@ -78,7 +79,7 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
   );
 
   const handlePaymentMethodSelect = useCallback(
-    (method: PaymentMethod) => {
+    async (method: PaymentMethod) => {
       if (!user || !pendingSheet) return;
 
       // ✅ 중요: PayPal 선택 시 결제수단 선택 모달을 먼저 닫지 않음
@@ -96,8 +97,57 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
         setShowPayPalModal(true);
         return;
       }
+
+      if (method === 'cash') {
+        // 포인트 결제 처리
+        const price = Math.max(0, pendingSheet.price ?? 0);
+        if (price <= 0) {
+          alert('결제 금액이 올바르지 않습니다.');
+          return;
+        }
+
+        setPaymentProcessing(true);
+
+        try {
+          const result = await processCashPurchase({
+            userId: user.id,
+            totalPrice: price,
+            description: t('categoriesPage.purchaseDescription', { title: pendingSheet.title }),
+            items: [
+              {
+                sheetId: pendingSheet.id,
+                sheetTitle: pendingSheet.title,
+                price,
+              },
+            ],
+            sheetIdForTransaction: pendingSheet.id,
+            paymentMethod: 'cash',
+          });
+
+          if (result.success) {
+            alert(t('categoriesPage.purchaseSuccess') || '구매가 완료되었습니다.');
+            // 구매 완료 후 페이지 새로고침 또는 리다이렉트
+            window.location.reload();
+          } else if (result.reason === 'INSUFFICIENT_CREDIT') {
+            alert(
+              t('payment.notEnoughCashMessage') ||
+                `보유 포인트가 부족합니다. 현재 잔액: ${result.currentCredits.toLocaleString()}원`
+            );
+          }
+        } catch (error) {
+          console.error('[useBuyNow] 포인트 결제 오류:', error);
+          alert(
+            error instanceof Error
+              ? error.message
+              : t('categoriesPage.purchaseError') || '결제 중 오류가 발생했습니다.'
+          );
+        } finally {
+          setPaymentProcessing(false);
+          setPendingSheet(null);
+        }
+      }
     },
-    [user, pendingSheet]
+    [user, pendingSheet, t]
   );
 
   const handleBankTransferConfirm = useCallback(
