@@ -4,6 +4,7 @@ import { isGlobalSiteHost, isJapaneseSiteHost, isEnglishSiteHost } from '../../c
 import { getActiveCurrency } from './getActiveCurrency';
 import { DEFAULT_USD_RATE } from '../priceFormatter';
 import { getLocaleFromHost } from '../../i18n/getLocaleFromHost';
+import { supabase } from '../../lib/supabase';
 
 // PortOne currency type
 type PortOneCurrency = 'CURRENCY_KRW' | 'CURRENCY_USD' | 'CURRENCY_JPY';
@@ -281,6 +282,27 @@ export const requestPayPalPayment = async (
     const convertedAmount = convertFromKrw(params.amount, paypalCurrency);
     const portOneCurrency = toPortOneCurrency(paypalCurrency);
 
+    // PayPal 금액 계산: PortOne SDK는 통화별로 다른 단위를 사용
+    // - USD: 센트 단위 (정수) - 예: 2.31 USD = 231 센트
+    // - JPY: 엔 단위 (정수) - 예: 300 JPY = 300
+    let finalAmount: number;
+    if (paypalCurrency === 'USD') {
+      // USD는 센트 단위로 변환 (소수점 2자리 반올림 후 100 곱하기)
+      finalAmount = Math.round(Number(convertedAmount.toFixed(2)) * 100);
+    } else {
+      // JPY는 엔 단위로 반올림
+      finalAmount = Math.round(convertedAmount);
+    }
+
+    // 디버그 로그 추가
+    console.log('[paypal-debug] 금액 계산 과정', {
+      'params.amount (KRW)': params.amount,
+      'paypalCurrency': paypalCurrency,
+      'convertedAmount (소수점 포함)': convertedAmount,
+      'finalAmount (PortOne 전달값)': finalAmount,
+      'finalAmount 설명': paypalCurrency === 'USD' ? `${finalAmount} 센트 = $${(finalAmount / 100).toFixed(2)}` : `${finalAmount} 엔`,
+    });
+
     // Request data와 콜백을 분리하여 전달
     // PortOne SDK는 자동으로 .portone-ui-container를 찾지만, 명시적으로 지정할 수도 있음
     const requestData: any = {
@@ -289,7 +311,7 @@ export const requestPayPalPayment = async (
       channelKey,
       paymentId: params.orderId,
       orderName: params.description,
-      totalAmount: Math.round(convertedAmount),
+      totalAmount: finalAmount,
       currency: portOneCurrency,
       customer: {
         customerId: params.userId ?? undefined,
@@ -311,6 +333,10 @@ export const requestPayPalPayment = async (
       ...requestData,
       originalAmount: params.amount,
       convertedAmount,
+      finalAmount,
+      '금액 설명': paypalCurrency === 'USD' 
+        ? `${params.amount} KRW → ${convertedAmount.toFixed(2)} USD → ${finalAmount} 센트`
+        : `${params.amount} KRW → ${convertedAmount.toFixed(0)} JPY → ${finalAmount} 엔`,
     });
 
     // 포트원 V2 SDK로 PayPal 결제 UI 로드
@@ -318,6 +344,46 @@ export const requestPayPalPayment = async (
     await PortOne.loadPaymentUI(requestData, {
       onPaymentSuccess: async (paymentResult: any) => {
         console.log('[portone-paypal] onPaymentSuccess', paymentResult);
+        
+        // PayPal 결제 성공 후 주문 상태 업데이트
+        try {
+          const imp_uid = paymentResult.paymentId || paymentResult.imp_uid || paymentResult.id;
+          const merchant_uid = params.orderId;
+          const paid_amount = paymentResult.amount || paymentResult.paidAmount || finalAmount;
+
+          console.log('[portone-paypal] 주문 상태 업데이트 시작', {
+            imp_uid,
+            merchant_uid,
+            paid_amount,
+            orderId: params.orderId,
+          });
+
+          // payments-portone-paypal Edge Function 호출하여 주문 상태 업데이트
+          const { data, error } = await supabase.functions.invoke('payments-portone-paypal', {
+            body: {
+              imp_uid,
+              merchant_uid,
+              paid_amount: paypalCurrency === 'USD' ? paid_amount / 100 : paid_amount, // 센트를 USD로 변환
+              status: 'paid',
+              orderId: params.orderId,
+            },
+          });
+
+          if (error) {
+            console.error('[portone-paypal] Edge Function 호출 오류', error);
+            // 에러가 발생해도 사용자 콜백은 호출 (결제는 성공했으므로)
+          } else if (!data || !data.success) {
+            console.error('[portone-paypal] Edge Function 응답 오류', data);
+            // 에러가 발생해도 사용자 콜백은 호출
+          } else {
+            console.log('[portone-paypal] 주문 상태 업데이트 성공', data);
+          }
+        } catch (updateError) {
+          console.error('[portone-paypal] 주문 상태 업데이트 중 예외 발생', updateError);
+          // 예외가 발생해도 사용자 콜백은 호출 (결제는 성공했으므로)
+        }
+
+        // 사용자 정의 성공 콜백 호출
         if (params.onSuccess) {
           params.onSuccess(paymentResult);
         }

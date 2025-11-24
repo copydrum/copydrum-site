@@ -171,6 +171,7 @@ serve(async (req) => {
         payment_provider: "paypal",
         pg_transaction_id: transactionId,
         paid_at: now,
+        status: "completed", // 주문 상태도 완료로 변경
         metadata: {
           ...(order.metadata || {}),
           paypal_order_id: paypalOrderId,

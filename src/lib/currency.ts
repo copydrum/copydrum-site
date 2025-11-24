@@ -103,19 +103,28 @@ export function getSiteCurrency(hostname?: string, locale?: string): Currency {
 
 /**
  * KRW(원) 기준 금액을 사이트 통화로 변환
+ * 
+ * @param krw - KRW 금액
+ * @param to - 변환할 통화
+ * @returns 변환된 금액 (소수점 포함, 반올림하지 않음)
+ * 
+ * 예시:
+ * - convertFromKrw(3000, 'USD') → 2.3076923076923075 (3000 / 1300)
+ * - convertFromKrw(3000, 'JPY') → 300 (3000 / 10)
  */
 export function convertFromKrw(krw: number, to: Currency): number {
     if (to === 'KRW') return krw;
     const krwPerUnit = KRW_PER_UNIT[to];
     if (!krwPerUnit || krwPerUnit <= 0) return krw;
     
-    // 소수점 통화(VND, IDR)는 더 정밀하게 처리
+    // 소수점 통화(VND, IDR)는 정수로 반올림
     if (to === 'VND' || to === 'IDR') {
         return Math.round(krw / krwPerUnit);
     }
     
-    // 일반 통화는 반올림
-    return Math.round(krw / krwPerUnit);
+    // 일반 통화는 소수점을 유지하여 반환 (반올림하지 않음)
+    // PayPal 등에서 센트 단위로 변환할 때 정확한 계산을 위해 필요
+    return krw / krwPerUnit;
 }
 
 /**
