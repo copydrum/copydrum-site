@@ -268,22 +268,14 @@ export const requestPayPalPayment = async (
 
     // PayPal 통화 결정 로직
     // 1. 일본어 사이트: JPY
-    // 2. 영어 사이트: USD
-    // 3. 나머지 14개 언어: USD (UI는 각 언어 통화, PayPal은 USD)
-    // 4. 한국어 사이트: 이미 isGlobalSite 체크로 차단됨
+    // 2. 나머지 모든 언어: USD (영어 포함)
+    // 3. 한국어 사이트: 이미 isGlobalSite 체크로 차단됨
     const hostname = window.location.hostname;
     const locale = getLocaleFromHost(window.location.host);
     
-    // PayPal 통화 결정
-    let paypalCurrency: 'USD' | 'JPY' = 'USD';
-    if (locale === 'ja' || isJapaneseSiteHost(hostname)) {
-      paypalCurrency = 'JPY';
-    } else if (locale === 'en' || isEnglishSiteHost(hostname)) {
-      paypalCurrency = 'USD';
-    } else {
-      // 나머지 14개 언어는 모두 USD
-      paypalCurrency = 'USD';
-    }
+    // PayPal 통화 결정: 일본어만 JPY, 나머지는 모두 USD
+    const isJapanSite = locale === 'ja' || isJapaneseSiteHost(hostname);
+    const paypalCurrency: 'USD' | 'JPY' = isJapanSite ? 'JPY' : 'USD';
 
     // KRW 금액을 PayPal 통화로 변환
     const convertedAmount = convertFromKrw(params.amount, paypalCurrency);
