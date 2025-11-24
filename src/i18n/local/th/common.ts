@@ -206,5 +206,18 @@ export default {
   // Sheet
   'sheet.buyNow': 'ซื้อทันที',
   'sheet.buyNowProcessing': 'กำลังประมวลผล...',
+
+  // Category/Genre Names
+  'category.kpop': 'K-POP',
+  'category.pop': 'ป๊อป',
+  'category.rock': 'ร็อก',
+  'category.ccm': 'CCM',
+  'category.trot': 'ทร็อต/ผู้ใหญ่',
+  'category.jazz': 'แจ๊ส',
+  'category.jpop': 'J-POP',
+  'category.ost': 'OST',
+  'category.drumSolo': 'ดรัมโซโล',
+  'category.drumCover': 'ดรัมคัฟเวอร์',
+  'category.other': 'อื่นๆ',
 };
 

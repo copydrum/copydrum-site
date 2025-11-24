@@ -80,7 +80,8 @@ export default function MobileMenuSidebar({
   // 장르 목록 생성
   const genreListKo = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
   const genreListEn = ['팝', '락', '가요', '재즈', 'J-POP', 'OST', 'CCM', '트로트/성인가요', '드럼솔로', '드럼커버'];
-  const genreList = i18n.language === 'en' ? genreListEn : genreListKo;
+  // 한국어(ko)는 genreListKo, 영어(en)는 genreListEn, 나머지 모든 언어는 genreListEn(영어 순서) 사용
+  const genreList = i18n.language === 'ko' ? genreListKo : genreListEn;
 
   // 카테고리 이름을 번역하는 함수
   const getCategoryName = (categoryName: string | null | undefined): string => {

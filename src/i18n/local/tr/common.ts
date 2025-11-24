@@ -206,5 +206,18 @@ export default {
   // Sheet
   'sheet.buyNow': 'Şimdi Satın Al',
   'sheet.buyNowProcessing': 'İşleniyor...',
+
+  // Category/Genre Names
+  'category.kpop': 'K-POP',
+  'category.pop': 'Pop',
+  'category.rock': 'Rock',
+  'category.ccm': 'CCM',
+  'category.trot': 'Trot/Yetişkin',
+  'category.jazz': 'Caz',
+  'category.jpop': 'J-POP',
+  'category.ost': 'OST',
+  'category.drumSolo': 'Bateri Solo',
+  'category.drumCover': 'Bateri Cover',
+  'category.other': 'Diğer',
 };
 

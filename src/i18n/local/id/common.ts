@@ -206,5 +206,18 @@ export default {
   // Sheet
   'sheet.buyNow': 'Beli Sekarang',
   'sheet.buyNowProcessing': 'Memproses...',
+
+  // Category/Genre Names
+  'category.kpop': 'K-POP',
+  'category.pop': 'Pop',
+  'category.rock': 'Rock',
+  'category.ccm': 'CCM',
+  'category.trot': 'Trot/Dewasa',
+  'category.jazz': 'Jazz',
+  'category.jpop': 'J-POP',
+  'category.ost': 'OST',
+  'category.drumSolo': 'Drum Solo',
+  'category.drumCover': 'Drum Cover',
+  'category.other': 'Lainnya',
 };
 

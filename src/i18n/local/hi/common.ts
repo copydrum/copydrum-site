@@ -206,5 +206,18 @@ export default {
   // Sheet
   'sheet.buyNow': 'अभी खरीदें',
   'sheet.buyNowProcessing': 'प्रसंस्करण...',
+
+  // Category/Genre Names
+  'category.kpop': 'K-POP',
+  'category.pop': 'पॉप',
+  'category.rock': 'रॉक',
+  'category.ccm': 'CCM',
+  'category.trot': 'ट्रॉट/वयस्क',
+  'category.jazz': 'जैज़',
+  'category.jpop': 'J-POP',
+  'category.ost': 'OST',
+  'category.drumSolo': 'ड्रम सोलो',
+  'category.drumCover': 'ड्रम कवर',
+  'category.other': 'अन्य',
 };
 

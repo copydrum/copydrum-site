@@ -206,5 +206,18 @@ export default {
   // Sheet
   'sheet.buyNow': 'Comprar Agora',
   'sheet.buyNowProcessing': 'Processando...',
+
+  // Category/Genre Names
+  'category.kpop': 'K-POP',
+  'category.pop': 'Pop',
+  'category.rock': 'Rock',
+  'category.ccm': 'CCM',
+  'category.trot': 'Trot/Adultos',
+  'category.jazz': 'Jazz',
+  'category.jpop': 'J-POP',
+  'category.ost': 'OST',
+  'category.drumSolo': 'Solo de Bateria',
+  'category.drumCover': 'Cover de Bateria',
+  'category.other': 'Outros',
 };
 

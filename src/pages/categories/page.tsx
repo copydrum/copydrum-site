@@ -89,11 +89,12 @@ const CategoriesPage: React.FC = () => {
   // 장르 목록 (순서대로) - 한글 원본 (한글 사이트용)
   const genreListKo = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
 
-  // 영문 사이트용 장르 순서 (한글 이름으로 저장되어 있지만 영문 순서로 매핑)
+  // 영문 사이트용 장르 순서 (기준 순서)
   const genreListEn = ['팝', '락', '가요', '재즈', 'J-POP', 'OST', 'CCM', '트로트/성인가요', '드럼솔로', '드럼커버'];
 
   // 현재 언어에 맞는 장르 목록 가져오기
-  const genreList = i18n.language === 'en' ? genreListEn : genreListKo;
+  // 한국어(ko)는 genreListKo, 영어(en)는 genreListEn, 나머지 모든 언어는 genreListEn(영어 순서) 사용
+  const genreList = i18n.language === 'ko' ? genreListKo : genreListEn;
 
   // 카테고리 이름을 번역하는 함수
   const getCategoryName = (categoryName: string | null | undefined): string => {

@@ -33,10 +33,11 @@ export default function MainHeader({ user }: MainHeaderProps) {
 
   // 장르 목록 (순서대로) - 한글 원본 (한글 사이트용)
   const genreListKo = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
-  // 영문 사이트용 장르 순서
+  // 영문 사이트용 장르 순서 (기준 순서)
   const genreListEn = ['팝', '락', '가요', '재즈', 'J-POP', 'OST', 'CCM', '트로트/성인가요', '드럼솔로', '드럼커버'];
   // 현재 언어에 맞는 장르 목록 가져오기
-  const genreList = i18n.language === 'en' ? genreListEn : genreListKo;
+  // 한국어(ko)는 genreListKo, 영어(en)는 genreListEn, 나머지 모든 언어는 genreListEn(영어 순서) 사용
+  const genreList = i18n.language === 'ko' ? genreListKo : genreListEn;
 
   // 장르 이름을 번역하는 함수
   const getGenreName = (genreKo: string): string => {

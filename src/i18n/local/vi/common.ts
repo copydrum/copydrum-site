@@ -206,5 +206,18 @@ export default {
   // Sheet
   'sheet.buyNow': 'Mua Ngay',
   'sheet.buyNowProcessing': 'Đang xử lý...',
+
+  // Category/Genre Names
+  'category.kpop': 'K-POP',
+  'category.pop': 'Pop',
+  'category.rock': 'Rock',
+  'category.ccm': 'CCM',
+  'category.trot': 'Trot/Người Lớn',
+  'category.jazz': 'Jazz',
+  'category.jpop': 'J-POP',
+  'category.ost': 'OST',
+  'category.drumSolo': 'Trống Solo',
+  'category.drumCover': 'Trống Cover',
+  'category.other': 'Khác',
 };
 

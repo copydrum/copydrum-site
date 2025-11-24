@@ -206,5 +206,18 @@ export default {
   // Sheet
   'sheet.buyNow': '立即購買',
   'sheet.buyNowProcessing': '處理中...',
+
+  // Category/Genre Names
+  'category.kpop': 'K-POP',
+  'category.pop': '流行',
+  'category.rock': '搖滾',
+  'category.ccm': 'CCM',
+  'category.trot': '演歌/成人',
+  'category.jazz': '爵士',
+  'category.jpop': 'J-POP',
+  'category.ost': 'OST',
+  'category.drumSolo': '鼓獨奏',
+  'category.drumCover': '鼓翻奏',
+  'category.other': '其他',
 };
 

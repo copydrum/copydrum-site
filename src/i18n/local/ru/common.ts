@@ -206,5 +206,18 @@ export default {
   // Sheet
   'sheet.buyNow': 'Купить Сейчас',
   'sheet.buyNowProcessing': 'Обработка...',
+
+  // Category/Genre Names
+  'category.kpop': 'K-POP',
+  'category.pop': 'Поп',
+  'category.rock': 'Рок',
+  'category.ccm': 'CCM',
+  'category.trot': 'Трот/Взрослые',
+  'category.jazz': 'Джаз',
+  'category.jpop': 'J-POP',
+  'category.ost': 'OST',
+  'category.drumSolo': 'Соло на Барабанах',
+  'category.drumCover': 'Кавер на Барабанах',
+  'category.other': 'Другое',
 };
 
