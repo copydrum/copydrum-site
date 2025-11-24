@@ -1,7 +1,5 @@
 import { useCallback, useMemo, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { calculatePointPrice } from '../../lib/pointPrice';
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 
 type PaymentMethod = 'cash' | 'card' | 'bank' | 'paypal';
@@ -44,37 +42,8 @@ function getAvailablePaymentMethods(
   t: (key: string) => string,
   allowCash: boolean = true,
 ): PaymentMethodOption[] {
-  // 글로벌 사이트: 바로구매 컨텍스트에서는 캐시 결제 + PayPal 표시
+  // 글로벌 사이트: PayPal만 표시
   if (siteType === 'global') {
-    if (context === 'buyNow') {
-      const methods: PaymentMethodOption[] = [];
-
-      // 캐시 결제 옵션 추가
-      if (allowCash) {
-        methods.push({
-          id: 'cash',
-          name: t('payment.payWithCash'),
-          description: t('payment.cashDescription'),
-          icon: 'ri-wallet-3-line',
-          color: 'text-purple-600',
-          disabled: false,
-        });
-      }
-
-      // PayPal 옵션 추가
-      methods.push({
-        id: 'paypal',
-        name: t('payment.paypal'),
-        description: t('payment.paypalDescription'),
-        icon: 'ri-paypal-line',
-        color: 'text-blue-700',
-        disabled: false,
-      });
-
-      return methods;
-    }
-
-    // 캐시 충전 컨텍스트: PayPal만 표시 (기존 동작 유지)
     return [
       {
         id: 'paypal',
@@ -87,62 +56,34 @@ function getAvailablePaymentMethods(
     ];
   }
 
-  // 한국어 사이트
+  // 한국어 사이트: 무통장입금만 표시
   if (siteType === 'ko') {
-    // 바로구매 컨텍스트: 캐시 결제 + 무통장입금만 표시
-    if (context === 'buyNow') {
-      const methods: PaymentMethodOption[] = [];
-
-      if (allowCash) {
-        methods.push({
-          id: 'cash',
-          name: t('payment.payWithCash'),
-          description: t('payment.cashDescription'),
-          icon: 'ri-wallet-3-line',
-          color: 'text-purple-600',
-          disabled: false,
-        });
-      }
-
-      methods.push({
+    const methods: PaymentMethodOption[] = [
+      {
         id: 'bank',
         name: t('payment.bank'),
         description: t('payment.bankDescription'),
         icon: 'ri-bank-line',
         color: 'text-green-600',
         disabled: false,
+      },
+    ];
+
+    // Feature flag: 향후 PG 심사 완료 후 카드/간편결제를 다시 노출할 수 있도록
+    const enableCardInKR = import.meta.env.VITE_ENABLE_CARD_IN_KR === 'true';
+    if (enableCardInKR) {
+      // 카드 결제 추가 (향후 사용)
+      methods.push({
+        id: 'card',
+        name: t('payment.card'),
+        description: t('payment.cardDescription'),
+        icon: 'ri-bank-card-line',
+        color: 'text-blue-600',
+        disabled: false,
       });
-
-      // Feature flag: 향후 PG 심사 완료 후 카드/간편결제를 다시 노출할 수 있도록
-      const enableCardInKR = import.meta.env.VITE_ENABLE_CARD_IN_KR === 'true';
-      if (enableCardInKR) {
-        // 카드 결제 추가 (향후 사용)
-        methods.push({
-          id: 'card',
-          name: t('payment.card'),
-          description: t('payment.cardDescription'),
-          icon: 'ri-bank-card-line',
-          color: 'text-blue-600',
-          disabled: false,
-        });
-      }
-
-      return methods;
     }
 
-    // 캐시 충전 컨텍스트: 무통장입금만 표시 (기존 동작 유지)
-    if (context === 'cashCharge') {
-      return [
-        {
-          id: 'bank',
-          name: t('payment.bank'),
-          description: t('payment.bankDescription'),
-          icon: 'ri-bank-line',
-          color: 'text-green-600',
-          disabled: false,
-        },
-      ];
-    }
+    return methods;
   }
 
   // 기본값: 무통장입금만
@@ -196,7 +137,8 @@ export const PaymentMethodSelector = ({
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
   const currency = useMemo(() => getSiteCurrency(hostname), [hostname]);
   const isKoreanSite = currency === 'KRW';
-  const isGlobalSite = currency === 'USD' || currency === 'JPY';
+  // 한국 사이트가 아니면 모두 글로벌 사이트로 처리
+  const isGlobalSite = !isKoreanSite;
 
   const formatCurrency = useCallback(
     (value: number) => {
@@ -214,14 +156,6 @@ export const PaymentMethodSelector = ({
     return getAvailablePaymentMethods(siteType, context, t, allowCash);
   }, [siteType, context, t, allowCash]);
 
-  // 포인트 가격 계산 (모든 사이트에서 표시)
-  const pointPrice = useMemo(() => {
-    const calculated = calculatePointPrice(amount);
-    // 한국어 사이트에서는 한국어 형식으로, 글로벌 사이트에서는 영문 형식으로 표시
-    return isGlobalSite
-      ? calculated.toLocaleString('en-US')
-      : calculated.toLocaleString('ko-KR');
-  }, [amount, isGlobalSite]);
 
   if (!open) return null;
 
@@ -234,9 +168,6 @@ export const PaymentMethodSelector = ({
             <p className="text-sm text-gray-600">
               {t('payment.amount')} <span className="font-semibold text-gray-900">{formatCurrency(amount)}</span>
             </p>
-            <p className="text-sm text-gray-600">
-              {t('payment.pointPrice', { price: pointPrice })}
-            </p>
           </div>
         </div>
 
@@ -244,7 +175,7 @@ export const PaymentMethodSelector = ({
           <div className="space-y-3">
             {paymentMethodOptions.map((option) => {
               const isDisabled =
-                option.disabled || disabledMethods.includes(option.id) || (option.id === 'cash' && !allowCash);
+                option.disabled || disabledMethods.includes(option.id);
               return (
                 <button
                   key={option.id}

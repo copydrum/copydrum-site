@@ -85,8 +85,10 @@
     "downloading": "다운로드 중...",
     "noDownloads": "다운로드 가능한 악보가 없습니다.",
     "purchaseDate": "구매일",
+    "download": "다운로드",
     "preview": "미리보기",
-    "downloadUnavailable": "다운로드 불가"
+    "downloadUnavailable": "다운로드 불가",
+    "goToPurchaseHistory": "구매내역 페이지로 이동"
   },
   "favorites": {
     "title": "찜한 악보",

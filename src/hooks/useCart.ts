@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
-import { isGlobalSiteHost } from '../config/hostType';
+import { useTranslation } from 'react-i18next';
 
 export interface CartItem {
   id: string;
@@ -18,6 +18,7 @@ export const useCart = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(false);
   const { user } = useAuthStore();
+  const { t } = useTranslation();
 
   // 장바구니 아이템 로드
   const loadCartItems = async () => {
@@ -67,10 +68,8 @@ export const useCart = () => {
 
   // 장바구니에 아이템 추가
   const addToCart = async (sheetId: string) => {
-    const isGlobalSite = typeof window !== 'undefined' && isGlobalSiteHost(window.location.host);
-
     if (!user) {
-      alert(isGlobalSite ? 'Login is required.' : '로그인이 필요합니다.');
+      alert(t('cart.loginRequired'));
       return;
     }
 
@@ -86,7 +85,7 @@ export const useCart = () => {
 
       // 2. 이미 장바구니에 있는지 확인
       if (existingItems && existingItems.length > 0) {
-        alert(isGlobalSite ? 'Item is already in the cart.' : '이미 장바구니에 담긴 상품입니다.');
+        alert(t('cart.alreadyInCart'));
         return;
       }
 
@@ -105,12 +104,12 @@ export const useCart = () => {
       // 4. 장바구니 상태 업데이트 (선택적)
       // queryClient.invalidateQueries(['cart']); 
 
-      if (confirm(isGlobalSite ? 'Item added to cart. Go to cart?' : '장바구니에 담았습니다. 장바구니로 이동하시겠습니까?')) {
+      if (confirm(t('cart.addedConfirm'))) {
         window.location.href = '/cart';
       }
     } catch (error) {
       console.error('장바구니 추가 실패:', error);
-      alert(isGlobalSite ? 'Failed to add item to cart.' : '장바구니 추가에 실패했습니다.');
+      alert(t('cart.addFailed'));
     }
   };
 

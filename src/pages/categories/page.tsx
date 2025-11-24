@@ -4,22 +4,17 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import React from 'react';
-import UserSidebar from '../../components/feature/UserSidebar';
 import { useCart } from '../../hooks/useCart';
 import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
-import type { EventDiscountMap } from '../../lib/eventDiscounts';
-import { buildEventDiscountMap, fetchEventDiscountList, purchaseEventDiscount } from '../../lib/eventDiscounts';
 import { fetchUserFavorites, toggleFavorite } from '../../lib/favorites';
 import MainHeader from '../../components/common/MainHeader';
 import { processCashPurchase } from '../../lib/cashPurchases';
 import { hasPurchasedSheet } from '../../lib/purchaseCheck';
 import { BankTransferInfoModal, PaymentMethodSelector, InsufficientCashModal, PayPalPaymentModal } from '../../components/payments';
 import type { PaymentMethod } from '../../components/payments';
-import { startSheetPurchase } from '../../lib/payments';
+import { startSheetPurchase, buySheetNow } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
-
-import { calculatePointPrice } from '../../lib/pointPrice';
 
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import { useSiteLanguage } from '../../hooks/useSiteLanguage';
@@ -57,7 +52,6 @@ const CategoriesPage: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [drumSheets, setDrumSheets] = useState<DrumSheet[]>([]);
-  const [topSheets, setTopSheets] = useState<DrumSheet[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>(() => searchParams.get('category') || '');
   const [selectedSheet, setSelectedSheet] = useState<DrumSheet | null>(null);
@@ -77,7 +71,6 @@ const CategoriesPage: React.FC = () => {
     return Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
   });
   const [itemsPerPage] = useState<number>(20);
-  const [eventDiscounts, setEventDiscounts] = useState<EventDiscountMap>({});
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoriteLoadingIds, setFavoriteLoadingIds] = useState<Set<string>>(new Set());
   const [buyingSheetId, setBuyingSheetId] = useState<string | null>(null);
@@ -87,7 +80,6 @@ const CategoriesPage: React.FC = () => {
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
   const [showBankTransferModal, setShowBankTransferModal] = useState(false);
   const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
-  const [selectedTopSheetId, setSelectedTopSheetId] = useState<string | null>(null);
   const [showInsufficientCashModal, setShowInsufficientCashModal] = useState(false);
   const [insufficientCashInfo, setInsufficientCashInfo] = useState<{ currentBalance: number; requiredAmount: number } | null>(null);
   const [showPayPalModal, setShowPayPalModal] = useState(false);
@@ -106,26 +98,6 @@ const CategoriesPage: React.FC = () => {
 
   // 현재 언어에 맞는 장르 목록 가져오기
   const genreList = i18n.language === 'en' ? genreListEn : genreListKo;
-
-  // 장르 이름을 번역하는 함수
-  const getGenreName = (genreKo: string): string => {
-    if (i18n.language === 'ko') return genreKo;
-
-    const genreMap: Record<string, string> = {
-      '가요': t('categoriesPage.categories.kpop'),
-      '팝': t('categoriesPage.categories.pop'),
-      '락': t('categoriesPage.categories.rock'),
-      'CCM': t('categoriesPage.categories.ccm'),
-      '트로트/성인가요': t('categoriesPage.categories.trot'),
-      '재즈': t('categoriesPage.categories.jazz'),
-      'J-POP': t('categoriesPage.categories.jpop'),
-      'OST': t('categoriesPage.categories.ost'),
-      '드럼솔로': t('categoriesPage.categories.drumSolo'),
-      '드럼커버': t('categoriesPage.categories.drumCover'),
-    };
-
-    return genreMap[genreKo] || genreKo;
-  };
 
   // 카테고리 이름을 번역하는 함수
   const getCategoryName = (categoryName: string | null | undefined): string => {
@@ -250,9 +222,6 @@ const CategoriesPage: React.FC = () => {
     currentPage,
   ]);
 
-  useEffect(() => {
-    calculateTopSheets();
-  }, [drumSheets, selectedCategory]);
 
   const checkAuth = async () => {
     try {
@@ -270,10 +239,7 @@ const CategoriesPage: React.FC = () => {
     if (!user || !pendingPurchaseSheet) return;
 
     const sheet = pendingPurchaseSheet;
-    const price = Math.max(
-      0,
-      (getEventForSheet(sheet.id)?.discount_price ?? sheet.price) ?? 0,
-    );
+    const price = Math.max(0, sheet.price ?? 0);
 
     const result = await startSheetPurchase({
       userId: user.id,
@@ -304,8 +270,7 @@ const CategoriesPage: React.FC = () => {
 
     const sheet = pendingPurchaseSheet;
     const sheetId = sheet.id;
-    const event = getEventForSheet(sheetId);
-    const price = Math.max(0, (event?.discount_price ?? sheet.price) ?? 0);
+    const price = Math.max(0, sheet.price ?? 0);
 
     setShowPaymentSelector(false);
 
@@ -337,13 +302,6 @@ const CategoriesPage: React.FC = () => {
           return;
         }
 
-        if (event && event.status === 'active') {
-          try {
-            await purchaseEventDiscount(event);
-          } catch (eventError) {
-            console.warn('이벤트 할인 처리 중 경고:', eventError);
-          }
-        }
 
         alert(t('categoriesPage.purchaseComplete'));
         navigate('/my-orders');
@@ -367,20 +325,66 @@ const CategoriesPage: React.FC = () => {
   };
 
   const handleBankTransferConfirm = async (depositorName: string) => {
-    if (!user || !pendingPurchaseSheet) return;
+    if (!user || !pendingPurchaseSheet) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
 
-    setShowBankTransferModal(false);
+    // 필수값 검증
+    const trimmedDepositorName = depositorName?.trim();
+    if (!trimmedDepositorName) {
+      alert('입금자명을 입력해 주세요.');
+      return;
+    }
+
+    const price = Math.max(0, pendingPurchaseSheet.price ?? 0);
+    if (price <= 0) {
+      alert('결제 금액이 올바르지 않습니다.');
+      return;
+    }
+
     setPaymentProcessing(true);
 
     try {
-      await completeOnlinePurchase('bank_transfer', { depositorName });
+      const result = await buySheetNow({
+        user,
+        sheet: {
+          id: pendingPurchaseSheet.id,
+          title: pendingPurchaseSheet.title,
+          price,
+        },
+        description: t('categoriesPage.purchaseDescription', { title: pendingPurchaseSheet.title }),
+        depositorName: trimmedDepositorName,
+      });
+
+      if (result.paymentMethod === 'bank_transfer') {
+        // 주문 생성 성공 - 모달의 성공 상태로 전환
+        setBankTransferInfo(result.virtualAccountInfo ?? null);
+        
+        // 성공 메시지는 모달 내에서 표시됨
+        console.log('[CategoriesPage] 무통장입금 주문 생성 성공:', {
+          orderId: result.orderId,
+          orderNumber: result.orderNumber,
+          amount: result.amount,
+          depositorName: trimmedDepositorName,
+        });
+      }
     } catch (error) {
-      console.error('무통장입금 주문 처리 오류:', error);
-      alert(error instanceof Error ? error.message : t('categoriesPage.purchaseError'));
+      console.error('[CategoriesPage] 무통장입금 주문 처리 오류:', error);
+      
+      // 에러 메시지 표시
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : t('categoriesPage.purchaseError') || '주문 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+      
+      alert(errorMessage);
+      
+      // 에러 발생 시 모달 닫기
+      setShowBankTransferModal(false);
+      setBankTransferInfo(null);
     } finally {
       setPaymentProcessing(false);
       setBuyingSheetId(null);
-      setPendingPurchaseSheet(null);
     }
   };
 
@@ -388,8 +392,7 @@ const CategoriesPage: React.FC = () => {
     if (!user || !pendingPurchaseSheet) return;
 
     const sheet = pendingPurchaseSheet;
-    const event = getEventForSheet(sheet.id);
-    const price = Math.max(0, (event?.discount_price ?? sheet.price) ?? 0);
+    const price = Math.max(0, sheet.price ?? 0);
 
     await startSheetPurchase({
       userId: user.id,
@@ -403,14 +406,6 @@ const CategoriesPage: React.FC = () => {
     });
   };
 
-  const loadEventDiscounts = async () => {
-    try {
-      const data = await fetchEventDiscountList();
-      setEventDiscounts(buildEventDiscountMap(data));
-    } catch (err) {
-      console.error('이벤트 할인 악보 정보 로드 오류:', err);
-    }
-  };
 
   const loadFavorites = useCallback(async () => {
     if (!user) {
@@ -430,7 +425,7 @@ const CategoriesPage: React.FC = () => {
 
   const loadData = async () => {
     try {
-      await Promise.all([loadCategories(), loadDrumSheets(), loadEventDiscounts()]);
+      await Promise.all([loadCategories(), loadDrumSheets()]);
     } catch (error) {
       console.error('Data loading error:', error);
     } finally {
@@ -442,15 +437,6 @@ const CategoriesPage: React.FC = () => {
     loadFavorites();
   }, [loadFavorites]);
 
-  useEffect(() => {
-    if (!loading) {
-      if (topSheets.length === 0) {
-        setSelectedTopSheetId(null);
-      } else if (selectedTopSheetId && !topSheets.some((sheet) => sheet.id === selectedTopSheetId)) {
-        setSelectedTopSheetId(null);
-      }
-    }
-  }, [loading, topSheets, selectedTopSheetId]);
 
   const loadCategories = async () => {
     try {
@@ -540,28 +526,6 @@ const CategoriesPage: React.FC = () => {
     }
   };
 
-  const calculateTopSheets = () => {
-    let filtered = [...drumSheets];
-
-    // 선택된 카테고리가 있으면 필터링
-    if (selectedCategory) {
-      filtered = filtered.filter((sheet) => sheet.category_id === selectedCategory);
-    }
-
-    // TOP 5는 최신순으로 표시 (인기도 점수는 추후 구현)
-    const top5 = filtered
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 5);
-
-    setTopSheets(top5);
-
-    // 선택된 악보가 없거나 리스트에 없으면 첫 번째로 설정
-    if (top5.length > 0) {
-      if (!selectedSheet || !top5.find(s => s.id === selectedSheet.id)) {
-        setSelectedSheet(top5[0]);
-      }
-    }
-  };
 
   const getThumbnailUrl = (sheet: DrumSheet): string => {
     if (sheet.thumbnail_url) {
@@ -585,27 +549,55 @@ const CategoriesPage: React.FC = () => {
   };
 
   const handleAddToCart = async (sheetId: string) => {
-    if (user) {
-      try {
-        const alreadyPurchased = await hasPurchasedSheet(user.id, sheetId);
-        if (alreadyPurchased) {
-          const targetSheet =
-            drumSheets.find((sheet) => sheet.id === sheetId) ||
-            topSheets.find((sheet) => sheet.id === sheetId) ||
-            selectedSheet;
+    if (!user) {
+      navigate('/auth/login');
+      return;
+    }
 
-          const title = targetSheet?.title || '';
-          alert(t('categoriesPage.alreadyPurchased', { title }));
-          return;
-        }
-      } catch (error) {
-        console.error('장바구니 담기 전 구매 이력 확인 오류:', error);
-        alert(t('categoriesPage.purchaseCheckError'));
+    try {
+      const alreadyPurchased = await hasPurchasedSheet(user.id, sheetId);
+      if (alreadyPurchased) {
+        const targetSheet =
+          drumSheets.find((sheet) => sheet.id === sheetId) ||
+          selectedSheet;
+
+        const title = targetSheet?.title || '';
+        alert(t('categoriesPage.alreadyPurchased', { title }));
         return;
       }
+    } catch (error) {
+      console.error('장바구니 담기 전 구매 이력 확인 오류:', error);
+      alert(t('categoriesPage.purchaseCheckError'));
+      return;
     }
 
     await addToCart(sheetId);
+  };
+
+  const [buyingNowSheetId, setBuyingNowSheetId] = useState<string | null>(null);
+
+  const handleBuyNow = async (sheet: DrumSheet) => {
+    if (!user) {
+      navigate('/auth/login');
+      return;
+    }
+
+    try {
+      const alreadyPurchased = await hasPurchasedSheet(user.id, sheet.id);
+      if (alreadyPurchased) {
+        alert(t('categoriesPage.alreadyPurchased', { title: sheet.title }));
+        return;
+      }
+    } catch (error) {
+      console.error('바로구매 전 구매 이력 확인 오류:', error);
+      alert(t('categoriesPage.purchaseCheckError'));
+      return;
+    }
+
+    // 모든 사이트에서 결제수단 선택 모달 열기
+    // PaymentMethodSelector가 사이트 타입에 따라 적절한 결제수단만 표시
+    setPendingPurchaseSheet(sheet);
+    setShowPaymentSelector(true);
   };
 
 
@@ -677,11 +669,8 @@ const CategoriesPage: React.FC = () => {
     return formatCurrencyUtil(convertedAmount, currency);
   };
 
-  const getEventForSheet = (sheetId: string) => eventDiscounts[sheetId];
-
   const getDisplayPrice = (sheet: DrumSheet) => {
-    const event = getEventForSheet(sheet.id);
-    return event ? event.discount_price : sheet.price;
+    return sheet.price;
   };
 
   // Filtered sheets based on search, category, difficulty, price range, artist, album
@@ -768,7 +757,7 @@ const CategoriesPage: React.FC = () => {
     }
 
     return sorted;
-  }, [drumSheets, searchTerm, selectedCategory, selectedDifficulty, priceRange, sortBy, selectedArtist, selectedAlbum, eventDiscounts]);
+  }, [drumSheets, searchTerm, selectedCategory, selectedDifficulty, priceRange, sortBy, selectedArtist, selectedAlbum]);
 
   // Pagination
   const totalPages = Math.ceil(filteredSheets.length / itemsPerPage);
@@ -776,16 +765,9 @@ const CategoriesPage: React.FC = () => {
   const endIndex = startIndex + itemsPerPage;
   const paginatedSheets = filteredSheets.slice(startIndex, endIndex);
 
-  const selectedEventInfo = selectedSheet ? getEventForSheet(selectedSheet.id) : undefined;
   const selectedDisplayPrice = selectedSheet ? getDisplayPrice(selectedSheet) : 0;
   const selectedSheetIsFavorite = selectedSheet ? favoriteIds.has(selectedSheet.id) : false;
   const selectedSheetFavoriteLoading = selectedSheet ? favoriteLoadingIds.has(selectedSheet.id) : false;
-
-  // 포인트 가격 계산 (항상 KRW 가격 기준)
-  const selectedPointPrice = useMemo(() => {
-    if (!selectedSheet || !selectedDisplayPrice) return 0;
-    return calculatePointPrice(selectedDisplayPrice);
-  }, [selectedSheet, selectedDisplayPrice]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -797,8 +779,8 @@ const CategoriesPage: React.FC = () => {
   };
 
   const handleMobileSheetSelect = (sheet: DrumSheet) => {
-    setSelectedSheet(sheet);
-    setIsMobileDetailOpen(true);
+    // 모바일: 상세페이지로 이동
+    navigate(`/sheet-detail/${sheet.id}`);
   };
 
   const closeMobileDetail = () => {
@@ -832,14 +814,43 @@ const CategoriesPage: React.FC = () => {
         <MainHeader user={user} />
       </div>
 
-      {/* User Sidebar - 데스크톱 전용 */}
-      <div className="hidden lg:block">
-        <UserSidebar user={user} />
-      </div>
 
       {/* Mobile Layout */}
-      <div className="md:hidden pt-[76px] pb-[96px] space-y-6">
-        <div className="px-4 space-y-6">
+      <div className="md:hidden">
+        {/* 모바일 장르 탭 - 헤더 바로 아래 */}
+        <div className="sticky top-[76px] z-40 bg-white border-b border-gray-200 overflow-x-auto">
+          <div className="flex gap-2 px-4 py-3">
+            {genreList.map((genreKo) => {
+              const category = categories.find((cat) => cat.name === genreKo);
+              if (!category) return null;
+              
+              const isActive = selectedCategory === category.id;
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(category.id);
+                    setCurrentPage(1);
+                    updateQueryParams({
+                      category: category.id,
+                      page: null,
+                    });
+                  }}
+                  className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${
+                    isActive
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {getCategoryName(genreKo)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        
+        <div className="pt-4 pb-[96px] px-4 space-y-6">
           {bankTransferInfo ? (
             <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
               <div className="flex items-center justify-between">
@@ -879,111 +890,15 @@ const CategoriesPage: React.FC = () => {
             </div>
           ) : null}
 
-          <div className="space-y-4">
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {genreList.map((genre) => {
-                const category = categories.find((cat) => cat.name === genre);
-                const categoryId = category?.id || '';
-                const isSelected = selectedCategory === categoryId;
-                return (
-                  <button
-                    key={genre}
-                    type="button"
-                    onClick={() => handleCategorySelect(categoryId)}
-                    className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition ${isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 text-gray-600'
-                      }`}
-                  >
-                    {getGenreName(genre)}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Mobile Top 5 */}
-          {!loading && topSheets.length > 0 && (
-            <div className="px-4 space-y-3">
-              <h2 className="text-lg font-bold text-gray-900">{t('categoriesPage.top5')}</h2>
-              <div className="space-y-2">
-                {topSheets.map((sheet, index) => {
-                  const isActive = sheet.id === selectedTopSheetId;
-                  const eventInfo = getEventForSheet(sheet.id);
-                  const displayPrice = getDisplayPrice(sheet);
-                  return (
-                    <div key={sheet.id} className="space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedTopSheetId((prev) => (prev === sheet.id ? null : sheet.id));
-                        }}
-                        className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 transition ${isActive ? 'border-blue-200 bg-blue-50' : 'border-gray-100 bg-gray-50'
-                          }`}
-                      >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <span className="text-sm font-semibold text-gray-500">{index + 1}</span>
-                          <div className="min-w-0 text-left">
-                            <p className="truncate text-sm font-bold text-gray-900">{sheet.title}</p>
-                            <p className="truncate text-xs text-gray-500">{sheet.artist}</p>
-                          </div>
-                        </div>
-                        <i className={`ri-arrow-${isActive ? 'up' : 'down'}-s-line text-gray-400 text-lg`} />
-                      </button>
-                      {isActive && (
-                        <div className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm space-y-3">
-                          <div className="flex items-center gap-3">
-                            <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border border-gray-200">
-                              <img
-                                src={getThumbnailUrl(sheet)}
-                                alt={sheet.title}
-                                className="h-full w-full object-cover"
-                                onError={(event) => {
-                                  const img = event.target as HTMLImageElement;
-                                  img.src = generateDefaultThumbnail(320, 320);
-                                }}
-                              />
-                            </div>
-                            <div className="min-w-0 flex-1 text-left">
-                              <p className="truncate text-sm font-bold text-gray-900">{sheet.title}</p>
-                              <p className="truncate text-xs text-gray-500">{sheet.artist}</p>
-                              <p className="truncate text-xs text-gray-400">{sheet.album_name || t('categoriesPage.albumInfoNotAvailable')}</p>
-                            </div>
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {getCategoryName(sheet.categories?.name)} · {getDifficultyName(sheet.difficulty)}
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="space-y-1 text-right">
-                              {eventInfo ? (
-                                <>
-                                  <span className="text-xs text-gray-400 line-through">
-                                    {formatCurrency(sheet.price)}
-                                  </span>
-                                  <span className="text-lg font-extrabold text-blue-600">
-                                    {formatCurrency(displayPrice)}
-                                  </span>
-                                </>
-                              ) : (
-                                <span className="text-lg font-extrabold text-blue-600">
-                                  {formatCurrency(displayPrice)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleAddToCart(sheet.id)}
-                              className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-                            >
-                              {t('categoriesPage.addToCart')}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+          {/* 현재 선택된 카테고리 표시 (모바일) */}
+          {!loading && selectedCategory && (
+            <div className="mb-4">
+              <h2 className="text-xl font-bold text-gray-900">
+                {(() => {
+                  const category = categories.find(cat => cat.id === selectedCategory);
+                  return category ? getCategoryName(category.name) : '';
+                })()}
+              </h2>
             </div>
           )}
 
@@ -1005,7 +920,6 @@ const CategoriesPage: React.FC = () => {
 
             {!loading &&
               paginatedSheets.map((sheet) => {
-                const eventInfo = getEventForSheet(sheet.id);
                 const displayPrice = getDisplayPrice(sheet);
                 return (
                   <button
@@ -1030,16 +944,7 @@ const CategoriesPage: React.FC = () => {
                       <p className="truncate text-xs text-gray-500">{sheet.artist}</p>
                       <p className="truncate text-xs text-gray-400">{sheet.album_name || t('categoriesPage.albumInfoNotFound')}</p>
                       <div className="pt-1 text-sm font-semibold text-blue-600">
-                        {eventInfo ? (
-                          <>
-                            <span className="mr-2 text-xs text-gray-400 line-through">
-                              {formatCurrency(sheet.price)}
-                            </span>
-                            {formatCurrency(displayPrice)}
-                          </>
-                        ) : (
-                          formatCurrency(displayPrice)
-                        )}
+                        {formatCurrency(displayPrice)}
                       </div>
                     </div>
                   </button>
@@ -1109,20 +1014,9 @@ const CategoriesPage: React.FC = () => {
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="space-y-1 text-right">
-                    {selectedEventInfo ? (
-                      <>
-                        <span className="text-sm text-gray-400 line-through">
-                          {formatCurrency(selectedSheet.price)}
-                        </span>
-                        <span className="text-2xl font-extrabold text-red-500">
-                          {formatCurrency(selectedDisplayPrice)}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-2xl font-extrabold text-blue-600">
-                        {formatCurrency(selectedDisplayPrice)}
-                      </span>
-                    )}
+                    <span className="text-2xl font-extrabold text-blue-600">
+                      {formatCurrency(selectedDisplayPrice)}
+                    </span>
                   </div>
                   <button
                     type="button"
@@ -1174,9 +1068,25 @@ const CategoriesPage: React.FC = () => {
                       handleAddToCart(selectedSheet.id);
                       closeMobileDetail();
                     }}
-                    className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                    disabled={selectedSheet && isInCart(selectedSheet.id)}
+                    className={`flex-1 sheet-action-btn btn-cart ${selectedSheet && isInCart(selectedSheet.id) ? 'opacity-60' : ''}`}
                   >
                     {t('categoriesPage.addToCart')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedSheet) {
+                        handleBuyNow(selectedSheet);
+                      }
+                      closeMobileDetail();
+                    }}
+                    disabled={selectedSheet && buyingNowSheetId === selectedSheet.id}
+                    className="flex-1 sheet-action-btn btn-buy"
+                  >
+                    {selectedSheet && buyingNowSheetId === selectedSheet.id
+                      ? t('sheet.buyNowProcessing') || '처리 중...'
+                      : t('sheet.buyNow')}
                   </button>
                 </div>
                 <button
@@ -1193,7 +1103,7 @@ const CategoriesPage: React.FC = () => {
       }
 
       {/* Desktop Layout */}
-      <div className="hidden md:block md:mr-0 lg:mr-64">
+      <div className="hidden md:block ">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
           {bankTransferInfo ? (
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-gray-700 shadow-sm">
@@ -1278,245 +1188,39 @@ const CategoriesPage: React.FC = () => {
             )}
           </div>
 
-          {/* 장르 하위 메뉴 */}
-          <div className="mb-8 border-b border-gray-200">
-            <div className="flex flex-wrap gap-3">
-              {genreList.map((genre) => {
-                const category = categories.find(cat => cat.name === genre);
-                const isSelected = selectedCategory === (category?.id || '');
-                return (
-                  <button
-                    key={genre}
-                    onClick={() => {
-                      const categoryId = category?.id || '';
-                      handleCategorySelect(categoryId);
-                    }}
-                    className={`px-5 py-3 text-base font-semibold transition-all rounded-t-lg ${isSelected
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
-                      }`}
-                  >
-                    {getGenreName(genre)}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* TOP 5 섹션 */}
-          {!loading && topSheets.length > 0 && (
-            <div className="mb-8 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">{t('categoriesPage.top5')}</h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* 왼쪽: TOP 5 리스트 */}
-                <div className="space-y-2">
-                  {topSheets.map((sheet, index) => {
-                    const isFavorite = favoriteIds.has(sheet.id);
-                    const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
-                    return (
-                      <div
-                        key={sheet.id}
-                        onClick={() => setSelectedSheet(sheet)}
-                        className={`p-4 rounded-lg cursor-pointer transition-colors ${selectedSheet?.id === sheet.id
-                          ? 'bg-blue-50 border-2 border-blue-500'
-                          : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
-                          }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <span
-                              className={`text-lg font-bold ${selectedSheet?.id === sheet.id ? 'text-blue-600' : 'text-gray-400'
-                                }`}
-                            >
-                              {index + 1}
-                            </span>
-                            <img
-                              src={getThumbnailUrl(sheet)}
-                              alt={sheet.title}
-                              className="w-12 h-12 object-cover rounded border border-gray-200 flex-shrink-0"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-gray-900 truncate">{sheet.title}</p>
-                              <p className="text-sm text-gray-600 truncate">{sheet.artist}</p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleToggleFavorite(sheet.id);
-                            }}
-                            disabled={isFavoriteLoading}
-                            className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${isFavorite
-                              ? 'border-red-200 bg-red-50 text-red-500'
-                              : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
-                              } ${isFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                            aria-label={isFavorite ? t('categoriesPage.favoriteRemove') : t('categoriesPage.favoriteAdd')}
-                          >
-                            <i className={`ri-heart-${isFavorite ? 'fill' : 'line'} text-lg`} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* 오른쪽: 선택된 악보 상세 정보 */}
-                {selectedSheet && (
-                  <div className="bg-gray-50 rounded-lg p-6">
-                    <div className="flex items-start space-x-4 mb-4">
-                      <img
-                        src={getThumbnailUrl(selectedSheet)}
-                        alt={selectedSheet.title}
-                        className="w-48 h-48 object-cover rounded-lg border border-gray-300 flex-shrink-0"
-                      />
-                      <div className="flex-1">
-                        <h3 className="text-xl font-bold text-gray-900 mb-1">{selectedSheet.title}</h3>
-                        <p className="text-gray-600 mb-2">{selectedSheet.artist}</p>
-                        {selectedEventInfo && (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 mb-3">
-                            <span>🔥</span> {t('categoriesPage.eventDiscountSheetWithPrice')}
-                          </span>
-                        )}
-                        {selectedSheet.categories?.name && (
-                          <p className="text-sm text-gray-500 mb-1">{getCategoryName(selectedSheet.categories.name)}</p>
-                        )}
-                        {selectedSheet.difficulty && (
-                          <div className="text-sm text-gray-500 space-y-1">
-                            <p>
-                              {selectedSheet.difficulty === 'beginner'
-                                ? t('categoriesPage.beginner')
-                                : selectedSheet.difficulty === 'intermediate'
-                                  ? t('categoriesPage.intermediate')
-                                  : t('categoriesPage.advanced')}
-                              {selectedSheet.page_count && ` / ${selectedSheet.page_count}${t('categoriesPage.pageUnit')}`}
-                            </p>
-                            <p>
-                              {t('categoriesPage.difficultyLabel')} :{' '}
-                              {selectedSheet.difficulty === 'beginner'
-                                ? t('categoriesPage.beginner')
-                                : selectedSheet.difficulty === 'intermediate'
-                                  ? t('categoriesPage.intermediate')
-                                  : t('categoriesPage.advanced')}
-                            </p>
-                            {selectedSheet.page_count && <p>{t('categoriesPage.pageLabel')} : {selectedSheet.page_count} {t('categoriesPage.pageUnit')}</p>}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleFavorite(selectedSheet.id)}
-                          disabled={selectedSheetFavoriteLoading}
-                          className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${selectedSheetIsFavorite
-                            ? 'border-red-200 bg-red-50 text-red-500'
-                            : 'border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500'
-                            } ${selectedSheetFavoriteLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          aria-label={selectedSheetIsFavorite ? t('categoriesPage.favoriteRemove') : t('categoriesPage.favoriteAdd')}
-                        >
-                          <i className={`ri-heart-${selectedSheetIsFavorite ? 'fill' : 'line'} text-xl`} />
-                        </button>
-                        <button type="button" className="text-gray-400 hover:text-gray-600">
-                          <i className="ri-information-line text-xl"></i>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-gray-200 pt-4">
-                      <div className="flex items-center justify-end mb-4">
-                        <div className="flex items-center space-x-2">
-                          <div className="flex flex-col items-end space-y-1">
-                            {selectedEventInfo ? (
-                              <>
-                                <span className="text-sm text-gray-400 line-through">
-                                  {formatCurrency(selectedSheet.price)}
-                                </span>
-                                <span className="text-2xl font-extrabold text-red-500">
-                                  {formatCurrency(selectedDisplayPrice)}
-                                </span>
-                                {isKoreanSite && (
-                                  <span className="text-sm text-gray-600">
-                                    {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('ko-KR') })}
-                                  </span>
-                                )}
-                                {!isKoreanSite && (
-                                  <span className="text-sm text-gray-600">
-                                    {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('en-US') })}
-                                  </span>
-                                )}
-                              </>
-                            ) : (
-                              <>
-                                <span className="text-2xl font-bold text-gray-900">
-                                  {formatCurrency(selectedDisplayPrice)}
-                                </span>
-                                {isKoreanSite && (
-                                  <span className="text-sm text-gray-600">
-                                    {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('ko-KR') })}
-                                  </span>
-                                )}
-                                {!isKoreanSite && (
-                                  <span className="text-sm text-gray-600">
-                                    {t('payment.pointPrice', { price: selectedPointPrice.toLocaleString('en-US') })}
-                                  </span>
-                                )}
-                              </>
-                            )}
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={isInCart(selectedSheet.id)}
-                            onChange={() => handleAddToCart(selectedSheet.id)}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-end">
-                          <span className="font-bold text-gray-900">
-                            {t('categoriesPage.total')} {formatCurrency(selectedDisplayPrice)}
-                          </span>
-                        </div>
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => handleAddToCart(selectedSheet.id)}
-                            className="flex-1 bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors"
-                          >
-                            {t('categoriesPage.addToCartFull')}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+          {/* 현재 선택된 카테고리 표시 */}
+          {!loading && selectedCategory && (
+            <div className="mb-4">
+              <h2 className="text-2xl font-bold text-gray-900">
+                {(() => {
+                  const category = categories.find(cat => cat.id === selectedCategory);
+                  return category ? getCategoryName(category.name) : '';
+                })()}
+              </h2>
             </div>
           )}
 
           {/* 필터 및 정렬 - 기본적으로 숨김 */}
           {!loading && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center space-x-4">
-                  <button
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <i className="ri-filter-line w-4 h-4"></i>
-                    <span>{t('categoriesPage.filter')}</span>
-                    <i className={`ri-arrow-${showFilters ? 'up' : 'down'}-s-line w-4 h-4`}></i>
-                  </button>
+              <div className="flex flex-wrap items-center justify-end gap-2 mt-2">
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <i className="ri-filter-line text-sm"></i>
+                  <span>{t('categoriesPage.filter')}</span>
+                  <i className={`ri-arrow-${showFilters ? 'up' : 'down'}-s-line text-sm`}></i>
+                </button>
 
-                  <button
-                    onClick={() => setShowSortFilter(!showSortFilter)}
-                    className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <i className="ri-sort-desc w-4 h-4"></i>
-                    <span>{t('categoriesPage.sort')}</span>
-                    <i className={`ri-arrow-${showSortFilter ? 'up' : 'down'}-s-line w-4 h-4`}></i>
-                  </button>
-                </div>
+                <button
+                  onClick={() => setShowSortFilter(!showSortFilter)}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <i className="ri-sort-desc text-sm"></i>
+                  <span>{t('categoriesPage.sort')}</span>
+                  <i className={`ri-arrow-${showSortFilter ? 'up' : 'down'}-s-line text-sm`}></i>
+                </button>
               </div>
 
               {/* 정렬 옵션 - 클릭시 표시 */}
@@ -1680,7 +1384,6 @@ const CategoriesPage: React.FC = () => {
                     </tr>
                   ) : (
                     paginatedSheets.map((sheet) => {
-                      const eventInfo = getEventForSheet(sheet.id);
                       const displayPrice = getDisplayPrice(sheet);
                       const isFavorite = favoriteIds.has(sheet.id);
                       const isFavoriteLoading = favoriteLoadingIds.has(sheet.id);
@@ -1704,27 +1407,11 @@ const CategoriesPage: React.FC = () => {
                                   >
                                     {sheet.title}
                                   </span>
-                                  {eventInfo && (
-                                    <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600 flex-shrink-0 whitespace-nowrap">
-                                      {t('categoriesPage.eventDiscountSheet')}
-                                    </span>
-                                  )}
                                 </div>
                                 <div className="flex items-center space-x-2 text-xs flex-shrink-0">
-                                  {eventInfo ? (
-                                    <>
-                                      <span className="text-gray-400 line-through">
-                                        {formatCurrency(sheet.price)}
-                                      </span>
-                                      <span className="font-semibold text-red-500">
-                                        {formatCurrency(displayPrice)}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <span className="font-semibold text-gray-700">
-                                      {formatCurrency(displayPrice)}
-                                    </span>
-                                  )}
+                                  <span className="font-semibold text-gray-700">
+                                    {formatCurrency(displayPrice)}
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -1788,11 +1475,21 @@ const CategoriesPage: React.FC = () => {
                                   e.stopPropagation();
                                   handleAddToCart(sheet.id);
                                 }}
-                                className="px-4 py-2.5 text-sm bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors"
+                                disabled={isInCart(sheet.id)}
+                                className={`sheet-action-btn btn-cart ${isInCart(sheet.id) ? 'opacity-60' : ''}`}
                               >
                                 {t('categoriesPage.addToCart')}
                               </button>
-
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleBuyNow(sheet);
+                                }}
+                                disabled={buyingNowSheetId === sheet.id}
+                                className="sheet-action-btn btn-buy"
+                              >
+                                {buyingNowSheetId === sheet.id ? t('sheet.buyNowProcessing') || '처리 중...' : t('sheet.buyNow')}
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -1911,7 +1608,7 @@ const CategoriesPage: React.FC = () => {
           pendingPurchaseSheet
             ? Math.max(
               0,
-              (getEventForSheet(pendingPurchaseSheet.id)?.discount_price ?? pendingPurchaseSheet.price) ?? 0,
+              pendingPurchaseSheet.price ?? 0,
             )
             : 0
         }
@@ -1919,8 +1616,16 @@ const CategoriesPage: React.FC = () => {
         onConfirm={handleBankTransferConfirm}
         onClose={() => {
           setShowBankTransferModal(false);
-          setShowPaymentSelector(true);
+          if (!bankTransferInfo) {
+            setShowPaymentSelector(true);
+          } else {
+            setPendingPurchaseSheet(null);
+            setBankTransferInfo(null);
+          }
         }}
+        processing={paymentProcessing}
+        orderCreated={!!bankTransferInfo}
+        successMessage={t('categoriesPage.bankTransferCreated') || '무통장입금 계좌가 생성되었습니다. 입금을 완료해주세요.'}
       />
 
       <PaymentMethodSelector
@@ -1929,9 +1634,7 @@ const CategoriesPage: React.FC = () => {
           pendingPurchaseSheet
             ? Math.max(
               0,
-              (
-                getEventForSheet(pendingPurchaseSheet.id)?.discount_price ?? pendingPurchaseSheet.price
-              ) ?? 0,
+              pendingPurchaseSheet.price ?? 0,
             )
             : 0
         }
@@ -1965,7 +1668,7 @@ const CategoriesPage: React.FC = () => {
             open={showPayPalModal}
             amount={Math.max(
               0,
-              (getEventForSheet(pendingPurchaseSheet.id)?.discount_price ?? pendingPurchaseSheet.price) ?? 0,
+              pendingPurchaseSheet.price ?? 0,
             )}
             orderTitle={pendingPurchaseSheet.title}
             onClose={() => {

@@ -7,21 +7,16 @@ import { googleAuth } from '../../lib/google';
 import type { User } from '@supabase/supabase-js';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../../hooks/useCart';
-import { useUserCashBalance } from '../../hooks/useUserCashBalance';
 import { useTranslation } from 'react-i18next';
-import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
+import { getSiteCurrency } from '../../lib/currency';
 import { getUserDisplayName } from '../../utils/userDisplayName';
-import PointChargeModal from '../payments/PointChargeModal';
 
 interface UserSidebarProps {
   user: User | null;
 }
 
 export default function UserSidebar({ user }: UserSidebarProps) {
-  // 캐시 잔액 조회: 통일된 훅 사용 (profiles 테이블의 credits 필드가 기준)
-  const { credits: userCash, loading: cashLoading, error: cashError, refresh: refreshCash } = useUserCashBalance(user);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [showCashChargeModal, setShowCashChargeModal] = useState(false);
 
   // 로그인 폼 상태
   const [email, setEmail] = useState('');
@@ -42,17 +37,6 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
   const currency = useMemo(() => getSiteCurrency(hostname), [hostname]);
   const isGlobalSite = currency !== 'KRW';
-
-  // 캐시 표시용 포맷 함수
-  // KRW 사이트: 통화로 표시 (예: 230,500원)
-  // EN/JP 사이트: 포인트로 표시 (예: 230,500 P)
-  const formatCash = useCallback(
-    (value: number) => {
-      // 모든 사이트: 포인트로 표시 (예: 230,500 P)
-      return `${value.toLocaleString('en-US')} P`;
-    },
-    [],
-  );
 
   const handleLogout = async () => {
     try {
@@ -200,18 +184,6 @@ export default function UserSidebar({ user }: UserSidebarProps) {
     }
   };
 
-  const handleCashCharge = () => {
-    if (!user) {
-      alert(t('sidebar.loginRequired'));
-      return;
-    }
-    setShowCashChargeModal(true);
-  };
-
-  const handleCloseCashChargeModal = () => {
-    setShowCashChargeModal(false);
-  };
-
   const handleCustomerSupportClick = () => {
     navigate('/customer-support');
   };
@@ -232,11 +204,6 @@ export default function UserSidebar({ user }: UserSidebarProps) {
 
   const sidebarMenuItems = useMemo(
     () => [
-      {
-        icon: 'ri-history-line',
-        label: t('sidebar.cashHistory'),
-        onClick: () => handleNavigate('/mypage?section=cash-history'),
-      },
       {
         icon: 'ri-user-settings-line',
         label: t('sidebar.updateProfile'),
@@ -279,11 +246,11 @@ export default function UserSidebar({ user }: UserSidebarProps) {
         onClick: () => handleNavigate('/guide'),
       },
     ],
-    [cartItems.length, handleNavigate, t],
+    [handleNavigate, t],
   );
 
 
-  // 프로필 정보 로드 (display_name, email 등)
+  // 프로필 정보 로드
   const loadProfile = useCallback(async () => {
     if (!user) {
       setProfile(null);
@@ -316,14 +283,6 @@ export default function UserSidebar({ user }: UserSidebarProps) {
   useEffect(() => {
     void loadProfile();
   }, [loadProfile]);
-
-  // 캐시 잔액 에러가 발생한 경우 콘솔에 로그 출력
-  useEffect(() => {
-    if (cashError) {
-      console.error('[UserSidebar] 캐시 잔액 조회 실패:', cashError);
-    }
-  }, [cashError]);
-
 
   // 로그인하지 않은 경우 로그인 사이드바 표시
   if (!user) {
@@ -532,38 +491,11 @@ export default function UserSidebar({ user }: UserSidebarProps) {
             </div>
             <p className="text-blue-100 text-xs">{user?.email}</p>
           </div>
-
-          <div className="bg-white/20 rounded-lg p-3">
-            <p className="text-xs text-blue-100">{t('sidebar.availableCash')}</p>
-            {cashLoading ? (
-              <p className="text-xl font-bold text-blue-200 animate-pulse">{t('sidebar.loading')}</p>
-            ) : cashError ? (
-              <p className="text-sm font-bold text-red-200">
-                {t('sidebar.error')}: {cashError.message}
-              </p>
-            ) : (
-              <p className="text-xl font-bold">{formatCash(userCash)}</p>
-            )}
-          </div>
         </div>
 
         {/* 메뉴 목록 */}
         <div className="flex-1 overflow-y-auto h-full pb-16">
           <div className="p-3 space-y-2">
-            {/* 캐쉬충전 - 강조 */}
-            <button
-              onClick={handleCashCharge}
-              className="w-full flex items-center p-3 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg hover:from-blue-100 hover:to-purple-100 transition-all cursor-pointer"
-            >
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                <i className="ri-wallet-3-line text-blue-600 text-sm"></i>
-              </div>
-              <div className="text-left">
-                <h3 className="font-semibold text-blue-900 text-sm">{t('sidebar.cashCharge')}</h3>
-                <p className="text-xs text-blue-600">{t('sidebar.cashForPurchase')}</p>
-              </div>
-            </button>
-
             {sidebarMenuItems.map((item) => (
               <Fragment key={item.label}>
                 <button
@@ -607,18 +539,6 @@ export default function UserSidebar({ user }: UserSidebarProps) {
           </div>
         </div>
       </div>
-
-      {/* 포인트 충전 모달 */}
-      <PointChargeModal
-        open={showCashChargeModal}
-        onClose={handleCloseCashChargeModal}
-        user={user}
-        profile={profile}
-        userCash={userCash}
-        cashLoading={cashLoading}
-        cashError={!!cashError}
-        onCashUpdate={refreshCash}
-      />
     </div>
   );
 }

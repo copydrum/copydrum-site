@@ -3,7 +3,6 @@ import type { User } from '@supabase/supabase-js';
 import { useTranslation } from 'react-i18next';
 import MainHeader from '../../components/common/MainHeader';
 import Footer from '../../components/common/Footer';
-import UserSidebar from '../../components/feature/UserSidebar';
 import { supabase } from '../../lib/supabase';
 
 interface Partner {
@@ -44,8 +43,7 @@ export default function PartnershipPage() {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <MainHeader user={user} />
-      <UserSidebar user={user} />
-      <div className={user ? 'md:mr-64' : ''}>
+      <div>
         <section className="bg-gradient-to-r from-purple-600 to-blue-600 text-white py-20">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <h1 className="text-4xl font-bold mb-4">

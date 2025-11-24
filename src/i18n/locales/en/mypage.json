@@ -86,7 +86,8 @@
     "noDownloads": "No downloadable sheet music available.",
     "purchaseDate": "Purchase Date",
     "preview": "Preview",
-    "downloadUnavailable": "Download Unavailable"
+    "downloadUnavailable": "Download Unavailable",
+    "goToPurchaseHistory": "Go to Purchase History"
   },
   "favorites": {
     "title": "Favorite Sheets",

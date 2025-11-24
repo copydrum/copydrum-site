@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - Download Spartiti per Batteria',
   'site.description': 'Scarica spartiti per batteria di alta qualità. Spartiti per batteria per tutti i generi disponibili.',
 
+  // Header
+  'header.tagline': 'Spartiti per batteria premium',
+
   // Navigation
   'nav.home': 'Home',
   'nav.categories': 'Categorie Spartiti',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': 'Carrello',
   'nav.mypage': 'La Mia Pagina',
   'nav.myOrders': 'I Miei Ordini',
+  'nav.purchaseHistory': 'Download',
   'nav.admin': 'Amministratore',
   'nav.login': 'Accedi',
   'nav.register': 'Registrati',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': 'Partnership',
 
   // Search
-  'search.placeholder': 'Cerca per canzone, artista, genere...',
+  'search.placeholder': 'Cerca per canzone o artista...',
   'search.button': 'Cerca',
   'search.noResults': 'Nessun risultato trovato.',
 
@@ -173,5 +177,17 @@ export default {
   'mobile.cash.noBonus': 'Nessun bonus',
   'mobile.cash.bonusLabel': '+{{amount}} P bonus ({{percent}})',
   'mobile.cash.processing': 'Elaborazione...',
+
+  // Purchase History
+  'purchaseHistory.title': 'Download',
+  'purchaseHistory.description': 'Visualizza e scarica nuovamente gli spartiti per batteria che hai acquistato.',
+  'purchaseHistory.listTitle': 'Spartiti acquistati',
+  'purchaseHistory.totalCount': 'Totale: {{count}} elemento/i',
+  'purchaseHistory.emptyMessage': 'Non ci sono spartiti scaricabili disponibili.',
+  'purchaseHistory.loading': 'Caricamento...',
+  
+  // Sheet
+  'sheet.buyNow': 'Acquista Ora',
+  'sheet.buyNowProcessing': 'Elaborazione...',
 };
 

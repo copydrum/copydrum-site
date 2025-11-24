@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - ड्रम शीट संगीत डाउनलोड',
   'site.description': 'उच्च गुणवत्ता वाले ड्रम शीट संगीत डाउनलोड करें। सभी शैलियों के लिए ड्रम नोटेशन उपलब्ध।',
 
+  // Header
+  'header.tagline': 'प्रीमियम ड्रम शीट संगीत',
+
   // Navigation
   'nav.home': 'होम',
   'nav.categories': 'शीट श्रेणियाँ',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': 'कार्ट',
   'nav.mypage': 'मेरा पेज',
   'nav.myOrders': 'मेरे ऑर्डर',
+  'nav.purchaseHistory': 'डाउनलोड',
   'nav.admin': 'व्यवस्थापक',
   'nav.login': 'लॉगिन',
   'nav.register': 'साइन अप',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': 'साझेदारी',
 
   // Search
-  'search.placeholder': 'गाने, कलाकार, शैली से खोजें...',
+  'search.placeholder': 'गाने या कलाकार से खोजें...',
   'search.button': 'खोजें',
   'search.noResults': 'कोई खोज परिणाम नहीं मिला।',
 
@@ -173,5 +177,17 @@ export default {
   'mobile.cash.noBonus': 'कोई बोनस नहीं',
   'mobile.cash.bonusLabel': '+{{amount}} P बोनस ({{percent}})',
   'mobile.cash.processing': 'प्रक्रिया जारी है...',
+
+  // Purchase History
+  'purchaseHistory.title': 'डाउनलोड',
+  'purchaseHistory.description': 'आपके द्वारा खरीदे गए ड्रम शीट्स को देखें और फिर से डाउनलोड करें।',
+  'purchaseHistory.listTitle': 'खरीदी गई शीट्स',
+  'purchaseHistory.totalCount': 'कुल: {{count}} आइटम',
+  'purchaseHistory.emptyMessage': 'डाउनलोड करने योग्य शीट्स नहीं हैं।',
+  'purchaseHistory.loading': 'लोड हो रहा है...',
+  
+  // Sheet
+  'sheet.buyNow': 'अभी खरीदें',
+  'sheet.buyNowProcessing': 'प्रसंस्करण...',
 };
 

@@ -3,24 +3,18 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
-import { ArrowLeft, Star, ShoppingCart, Music, Eye, X } from 'lucide-react';
+import { ArrowLeft, Star, ShoppingCart, Music, X } from 'lucide-react';
 import { useCart } from '../../hooks/useCart';
-import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
-import UserSidebar from '../../components/feature/UserSidebar';
 import MainHeader from '../../components/common/MainHeader';
 import Footer from '../../components/common/Footer';
-import type { EventDiscountSheet } from '../../lib/eventDiscounts';
-import { fetchEventDiscountBySheetId, isEventActive, purchaseEventDiscount } from '../../lib/eventDiscounts';
-import { processCashPurchase } from '../../lib/cashPurchases';
 import { isFavorite, toggleFavorite } from '../../lib/favorites';
 import { hasPurchasedSheet } from '../../lib/purchaseCheck';
-import { BankTransferInfoModal, PaymentMethodSelector, InsufficientCashModal, PayPalPaymentModal } from '../../components/payments';
+import { BankTransferInfoModal, PaymentMethodSelector, PayPalPaymentModal } from '../../components/payments';
 import type { PaymentMethod } from '../../components/payments';
-import { startSheetPurchase } from '../../lib/payments';
+import { startSheetPurchase, buySheetNow } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
-import { calculatePointPrice } from '../../lib/pointPrice';
 import { useSiteLanguage } from '../../hooks/useSiteLanguage';
 
 interface DrumSheet {
@@ -51,17 +45,13 @@ export default function SheetDetailPage() {
   const [purchasing, setPurchasing] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const { addToCart, isInCart } = useCart();
-  const [eventDiscount, setEventDiscount] = useState<EventDiscountSheet | null>(null);
   const [isFavoriteSheet, setIsFavoriteSheet] = useState(false);
   const [favoriteProcessing, setFavoriteProcessing] = useState(false);
   const [showPaymentSelector, setShowPaymentSelector] = useState(false);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
   const [showBankTransferModal, setShowBankTransferModal] = useState(false);
-  const [showInsufficientCashModal, setShowInsufficientCashModal] = useState(false);
-  const [insufficientCashInfo, setInsufficientCashInfo] = useState<{ currentBalance: number; requiredAmount: number } | null>(null);
   const [showPayPalModal, setShowPayPalModal] = useState(false);
-  const eventIsActive = eventDiscount ? isEventActive(eventDiscount) : false;
   const { i18n, t } = useTranslation();
   const { isKoreanSite } = useSiteLanguage();
 
@@ -69,13 +59,7 @@ export default function SheetDetailPage() {
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
   const currency = getSiteCurrency(hostname);
 
-  const displayPrice = sheet ? (eventDiscount && eventIsActive ? eventDiscount.discount_price : sheet.price) : 0;
-
-  // 포인트 가격 계산 (모든 사이트에서 사용)
-  const pointPrice = useMemo(() => {
-    if (!displayPrice || displayPrice <= 0) return 0;
-    return calculatePointPrice(displayPrice);
-  }, [displayPrice]);
+  const displayPrice = sheet ? sheet.price : 0;
 
   const formatCurrency = (value: number) => {
     const convertedAmount = convertFromKrw(value, currency);
@@ -129,6 +113,19 @@ export default function SheetDetailPage() {
       loadSheetDetail(id);
     }
   }, [id]);
+
+  // 모바일에서 악보 상세페이지 진입 시 항상 화면 맨 위로 스크롤
+  useEffect(() => {
+    // 모바일 체크 (< 768px)
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      // 페이지 진입 시 항상 최상단으로
+      window.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: 'auto', // 'smooth' 말고 'auto'로 즉시 이동
+      });
+    }
+  }, [id]); // id가 변경될 때마다 (즉, 다른 악보로 이동할 때마다) 실행
 
   useEffect(() => {
     // 인증 상태 변화 감지
@@ -189,14 +186,6 @@ export default function SheetDetailPage() {
       } as DrumSheet;
 
       setSheet(normalizedSheet);
-
-      try {
-        const event = await fetchEventDiscountBySheetId(sheetId);
-        setEventDiscount(event);
-      } catch (eventError) {
-        console.error('이벤트 할인 악보 정보 로드 오류:', eventError);
-        setEventDiscount(null);
-      }
     } catch (error) {
       console.error('악보 상세 정보 로딩 오류:', error);
     } finally {
@@ -280,8 +269,7 @@ export default function SheetDetailPage() {
 
   const getSheetPrice = () => {
     if (!sheet) return 0;
-    const basePrice = eventDiscount && eventIsActive ? eventDiscount.discount_price : sheet.price;
-    return Math.max(0, basePrice ?? 0);
+    return Math.max(0, sheet.price ?? 0);
   };
 
   const completeOnlinePurchase = async (
@@ -351,43 +339,6 @@ export default function SheetDetailPage() {
     const price = getSheetPrice();
 
     try {
-      if (method === 'cash') {
-        const purchaseResult = await processCashPurchase({
-          userId: user.id,
-          totalPrice: calculatePointPrice(price),
-          description: t('sheetDetail.purchaseDescription', { title: sheet.title }),
-          items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
-          sheetIdForTransaction: sheet.id,
-        });
-
-        if (!purchaseResult.success) {
-          if (purchaseResult.reason === 'INSUFFICIENT_CREDIT') {
-            setInsufficientCashInfo({
-              currentBalance: purchaseResult.currentCredits,
-              requiredAmount: price,
-            });
-            setShowInsufficientCashModal(true);
-          }
-          return;
-        }
-
-        let message = t('sheetDetail.purchaseComplete');
-
-        if (eventDiscount && eventIsActive) {
-          try {
-            const eventResult = await purchaseEventDiscount(eventDiscount);
-            if (eventResult?.message) {
-              message = eventResult.message;
-            }
-          } catch (eventError) {
-            console.warn('이벤트 할인 처리 중 경고:', eventError);
-          }
-        }
-
-        alert(t('sheetDetail.purchaseCompleteMessage', { message }));
-        return;
-      }
-
       if (method === 'paypal') {
         setShowPayPalModal(true);
         return;
@@ -406,19 +357,152 @@ export default function SheetDetailPage() {
   };
 
   const handleBankTransferConfirm = async (depositorName: string) => {
-    if (!user || !sheet) return;
+    if (!user || !sheet) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
 
-    setShowBankTransferModal(false);
+    // 필수값 검증
+    const trimmedDepositorName = depositorName?.trim();
+    if (!trimmedDepositorName) {
+      alert('입금자명을 입력해 주세요.');
+      return;
+    }
+
+    const price = getSheetPrice();
+    if (!price || price <= 0) {
+      alert('결제 금액이 올바르지 않습니다.');
+      return;
+    }
+
+    setPaymentProcessing(true);
     setPurchasing(true);
+
+    try {
+      await completeOnlinePurchase('bank_transfer', { depositorName: trimmedDepositorName });
+      
+      // 성공 메시지는 completeOnlinePurchase 내부에서 처리됨
+      // 주문 생성 후 모달 닫기
+      setShowBankTransferModal(false);
+    } catch (error) {
+      console.error('[SheetDetail] 무통장입금 구매 오류:', error);
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : t('sheetDetail.purchaseError') || '주문 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+      
+      alert(errorMessage);
+    } finally {
+      setPurchasing(false);
+      setPaymentProcessing(false);
+    }
+  };
+
+  const [buyingNow, setBuyingNow] = useState(false);
+  const [pendingBuyNowSheet, setPendingBuyNowSheet] = useState<DrumSheet | null>(null);
+  const [showPaymentSelectorForBuyNow, setShowPaymentSelectorForBuyNow] = useState(false);
+
+  const handleBuyNow = async () => {
+    if (!user) {
+      navigate('/auth/login');
+      return;
+    }
+
+    if (!sheet) return;
+
+    try {
+      const alreadyPurchased = await hasPurchasedSheet(user.id, sheet.id);
+      if (alreadyPurchased) {
+        alert(t('sheetDetail.alreadyPurchased'));
+        return;
+      }
+    } catch (error) {
+      console.error('바로구매 전 구매 이력 확인 오류:', error);
+      alert(t('sheetDetail.purchaseError'));
+      return;
+    }
+
+    // 모든 사이트에서 결제수단 선택 모달 열기
+    // PaymentMethodSelector가 사이트 타입에 따라 적절한 결제수단만 표시
+    setPendingBuyNowSheet(sheet);
+    setShowPaymentSelectorForBuyNow(true);
+  };
+
+  const handlePaymentMethodSelectForBuyNow = async (method: PaymentMethod) => {
+    if (!user || !pendingBuyNowSheet) return;
+
+    setShowPaymentSelectorForBuyNow(false);
+
+    if (method === 'bank') {
+      setShowBankTransferModal(true);
+      return;
+    }
+
+    if (method === 'paypal') {
+      setShowPayPalModal(true);
+      return;
+    }
+  };
+
+  const handleBankTransferConfirmForBuyNow = async (depositorName: string) => {
+    if (!user || !pendingBuyNowSheet) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    // 필수값 검증
+    const trimmedDepositorName = depositorName?.trim();
+    if (!trimmedDepositorName) {
+      alert('입금자명을 입력해 주세요.');
+      return;
+    }
+
+    const price = getSheetPrice();
+    if (!price || price <= 0) {
+      alert('결제 금액이 올바르지 않습니다.');
+      return;
+    }
+
     setPaymentProcessing(true);
 
     try {
-      await completeOnlinePurchase('bank_transfer', { depositorName });
+      const result = await buySheetNow({
+        user,
+        sheet: {
+          id: pendingBuyNowSheet.id,
+          title: pendingBuyNowSheet.title,
+          price,
+        },
+        description: t('sheetDetail.purchaseDescription', { title: pendingBuyNowSheet.title }),
+        depositorName: trimmedDepositorName,
+      });
+
+      if (result.paymentMethod === 'bank_transfer') {
+        // 주문 생성 성공 - 모달의 성공 상태로 전환
+        setBankTransferInfo(result.virtualAccountInfo ?? null);
+        
+        // 성공 메시지는 모달 내에서 표시됨
+        console.log('[SheetDetail] 무통장입금 주문 생성 성공:', {
+          orderId: result.orderId,
+          orderNumber: result.orderNumber,
+          amount: result.amount,
+          depositorName: trimmedDepositorName,
+        });
+      }
     } catch (error) {
-      console.error('무통장입금 구매 오류:', error);
-      alert(error instanceof Error ? error.message : t('sheetDetail.purchaseError'));
+      console.error('[SheetDetail] 무통장입금 주문 처리 오류:', error);
+      
+      // 에러 메시지 표시
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : t('sheetDetail.purchaseError') || '주문 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+      
+      alert(errorMessage);
+      
+      // 에러 발생 시 모달 닫기
+      setShowBankTransferModal(false);
+      setBankTransferInfo(null);
     } finally {
-      setPurchasing(false);
       setPaymentProcessing(false);
     }
   };
@@ -488,27 +572,6 @@ export default function SheetDetailPage() {
     }
   };
 
-  // 썸네일 이미지 URL 가져오기
-  const getThumbnailUrl = () => {
-    if (!sheet) return '';
-
-    // 1. 유튜브 URL이 있는 경우 유튜브 썸네일 우선 사용
-    if (sheet.youtube_url) {
-      const videoId = extractVideoId(sheet.youtube_url);
-      if (videoId) {
-        return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
-      }
-    }
-
-    // 2. 데이터베이스에 저장된 썸네일 URL 확인
-    if (sheet.thumbnail_url) {
-      return sheet.thumbnail_url;
-    }
-
-    // 3. 기본 썸네일 생성
-    return generateDefaultThumbnail(400, 400);
-  };
-
   // 미리보기 이미지 생성 함수
   const getPreviewImageUrl = (sheet: DrumSheet) => {
     if (sheet.preview_image_url) {
@@ -568,11 +631,8 @@ export default function SheetDetailPage() {
       {/* Main Header */}
       <MainHeader user={user} />
 
-      {/* User Sidebar - 로그인 시 항상 표시 */}
-      <UserSidebar user={user} />
-
-      {/* Main Content - 로그인 시 사이드바 공간 확보 */}
-      <div className={user ? 'md:mr-64' : ''}>
+      {/* Main Content */}
+      <div>
         {/* Back Button */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <button
@@ -650,41 +710,36 @@ export default function SheetDetailPage() {
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-            {/* Thumbnail Image */}
+            {/* Sheet Preview */}
             <div className="space-y-6">
-              <div className="bg-gray-50 rounded-lg overflow-hidden">
-                <img
-                  src={getThumbnailUrl()}
-                  alt={`${sheet.title} ${sheet.youtube_url ? t('sheetDetail.youtubeThumbnail') : t('sheetDetail.albumCover')}`}
-                  className="w-full h-auto object-cover object-top"
-                  onError={(e) => {
-                    const img = e.target as HTMLImageElement;
-                    img.src = generateDefaultThumbnail(400, 400);
-                  }}
-                />
-              </div>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-blue-400 rounded-full flex items-center justify-center">
-                      <Music className="w-4 h-4 text-blue-800" />
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+                <div className="relative">
+                  <div className="aspect-[3/4] bg-gray-50 rounded-lg overflow-hidden relative">
+                    <img
+                      src={getPreviewImageUrl(sheet)}
+                      alt={`${sheet.title} ${t('sheetDetail.sheetMusicPreview')}`}
+                      className="w-full h-full object-cover cursor-pointer"
+                      onClick={() => setShowPreviewModal(true)}
+                      onError={handlePreviewImageError}
+                    />
+
+                    {/* 하단 흐림 효과 */}
+                    <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-white/90 via-white/60 to-transparent"></div>
+
+                    {/* 미리보기 안내 */}
+                    <div className="absolute bottom-4 left-4 right-4 text-center">
+                      <p className="text-sm text-gray-700 font-medium bg-white/80 rounded px-3 py-2">
+                        {t('sheetDetail.fullSheetAfterPurchase')}
+                      </p>
                     </div>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-blue-800 mb-1">
-                      {sheet.youtube_url ? t('sheetDetail.youtubeThumbnail') : t('sheetDetail.albumCover')}
-                    </h4>
-                    <p className="text-sm text-blue-700">
-                      {getThumbnailUrl() ?
-                        (sheet.youtube_url ?
-                          t('sheetDetail.youtubeThumbnailDescription') :
-                          t('sheetDetail.albumCoverDescription')
-                        ) :
-                        t('sheetDetail.thumbnailNotAvailable')
-                      }
-                      {' '}{t('sheetDetail.previewBelow')}
-                    </p>
-                  </div>
+
+                  <button
+                    onClick={() => setShowPreviewModal(true)}
+                    className="mt-4 w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap cursor-pointer"
+                  >
+                    {t('sheetDetail.enlargePreview')}
+                  </button>
                 </div>
               </div>
 
@@ -762,56 +817,14 @@ export default function SheetDetailPage() {
                 )}
               </div>
 
-              {eventDiscount && (
-                <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
-                  {eventIsActive ? (
-                    <p>
-                      {t('sheetDetail.eventInProgress')}{' '}
-                      <span className="font-semibold">
-                        {new Date(eventDiscount.event_start).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')} ~ {new Date(eventDiscount.event_end).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US')}
-                      </span>
-                    </p>
-                  ) : eventDiscount.status === 'scheduled' ? (
-                    <p>
-                      {t('sheetDetail.eventStartsFrom', { date: new Date(eventDiscount.event_start).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US') })}
-                    </p>
-                  ) : (
-                    <p>{t('sheetDetail.eventEnded')}</p>
-                  )}
-                </div>
-              )}
-
               {/* Price */}
               <div className="bg-gray-50 rounded-lg p-6">
                 <div className="flex items-center justify-between">
                   <div className="space-y-2">
-                    {eventDiscount && (
-                      <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600">
-                        <span>🔥</span>
-                        {eventIsActive ? t('sheetDetail.eventDiscountSheet') : eventDiscount.status === 'scheduled' ? t('sheetDetail.eventScheduled') : t('sheetDetail.eventEndedBadge')}
-                      </span>
-                    )}
                     <div className="flex flex-col">
-                      {eventDiscount && eventIsActive && (
-                        <span className="text-sm text-gray-400 line-through">
-                          {formatCurrency(sheet.price)}
-                        </span>
-                      )}
-                      <span className={`text-3xl font-bold ${eventDiscount && eventIsActive ? 'text-red-500' : 'text-blue-600'}`}>
+                      <span className="text-3xl font-bold text-blue-600">
                         {formatCurrency(displayPrice)}
                       </span>
-                      {pointPrice > 0 && (
-                        <span className="text-sm text-gray-600 mt-1">
-                          {t('payment.pointPrice', { price: pointPrice.toLocaleString(isKoreanSite ? 'ko-KR' : 'en-US') })}
-                        </span>
-                      )}
-                      {eventDiscount && !eventIsActive && (
-                        <span className="text-xs text-gray-500 mt-1">
-                          {eventDiscount.status === 'scheduled'
-                            ? t('sheetDetail.eventStartsFromPrice', { date: new Date(eventDiscount.event_start).toLocaleString(i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US') })
-                            : t('sheetDetail.eventEndedPrice')}
-                        </span>
-                      )}
                     </div>
                   </div>
                   <div className="text-right">
@@ -838,26 +851,25 @@ export default function SheetDetailPage() {
                   </button>
                 </div>
 
+                <div className="flex justify-end gap-2 sm:gap-3 mt-4">
+                  <button
+                    onClick={handleAddToCart}
+                    disabled={!user || isInCart(sheet.id)}
+                    className={`sheet-action-btn btn-cart px-4 py-2.5 sm:px-6 sm:py-3 text-sm sm:text-base w-1/2 sm:w-auto h-auto min-w-0 sm:min-w-[120px] ${isInCart(sheet.id) ? 'opacity-60' : ''}`}
+                  >
+                    <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5" />
+                    <span>{isInCart(sheet.id) ? t('categories.alreadyInCart') : t('categories.addToCart')}</span>
+                  </button>
 
-                <button
-                  onClick={handleAddToCart}
-                  disabled={!user || isInCart(sheet.id)}
-                  className={`w-full py-3 px-6 rounded-lg font-medium flex items-center justify-center space-x-2 whitespace-nowrap cursor-pointer transition-colors ${isInCart(sheet.id)
-                    ? 'bg-gray-400 text-white cursor-not-allowed'
-                    : 'bg-gray-900 text-white hover:bg-gray-800'
-                    }`}
-                >
-                  <ShoppingCart className="w-5 h-5" />
-                  <span>{isInCart(sheet.id) ? t('categories.alreadyInCart') : t('categories.addToCart')}</span>
-                </button>
+                  <button
+                    onClick={handleBuyNow}
+                    disabled={!user || buyingNow}
+                    className="sheet-action-btn btn-buy px-4 py-2.5 sm:px-6 sm:py-3 text-sm sm:text-base w-1/2 sm:w-auto h-auto min-w-0 sm:min-w-[120px]"
+                  >
+                    <span>{buyingNow ? (t('sheet.buyNowProcessing') || '처리 중...') : t('sheet.buyNow')}</span>
+                  </button>
+                </div>
 
-                <button
-                  onClick={() => setShowPreviewModal(true)}
-                  className="w-full bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 font-medium flex items-center justify-center space-x-2 whitespace-nowrap cursor-pointer transition-colors"
-                >
-                  <Eye className="w-5 h-5" />
-                  <span>{t('categories.previewSheet')}</span>
-                </button>
               </div>
 
               {/* Features */}
@@ -926,38 +938,6 @@ export default function SheetDetailPage() {
             </div>
           )}
 
-          {/* 악보 미리보기 섹션 */}
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">{t('sheetDetail.sheetMusicPreview')}</h3>
-            <div className="relative">
-              <div className="aspect-[3/4] bg-gray-50 rounded-lg overflow-hidden relative">
-                <img
-                  src={getPreviewImageUrl(sheet)}
-                  alt={`${sheet.title} ${t('sheetDetail.sheetMusicPreview')}`}
-                  className="w-full h-full object-cover cursor-pointer"
-                  onClick={() => setShowPreviewModal(true)}
-                  onError={handlePreviewImageError}
-                />
-
-                {/* 하단 흐림 효과 */}
-                <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-white/90 via-white/60 to-transparent"></div>
-
-                {/* 미리보기 안내 */}
-                <div className="absolute bottom-4 left-4 right-4 text-center">
-                  <p className="text-sm text-gray-700 font-medium bg-white/80 rounded px-3 py-2">
-                    {t('sheetDetail.fullSheetAfterPurchase')}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setShowPreviewModal(true)}
-                className="mt-4 w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap cursor-pointer"
-              >
-                {t('sheetDetail.enlargePreview')}
-              </button>
-            </div>
-          </div>
 
           {/* 환불 규정 안내 블록 */}
           <div className="bg-gray-50 rounded-lg p-6 mt-8">
@@ -1017,36 +997,50 @@ export default function SheetDetailPage() {
         <Footer />
       </div>
 
-      <BankTransferInfoModal
-        open={showBankTransferModal}
-        amount={getSheetPrice()}
-        userName={(user?.user_metadata?.name as string | undefined) ?? user?.email ?? undefined}
-        onConfirm={handleBankTransferConfirm}
-        onClose={() => {
-          setShowBankTransferModal(false);
-          setShowPaymentSelector(true);
-        }}
-      />
-
       <PaymentMethodSelector
-        open={showPaymentSelector}
-        amount={getSheetPrice()}
-        onClose={() => setShowPaymentSelector(false)}
-        onSelect={handlePaymentMethodSelect}
+        open={showPaymentSelectorForBuyNow}
+        amount={pendingBuyNowSheet ? getSheetPrice() : 0}
+        onSelect={handlePaymentMethodSelectForBuyNow}
+        onClose={() => {
+          setShowPaymentSelectorForBuyNow(false);
+          setPendingBuyNowSheet(null);
+        }}
         context="buyNow"
       />
 
-      {insufficientCashInfo && (
-        <InsufficientCashModal
-          open={showInsufficientCashModal}
-          currentBalance={insufficientCashInfo.currentBalance}
-          requiredAmount={insufficientCashInfo.requiredAmount}
-          onClose={() => {
-            setShowInsufficientCashModal(false);
-            setInsufficientCashInfo(null);
-          }}
+      <BankTransferInfoModal
+        open={showBankTransferModal}
+        amount={pendingBuyNowSheet ? getSheetPrice() : (sheet ? getSheetPrice() : 0)}
+        userName={(user?.user_metadata?.name as string | undefined) ?? user?.email ?? undefined}
+        onConfirm={pendingBuyNowSheet ? handleBankTransferConfirmForBuyNow : handleBankTransferConfirm}
+        onClose={() => {
+          setShowBankTransferModal(false);
+          if (!bankTransferInfo) {
+            if (pendingBuyNowSheet) {
+              setShowPaymentSelectorForBuyNow(true);
+            } else if (showPaymentSelector) {
+              setShowPaymentSelector(true);
+            }
+          } else {
+            setPendingBuyNowSheet(null);
+            setBankTransferInfo(null);
+          }
+        }}
+        processing={paymentProcessing}
+        orderCreated={!!bankTransferInfo}
+        successMessage={t('sheetDetail.bankTransferCreated') || '무통장입금 계좌가 생성되었습니다. 입금을 완료해주세요.'}
+      />
+
+      {showPaymentSelector && (
+        <PaymentMethodSelector
+          open={showPaymentSelector}
+          amount={getSheetPrice()}
+          onClose={() => setShowPaymentSelector(false)}
+          onSelect={handlePaymentMethodSelect}
+          context="buyNow"
         />
       )}
+
     </div>
   );
 }

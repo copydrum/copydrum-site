@@ -80,14 +80,7 @@ export default function LanguageSelector({ variant = 'desktop', className = '' }
     const currentHost = window.location.host;
     const currentHostname = window.location.hostname.toLowerCase();
     const currentPath = location.pathname + location.search;
-    const isCurrentlyGlobal = isGlobalSiteHost(currentHost);
     const currentDomainLang = getLocaleFromHost(currentHost);
-    const wantsEnglish = langCode === 'en';
-    const wantsKorean = langCode === 'ko';
-    const wantsJapanese = langCode === 'ja';
-    
-    // 현재 도메인이 일본어 도메인인지 확인 (jp. 또는 ja. 서브도메인)
-    const isJapaneseDomain = currentHostname.startsWith('jp.') || currentHostname.startsWith('ja.');
 
     // 로컬 환경에서는 도메인 변경 대신 쿼리 파라미터 사용
     if (currentHost.includes('localhost') || currentHost.includes('127.0.0.1')) {
@@ -113,23 +106,44 @@ export default function LanguageSelector({ variant = 'desktop', className = '' }
     if (needsDomainChange) {
       let targetHost: string;
 
-      if (wantsEnglish) {
+      // ✅ 이미 설정된 언어들 (변경 금지)
+      if (langCode === 'ko') {
+        // 한국어 도메인으로 이동
+        targetHost = 'copydrum.com';
+      } else if (langCode === 'en') {
         // 영어 도메인으로 이동
         targetHost = 'en.copydrum.com';
-      } else if (wantsKorean) {
-        // 한국어 도메인으로 이동
-        targetHost = currentHost.replace(/^[^.]+\.copydrum\.com$/, 'copydrum.com');
-        if (targetHost === currentHost && !currentHostname.includes('copydrum.com')) {
-          targetHost = 'copydrum.com';
-        }
-      } else if (wantsJapanese) {
-        // 일본어 도메인으로 이동 (jp. 우선, 없으면 ja.)
+      } else if (langCode === 'ja') {
+        // 일본어 도메인으로 이동 (jp. 우선)
         targetHost = 'jp.copydrum.com';
       } else {
-        // 그 외 언어는 현재 도메인 유지하고 언어만 변경
-        i18n.changeLanguage(langCode);
-        setIsOpen(false);
-        return;
+        // ✅ 나머지 언어 도메인 매핑
+        const domainMap: Record<string, string> = {
+          'de': 'de.copydrum.com',
+          'es': 'es.copydrum.com',
+          'fr': 'fr.copydrum.com',
+          'hi': 'hi.copydrum.com',
+          'id': 'id.copydrum.com',
+          'it': 'it.copydrum.com',
+          'pt': 'pt.copydrum.com',
+          'ru': 'ru.copydrum.com',
+          'th': 'th.copydrum.com',
+          'tr': 'tr.copydrum.com',
+          'uk': 'uk.copydrum.com',
+          'vi': 'vi.copydrum.com',
+          'zh-CN': 'zh-cn.copydrum.com',
+          'zh-TW': 'zh-tw.copydrum.com',
+        };
+
+        targetHost = domainMap[langCode];
+        
+        // 도메인 매핑이 없으면 경고하고 현재 도메인 유지
+        if (!targetHost) {
+          console.warn(`[LanguageSelector] 도메인 매핑이 없습니다: ${langCode}`);
+          i18n.changeLanguage(langCode);
+          setIsOpen(false);
+          return;
+        }
       }
 
       // 프로토콜 포함 전체 URL 생성

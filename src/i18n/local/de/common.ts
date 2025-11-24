@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - Schlagzeugnoten Download',
   'site.description': 'Laden Sie hochwertige Schlagzeugnoten herunter. Noten für alle Genres verfügbar.',
 
+  // Header
+  'header.tagline': 'Premium Schlagzeugnoten',
+
   // Navigation
   'nav.home': 'Startseite',
   'nav.categories': 'Notenkategorien',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': 'Warenkorb',
   'nav.mypage': 'Meine Seite',
   'nav.myOrders': 'Meine Bestellungen',
+  'nav.purchaseHistory': 'Downloads',
   'nav.admin': 'Administrator',
   'nav.login': 'Anmelden',
   'nav.register': 'Registrieren',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': 'Partnerschaft',
 
   // Search
-  'search.placeholder': 'Nach Titel, Künstler, Genre suchen...',
+  'search.placeholder': 'Nach Titel oder Künstler suchen...',
   'search.button': 'Suchen',
   'search.noResults': 'Keine Suchergebnisse gefunden.',
 
@@ -102,6 +106,7 @@ export default {
   'footer.legal': 'Rechtliches',
   'footer.followUs': 'Folgen Sie uns',
   'footer.copyright': '© 2025 CopyDrum. Alle Rechte vorbehalten.',
+  'footer.contactInfoGlobal': 'Wenn Sie Fragen haben, senden Sie diese bitte über "1:1-Anfrage" auf Meiner Seite.',
 
   // Common
   'common.or': 'oder',
@@ -173,5 +178,17 @@ export default {
   'mobile.cash.noBonus': 'Kein Bonus',
   'mobile.cash.bonusLabel': '+{{amount}} P Bonus ({{percent}})',
   'mobile.cash.processing': 'Wird verarbeitet...',
+
+  // Purchase History
+  'purchaseHistory.title': 'Downloads',
+  'purchaseHistory.description': 'Sehen Sie sich die von Ihnen gekauften Schlagzeugnoten an und laden Sie sie erneut herunter.',
+  'purchaseHistory.listTitle': 'Gekaufte Noten',
+  'purchaseHistory.totalCount': 'Gesamt: {{count}} Artikel',
+  'purchaseHistory.emptyMessage': 'Es sind keine herunterladbaren Noten verfügbar.',
+  'purchaseHistory.loading': 'Wird geladen...',
+  
+  // Sheet
+  'sheet.buyNow': 'Jetzt Kaufen',
+  'sheet.buyNowProcessing': 'Wird verarbeitet...',
 };
 

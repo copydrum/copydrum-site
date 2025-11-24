@@ -2,14 +2,52 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
-import { useAuthStore } from '../../stores/authStore';
+import type { User } from '@supabase/supabase-js';
+import MainHeader from '../../components/common/MainHeader';
+import Footer from '../../components/common/Footer';
 
 const CustomOrdersPage = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuthStore();
+  const [user, setUser] = useState<User | null>(null);
   const navigate = useNavigate();
   const { t } = useTranslation();
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const {
+          data: { user: currentUser },
+        } = await supabase.auth.getUser();
+
+        if (!currentUser) {
+          navigate('/auth/login');
+          return;
+        }
+
+        setUser(currentUser);
+      } catch (error) {
+        console.error('인증 확인 오류:', error);
+        navigate('/auth/login');
+      }
+    };
+
+    checkAuth();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session?.user) {
+        navigate('/auth/login');
+      } else {
+        setUser(session.user);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
 
   const STATUS_META: Record<
     string,
@@ -63,11 +101,13 @@ const CustomOrdersPage = () => {
   }, [user]);
 
   const fetchOrders = async () => {
+    if (!user) return;
+    
     try {
       const { data, error } = await supabase
         .from('custom_orders')
         .select('*')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -131,40 +171,38 @@ const CustomOrdersPage = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* 상단 네비게이션 */}
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-8">
-              <a href="/" className="text-xl font-bold text-gray-800" style={{ fontFamily: '"Pacifico", serif' }}>
-                logo
-              </a>
-              <div className="hidden md:flex space-x-6">
-                <a href="/" className="text-gray-600 hover:text-gray-800">{t('customOrders.nav.home')}</a>
-                <a href="/categories" className="text-gray-600 hover:text-gray-800">{t('customOrders.nav.categories')}</a>
-                <a href="/custom-order" className="text-gray-600 hover:text-gray-800">{t('customOrders.nav.customOrder')}</a>
-                <a href="/custom-orders" className="text-blue-600 font-medium">{t('customOrders.nav.customOrderHistory')}</a>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <a href="/cart" className="text-gray-600 hover:text-gray-800">
-                <i className="ri-shopping-cart-line text-xl"></i>
-              </a>
-              <a href="/mypage" className="text-gray-600 hover:text-gray-800">
-                <i className="ri-user-line text-xl"></i>
-              </a>
-            </div>
-          </div>
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white">
+        <div className="hidden md:block">
+          <MainHeader user={user} />
         </div>
-      </nav>
+        <div className="py-16 text-center text-gray-500">
+          <i className="ri-loader-4-line text-4xl animate-spin text-blue-500 mb-4" />
+          <p className="font-medium">{t('customOrders.loading')}</p>
+        </div>
+      </div>
+    );
+  }
 
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h1 className="text-2xl font-bold text-gray-800 mb-6">{t('customOrders.title')}</h1>
+  if (!user) {
+    return null;
+  }
 
-          {loading ? (
+  return (
+    <div className="min-h-screen bg-white">
+      {/* Desktop Header */}
+      <div className="hidden md:block">
+        <MainHeader user={user} />
+      </div>
+
+      {/* Main Content */}
+      <div className="px-4 pb-8 pt-6 sm:px-6 lg:px-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h1 className="text-2xl font-bold text-gray-800 mb-6">{t('customOrders.title')}</h1>
+
+            {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
               <p className="text-gray-600 mt-2">{t('customOrders.loading')}</p>
@@ -342,9 +380,15 @@ const CustomOrdersPage = () => {
                 );
               })}
             </div>
-          )}
+            )}
+          </div>
         </div>
-      </main>
+      </div>
+
+      {/* Footer (PC) */}
+      <div className="hidden md:block">
+        <Footer />
+      </div>
     </div>
   );
 };

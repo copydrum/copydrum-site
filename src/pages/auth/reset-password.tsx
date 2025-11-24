@@ -139,7 +139,6 @@ export default function ResetPassword() {
               </Link>
               <nav className="hidden md:flex space-x-8">
                 <a href="/categories" className="text-gray-700 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer">{t('nav.categories')}</a>
-                <a href="/event-sale" className="text-gray-700 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer">{t('nav.eventSale')}</a>
               </nav>
               <div className="flex items-center space-x-4">
                 <button className="text-gray-700 hover:text-gray-900 cursor-pointer">

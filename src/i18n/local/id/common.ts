@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - Unduh Partitur Drum',
   'site.description': 'Unduh partitur drum berkualitas tinggi. Partitur drum untuk semua genre tersedia.',
 
+  // Header
+  'header.tagline': 'Partitur drum premium',
+
   // Navigation
   'nav.home': 'Beranda',
   'nav.categories': 'Kategori Partitur',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': 'Keranjang',
   'nav.mypage': 'Halaman Saya',
   'nav.myOrders': 'Pesanan Saya',
+  'nav.purchaseHistory': 'Unduhan',
   'nav.admin': 'Administrator',
   'nav.login': 'Masuk',
   'nav.register': 'Daftar',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': 'Kemitraan',
 
   // Search
-  'search.placeholder': 'Cari berdasarkan lagu, artis, genre...',
+  'search.placeholder': 'Cari berdasarkan lagu atau artis...',
   'search.button': 'Cari',
   'search.noResults': 'Tidak ada hasil pencarian.',
 
@@ -173,5 +177,17 @@ export default {
   'mobile.cash.noBonus': 'Tanpa bonus',
   'mobile.cash.bonusLabel': '+{{amount}} P bonus ({{percent}})',
   'mobile.cash.processing': 'Sedang diproses...',
+
+  // Purchase History
+  'purchaseHistory.title': 'Unduhan',
+  'purchaseHistory.description': 'Lihat dan unduh ulang partitur drum yang telah Anda beli.',
+  'purchaseHistory.listTitle': 'Partitur yang dibeli',
+  'purchaseHistory.totalCount': 'Total: {{count}} item',
+  'purchaseHistory.emptyMessage': 'Tidak ada partitur yang dapat diunduh.',
+  'purchaseHistory.loading': 'Memuat...',
+  
+  // Sheet
+  'sheet.buyNow': 'Beli Sekarang',
+  'sheet.buyNowProcessing': 'Memproses...',
 };
 

@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - Скачать ноты для барабанов',
   'site.description': 'Скачайте высококачественные ноты для барабанов. Доступны ноты всех жанров.',
 
+  // Header
+  'header.tagline': 'Премиум ноты для барабанов',
+
   // Navigation
   'nav.home': 'Главная',
   'nav.categories': 'Категории нот',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': 'Корзина',
   'nav.mypage': 'Моя страница',
   'nav.myOrders': 'Мои заказы',
+  'nav.purchaseHistory': 'Загрузки',
   'nav.admin': 'Администратор',
   'nav.login': 'Войти',
   'nav.register': 'Регистрация',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': 'Партнёрство',
 
   // Search
-  'search.placeholder': 'Поиск по названию, исполнителю, жанру...',
+  'search.placeholder': 'Поиск по названию или исполнителю...',
   'search.button': 'Поиск',
   'search.noResults': 'Результаты не найдены.',
 
@@ -173,5 +177,17 @@ export default {
   'mobile.cash.noBonus': 'Без бонуса',
   'mobile.cash.bonusLabel': '+{{amount}} P бонус ({{percent}})',
   'mobile.cash.processing': 'Обработка...',
+
+  // Purchase History
+  'purchaseHistory.title': 'Загрузки',
+  'purchaseHistory.description': 'Просматривайте и скачивайте заново купленные ноты для барабанов.',
+  'purchaseHistory.listTitle': 'Купленные ноты',
+  'purchaseHistory.totalCount': 'Всего: {{count}} шт.',
+  'purchaseHistory.emptyMessage': 'Нет доступных нот для скачивания.',
+  'purchaseHistory.loading': 'Загрузка...',
+  
+  // Sheet
+  'sheet.buyNow': 'Купить Сейчас',
+  'sheet.buyNowProcessing': 'Обработка...',
 };
 

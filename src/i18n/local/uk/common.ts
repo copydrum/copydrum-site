@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - Завантажити ноти для барабанів',
   'site.description': 'Завантажте високоякісні ноти для барабанів. Доступні ноти всіх жанрів.',
 
+  // Header
+  'header.tagline': 'Преміум ноти для барабанів',
+
   // Navigation
   'nav.home': 'Головна',
   'nav.categories': 'Категорії нот',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': 'Кошик',
   'nav.mypage': 'Моя сторінка',
   'nav.myOrders': 'Мої замовлення',
+  'nav.purchaseHistory': 'Завантаження',
   'nav.admin': 'Адміністратор',
   'nav.login': 'Увійти',
   'nav.register': 'Реєстрація',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': 'Партнерство',
 
   // Search
-  'search.placeholder': 'Пошук за назвою, виконавцем, жанром...',
+  'search.placeholder': 'Пошук за назвою або виконавцем...',
   'search.button': 'Пошук',
   'search.noResults': 'Результатів не знайдено.',
 
@@ -173,5 +177,17 @@ export default {
   'mobile.cash.noBonus': 'Без бонусу',
   'mobile.cash.bonusLabel': '+{{amount}} P бонус ({{percent}})',
   'mobile.cash.processing': 'Обробка...',
+
+  // Purchase History
+  'purchaseHistory.title': 'Завантаження',
+  'purchaseHistory.description': 'Переглядайте та повторно завантажуйте куплені ноти для барабанів.',
+  'purchaseHistory.listTitle': 'Куплені ноти',
+  'purchaseHistory.totalCount': 'Всього: {{count}} шт.',
+  'purchaseHistory.emptyMessage': 'Немає доступних нот для завантаження.',
+  'purchaseHistory.loading': 'Завантаження...',
+  
+  // Sheet
+  'sheet.buyNow': 'Купити Зараз',
+  'sheet.buyNowProcessing': 'Обробка...',
 };
 

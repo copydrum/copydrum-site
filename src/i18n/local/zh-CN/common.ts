@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - 架子鼓谱下载',
   'site.description': '下载高质量的架子鼓谱。提供所有风格的鼓谱。',
 
+  // Header
+  'header.tagline': '优质鼓谱专业网站',
+
   // Navigation
   'nav.home': '首页',
   'nav.categories': '乐谱分类',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': '购物车',
   'nav.mypage': '我的页面',
   'nav.myOrders': '我的订单',
+  'nav.purchaseHistory': '下载',
   'nav.admin': '管理员',
   'nav.login': '登录',
   'nav.register': '注册',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': '合作伙伴',
 
   // Search
-  'search.placeholder': '搜索歌曲、艺术家、风格...',
+  'search.placeholder': '搜索歌曲、艺术家...',
   'search.button': '搜索',
   'search.noResults': '未找到搜索结果。',
 
@@ -102,6 +106,7 @@ export default {
   'footer.legal': '法律',
   'footer.followUs': '关注我们',
   'footer.copyright': '© 2025 CopyDrum. 版权所有。',
+  'footer.contactInfoGlobal': '如有任何疑问，请通过"我的页面"中的"1:1询问"提交。',
 
   // Common
   'common.or': '或',
@@ -173,5 +178,17 @@ export default {
   'mobile.cash.noBonus': '无额外奖励',
   'mobile.cash.bonusLabel': '+{{amount}} P 奖励 ({{percent}})',
   'mobile.cash.processing': '处理中...',
+
+  // Purchase History
+  'purchaseHistory.title': '购买记录',
+  'purchaseHistory.description': '您可以随时重新下载已购买的乐谱。',
+  'purchaseHistory.listTitle': '已购买的乐谱',
+  'purchaseHistory.totalCount': '共{{count}}项',
+  'purchaseHistory.emptyMessage': '没有可下载的乐谱。',
+  'purchaseHistory.loading': '加载中...',
+  
+  // Sheet
+  'sheet.buyNow': '立即购买',
+  'sheet.buyNowProcessing': '处理中...',
 };
 

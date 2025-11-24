@@ -4,7 +4,6 @@ import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import MainHeader from '../../components/common/MainHeader';
 import Footer from '../../components/common/Footer';
-import UserSidebar from '../../components/feature/UserSidebar';
 import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
@@ -205,10 +204,7 @@ export default function CustomerSupport() {
       <div className="hidden md:block">
         <MainHeader user={user} />
       </div>
-      <div className="hidden lg:block">
-        <UserSidebar user={user} />
-      </div>
-      <div className={`${user ? 'md:mr-64' : ''} pt-0 md:pt-0`}>
+      <div className="pt-0 md:pt-0">
         {/* Hero Section */}
         <section className="bg-gradient-to-r from-blue-600 to-blue-800 text-white pt-24 pb-12 md:py-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-3 md:space-y-4">

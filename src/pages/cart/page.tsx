@@ -2,16 +2,13 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../hooks/useCart';
 import { useAuthStore } from '../../stores/authStore';
-import { processCashPurchase } from '../../lib/cashPurchases';
 import { splitPurchasedSheetIds } from '../../lib/purchaseCheck';
 import { BankTransferInfoModal, PaymentMethodSelector } from '../../components/payments';
 import type { PaymentMethod } from '../../components/payments';
 import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
-import { openCashChargeModal } from '../../lib/cashChargeModal';
 import { useTranslation } from 'react-i18next';
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
-import { calculatePointPrice } from '../../lib/pointPrice';
 import PayPalPaymentModal from '../../components/payments/PayPalPaymentModal';
 
 type PendingCartPurchase = {
@@ -314,42 +311,6 @@ export default function CartPage() {
     setPaymentProcessing(true);
 
     try {
-      if (method === 'cash') {
-        const cashResult = await processCashPurchase({
-          userId: user.id,
-          totalPrice: calculatePointPrice(pendingPurchase.amount),
-          description: pendingPurchase.description,
-          items: pendingPurchase.items,
-          sheetIdForTransaction:
-            pendingPurchase.items.length === 1 ? pendingPurchase.items[0].sheetId : null,
-        });
-
-        if (!cashResult.success) {
-          if (cashResult.reason === 'INSUFFICIENT_CREDIT') {
-            alert(
-              t('cartPage.insufficientCash', {
-                amount: formatPriceValue(cashResult.currentCredits)
-              }),
-            );
-            openCashChargeModal();
-          }
-          return;
-        }
-
-        const removed = await removeSelectedItems(pendingPurchase.targetItemIds);
-        if (!removed) {
-          console.warn(t('cartPage.console.cartUpdateAfterPurchaseError'));
-        }
-
-        setSelectedItems(prev =>
-          prev.filter(id => !pendingPurchase.targetItemIds.includes(id)),
-        );
-
-        alert(t('cartPage.purchaseComplete'));
-        navigate('/my-orders');
-        return;
-      }
-
       if (method === 'paypal') {
         // PayPal 모달을 열기 전에 pendingPurchase를 유지해야 함
         // 모달이 닫힐 때까지 pendingPurchase를 유지
@@ -522,9 +483,6 @@ export default function CartPage() {
 
                     <div className="text-right">
                       <p className="text-lg font-bold text-gray-900">{formatPriceValue(item.price)}</p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {t('payment.pointPrice', { price: calculatePointPrice(item.price).toLocaleString('en-US') })}
-                      </p>
                     </div>
 
                     <button
@@ -546,9 +504,6 @@ export default function CartPage() {
                   <div className="flex flex-col items-end">
                     <span className="text-2xl font-bold text-blue-600">
                       {formatPriceValue(getTotalPrice(selectedItems))}
-                    </span>
-                    <span className="text-sm text-gray-600 mt-1">
-                      {t('payment.pointPrice', { price: calculatePointPrice(getTotalPrice(selectedItems)).toLocaleString('en-US') })}
                     </span>
                   </div>
                 </div>

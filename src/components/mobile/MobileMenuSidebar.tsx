@@ -5,12 +5,13 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import type { Profile } from '../../lib/supabase';
 import { googleAuth } from '../../lib/google';
-import { formatPrice } from '../../lib/priceFormatter';
 import { getUserDisplayName } from '../../utils/userDisplayName';
-import { getActiveCurrency } from '../../lib/payments/getActiveCurrency';
-import { convertPriceForLocale } from '../../lib/pricing/convertForLocale';
-import { formatCurrency as formatCurrencyUi } from '../../lib/pricing/formatCurrency';
-import { useUserCashBalance } from '../../hooks/useUserCashBalance';
+import { isKoreanSiteHost } from '../../config/hostType';
+
+interface Category {
+  id: string;
+  name: string;
+}
 
 interface MobileMenuSidebarProps {
   isOpen: boolean;
@@ -24,11 +25,8 @@ interface NavItem {
   icon: string;
 }
 
-const menuItems: NavItem[] = [
+const baseMenuItems: NavItem[] = [
   { labelKey: 'nav.categories', href: '/categories', icon: 'ri-apps-line' },
-  { labelKey: 'nav.freeSheets', href: '/free-sheets', icon: 'ri-music-line' },
-  { labelKey: 'nav.collections', href: '/collections', icon: 'ri-album-line' },
-  { labelKey: 'nav.eventSale', href: '/event-sale', icon: 'ri-fire-line' },
   { labelKey: 'nav.customOrder', href: '/custom-order', icon: 'ri-edit-line' },
 ];
 
@@ -41,9 +39,89 @@ export default function MobileMenuSidebar({
   const location = useLocation();
   const { t, i18n } = useTranslation();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [isKoreanSite, setIsKoreanSite] = useState<boolean>(false);
+  const [categories, setCategories] = useState<Category[]>([]);
 
-  // 마이페이지와 동일한 훅 사용 (통일된 캐시 잔액 조회)
-  const { credits: userCash, loading: cashLoading, error: cashError } = useUserCashBalance(user);
+  // 호스트 타입을 컴포넌트 마운트 시 한 번만 계산
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsKoreanSite(isKoreanSiteHost(window.location.host));
+    }
+  }, []);
+
+  // 카테고리 로드
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('categories')
+          .select('id, name')
+          .neq('name', '드럼레슨');
+
+        if (error) throw error;
+        setCategories(data || []);
+      } catch (error) {
+        console.error('카테고리 로드 오류:', error);
+      }
+    };
+
+    if (isOpen) {
+      void loadCategories();
+    }
+  }, [isOpen]);
+  
+  const menuItems = useMemo(() => {
+    if (isKoreanSite) {
+      return baseMenuItems.filter(item => item.labelKey !== 'nav.categories');
+    }
+    return baseMenuItems.filter(item => item.labelKey !== 'nav.customOrder' && item.labelKey !== 'nav.categories');
+  }, [isKoreanSite]);
+
+  // 장르 목록 생성
+  const genreListKo = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
+  const genreListEn = ['팝', '락', '가요', '재즈', 'J-POP', 'OST', 'CCM', '트로트/성인가요', '드럼솔로', '드럼커버'];
+  const genreList = i18n.language === 'en' ? genreListEn : genreListKo;
+
+  // 카테고리 이름을 번역하는 함수
+  const getCategoryName = (categoryName: string | null | undefined): string => {
+    if (!categoryName) return '';
+    if (i18n.language === 'ko') return categoryName;
+
+    const categoryMap: Record<string, string> = {
+      '가요': t('categoriesPage.categories.kpop'),
+      '팝': t('categoriesPage.categories.pop'),
+      '락': t('categoriesPage.categories.rock'),
+      'CCM': t('categoriesPage.categories.ccm'),
+      '트로트/성인가요': t('categoriesPage.categories.trot'),
+      '재즈': t('categoriesPage.categories.jazz'),
+      'J-POP': t('categoriesPage.categories.jpop'),
+      'OST': t('categoriesPage.categories.ost'),
+      '드럼솔로': t('categoriesPage.categories.drumSolo'),
+      '드럼커버': t('categoriesPage.categories.drumCover'),
+    };
+
+    return categoryMap[categoryName] || categoryName;
+  };
+
+  // 장르 네비게이션 아이템 생성
+  const genreNavItems = useMemo(() => {
+    return genreList.map((genreKo) => {
+      const category = categories.find((cat) => cat.name === genreKo);
+      if (!category) return null;
+
+      return {
+        id: category.id,
+        label: getCategoryName(genreKo),
+        href: `/categories?category=${category.id}`,
+      };
+    }).filter((item): item is { id: string; label: string; href: string } => item !== null);
+  }, [genreList, categories, i18n.language, t]);
+
+  // 현재 활성 카테고리 ID
+  const activeCategoryId = useMemo(() => {
+    const searchParams = new URLSearchParams(location.search);
+    return searchParams.get('category');
+  }, [location.search]);
 
   const greeting = useMemo(() => {
     if (!user) {
@@ -53,19 +131,7 @@ export default function MobileMenuSidebar({
     return t('mobile.menu.greeting', { name });
   }, [t, user, profile]);
 
-  const formatCurrency = useCallback(
-    (value: number) => {
-      if (i18n.language === 'ko') {
-        return formatPrice({ amountKRW: value, language: 'ko' }).formatted;
-      }
-      const currency = getActiveCurrency();
-      const converted = convertPriceForLocale(value, i18n.language, currency);
-      return formatCurrencyUi(converted, currency);
-    },
-    [i18n.language],
-  );
-
-  // 프로필 정보 로드 (display_name, email 등)
+  // 프로필 정보 로드
   useEffect(() => {
     if (!user) {
       setProfile(null);
@@ -138,24 +204,7 @@ export default function MobileMenuSidebar({
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div className="flex-1">
             <p className="text-sm font-semibold text-gray-900">{t('site.name')}</p>
-            {user ? (
-              <>
-                <p className="text-xs text-gray-500 mt-1">{greeting}</p>
-                <div className="mt-2 flex items-center gap-2">
-                  <i className="ri-wallet-3-line text-blue-600"></i>
-                  <span className="text-xs text-gray-600">보유 악보캐쉬</span>
-                  {cashLoading ? (
-                    <span className="text-sm font-bold text-blue-400 animate-pulse">{t('sidebar.loading')}</span>
-                  ) : cashError ? (
-                    <span className="text-sm font-bold text-red-500">{t('sidebar.error')}</span>
-                  ) : (
-                    <span className="text-sm font-bold text-blue-600">{formatCurrency(userCash)}</span>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className="text-xs text-gray-500 mt-1">{greeting}</p>
-            )}
+            <p className="text-xs text-gray-500 mt-1">{greeting}</p>
           </div>
           <button
             type="button"
@@ -168,6 +217,32 @@ export default function MobileMenuSidebar({
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-2">
+          {/* 장르 리스트 */}
+          <div className="mb-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-2">
+              {t('nav.categories')}
+            </p>
+            <div className="space-y-1">
+              {genreNavItems.map((genre) => {
+                const isActive = activeCategoryId === genre.id && location.pathname === '/categories';
+                return (
+                  <button
+                    key={genre.id}
+                    type="button"
+                    onClick={() => handleNavigate(genre.href)}
+                    className={`flex w-full items-center rounded-lg px-3 py-2 text-left transition-colors ${isActive
+                        ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                        : 'bg-white text-gray-700 border border-gray-100 hover:bg-gray-50'
+                      }`}
+                  >
+                    <span className="text-sm font-medium">{genre.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 기타 메뉴 아이템 */}
           {menuItems.map((item) => {
             const isActive = location.pathname === item.href;
             return (

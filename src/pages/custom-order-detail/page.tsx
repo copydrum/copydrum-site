@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 import CustomOrderDetail from '@/components/customer/CustomOrderDetail';
 import MainHeader from '@/components/common/MainHeader';
-import UserSidebar from '@/components/feature/UserSidebar';
 
 const CustomOrderDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -25,9 +24,8 @@ const CustomOrderDetailPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <MainHeader user={user} />
-      <UserSidebar user={user} />
 
-      <div className={user ? 'md:mr-64' : ''}>
+      <div>
         <main className="max-w-4xl mx-auto px-4 py-12">
           <div className="mb-6 flex items-center justify-between">
             <div>

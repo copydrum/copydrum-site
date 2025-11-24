@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - Davul Notası İndir',
   'site.description': 'Yüksek kaliteli davul notaları indirin. Tüm türler için davul notaları mevcut.',
 
+  // Header
+  'header.tagline': 'Premium davul notaları',
+
   // Navigation
   'nav.home': 'Ana Sayfa',
   'nav.categories': 'Nota Kategorileri',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': 'Sepet',
   'nav.mypage': 'Sayfam',
   'nav.myOrders': 'Siparişlerim',
+  'nav.purchaseHistory': 'İndirmeler',
   'nav.admin': 'Yönetici',
   'nav.login': 'Giriş Yap',
   'nav.register': 'Kayıt Ol',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': 'Ortaklık',
 
   // Search
-  'search.placeholder': 'Şarkı, sanatçı, tür ile ara...',
+  'search.placeholder': 'Şarkı veya sanatçı ile ara...',
   'search.button': 'Ara',
   'search.noResults': 'Arama sonucu bulunamadı.',
 
@@ -173,5 +177,17 @@ export default {
   'mobile.cash.noBonus': 'Bonus yok',
   'mobile.cash.bonusLabel': '+{{amount}} P bonus ({{percent}})',
   'mobile.cash.processing': 'İşleniyor...',
+
+  // Purchase History
+  'purchaseHistory.title': 'İndirmeler',
+  'purchaseHistory.description': 'Satın aldığınız davul notalarını görüntüleyin ve yeniden indirin.',
+  'purchaseHistory.listTitle': 'Satın alınan notalar',
+  'purchaseHistory.totalCount': 'Toplam: {{count}} öğe',
+  'purchaseHistory.emptyMessage': 'İndirilebilir nota yok.',
+  'purchaseHistory.loading': 'Yükleniyor...',
+  
+  // Sheet
+  'sheet.buyNow': 'Şimdi Satın Al',
+  'sheet.buyNowProcessing': 'İşleniyor...',
 };
 

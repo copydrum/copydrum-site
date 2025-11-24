@@ -97,7 +97,7 @@ export default function Header({ user: propUser }: HeaderProps) {
     return location.pathname === '/custom-order';
   };
 
-  const containerClassName = `hidden md:block bg-blue-700${user ? ' md:mr-64' : ''}`;
+  const containerClassName = `hidden md:block bg-blue-700`;
 
   return (
     <div className={containerClassName}>

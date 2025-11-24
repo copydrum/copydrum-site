@@ -7,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 interface MobileBottomNavProps {
   user?: User | null;
   onSearchToggle: () => void;
-  onCashChargeToggle: () => void;
 }
 
 interface NavAction {
@@ -22,7 +21,6 @@ interface NavAction {
 export default function MobileBottomNav({
   user,
   onSearchToggle,
-  onCashChargeToggle,
 }: MobileBottomNavProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -59,18 +57,6 @@ export default function MobileBottomNav({
         badge: cartCount > 0 ? String(cartCount) : null,
       },
       {
-        key: 'cash',
-        label: t('nav.cashCharge'),
-        icon: 'ri-wallet-3-line',
-        onClick: () => {
-          if (!user) {
-            navigate('/auth/login');
-            return;
-          }
-          onCashChargeToggle();
-        },
-      },
-      {
         key: 'support',
         label: t('nav.customerSupport'),
         icon: 'ri-customer-service-2-line',
@@ -84,11 +70,11 @@ export default function MobileBottomNav({
         onClick: onSearchToggle,
       },
     ];
-  }, [cartCount, location.pathname, navigate, onCashChargeToggle, onSearchToggle, t, user]);
+  }, [cartCount, location.pathname, navigate, onSearchToggle, t, user]);
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 bg-white/95 backdrop-blur">
-      <div className="mx-auto grid max-w-md grid-cols-5">
+      <div className="mx-auto grid max-w-md grid-cols-4">
         {actions.map((action) => {
           const isActive = action.isActive;
           return (

@@ -5,7 +5,6 @@ import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { generateDefaultThumbnail } from '@/lib/defaultThumbnail';
 import MainHeader from '@/components/common/MainHeader';
-import UserSidebar from '@/components/feature/UserSidebar';
 import { useCart } from '@/hooks/useCart';
 import { buildDownloadKey, downloadFile, getDownloadFileName, requestSignedDownloadUrl } from '@/utils/downloadHelpers';
 import type { VirtualAccountInfo } from '@/lib/payments';
@@ -611,11 +610,8 @@ const MyOrdersPage = () => {
       {/* 메인 헤더 */}
       <MainHeader user={user} />
 
-      {/* 사용자 사이드바 */}
-      <UserSidebar user={user} />
-
       {/* 메인 컨텐츠 */}
-      <div className={user ? 'md:mr-64' : ''}>
+      <div>
         <div className="bg-gray-50 py-8">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-8">

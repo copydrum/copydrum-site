@@ -4,12 +4,10 @@ import { useEffect, Suspense, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { RouteErrorBoundary } from './components/common/RouteErrorBoundary';
 import { supabase } from './lib/supabase';
-import { CASH_CHARGE_MODAL_EVENT } from './lib/cashChargeModal';
 import MobileHeader from './components/mobile/MobileHeader';
 import MobileMenuSidebar from './components/mobile/MobileMenuSidebar';
-import MobileBottomNav from './components/mobile/MobileBottomNav';
+// MobileBottomNav 제거됨 - 모바일 하단 탭바 제거
 import MobileSearchOverlay from './components/mobile/MobileSearchOverlay';
-import MobileCashChargeModal from './components/mobile/MobileCashChargeModal';
 import HreflangTags from './components/common/HreflangTags';
 import MaintenanceNotice from './components/common/MaintenanceNotice';
 
@@ -21,8 +19,6 @@ interface AppInnerProps {
   setIsMobileMenuOpen: (v: boolean) => void;
   isMobileSearchOpen: boolean;
   setIsMobileSearchOpen: (v: boolean) => void;
-  isCashModalOpen: boolean;
-  setIsCashModalOpen: (v: boolean) => void;
 }
 
 function AppInner({
@@ -31,8 +27,6 @@ function AppInner({
   setIsMobileMenuOpen,
   isMobileSearchOpen,
   setIsMobileSearchOpen,
-  isCashModalOpen,
-  setIsCashModalOpen,
 }: AppInnerProps) {
   const location = useLocation();
   const isAdminPage = location.pathname.startsWith('/admin');
@@ -59,22 +53,13 @@ function AppInner({
           isOpen={isMobileSearchOpen}
           onClose={() => setIsMobileSearchOpen(false)}
         />
-        <MobileCashChargeModal
-          isOpen={isCashModalOpen}
-          onClose={() => setIsCashModalOpen(false)}
-          user={user ?? null}
-        />
         <div
-          className={`min-h-screen bg-white pb-[80px] md:pb-0 ${isAdminPage ? '' : 'pt-[112px]'
+          className={`min-h-screen bg-white md:pb-0 ${isAdminPage ? '' : 'pt-[160px]'
             } md:pt-0`}
         >
           <AppRoutes />
         </div>
-        <MobileBottomNav
-          user={user ?? null}
-          onSearchToggle={() => setIsMobileSearchOpen(true)}
-          onCashChargeToggle={() => setIsCashModalOpen(true)}
-        />
+        {/* 모바일 하단 탭바 제거됨 */}
       </RouteErrorBoundary>
     </Suspense>
   );
@@ -84,7 +69,6 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
-  const [isCashModalOpen, setIsCashModalOpen] = useState(false);
   const isMaintenanceMode = import.meta.env.VITE_MAINTENANCE_MODE === 'true';
 
   useEffect(() => {
@@ -148,16 +132,6 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    const handleOpenCashCharge = () => setIsCashModalOpen(true);
-
-    window.addEventListener(CASH_CHARGE_MODAL_EVENT, handleOpenCashCharge);
-
-    return () => {
-      window.removeEventListener(CASH_CHARGE_MODAL_EVENT, handleOpenCashCharge);
-    };
-  }, []);
-
   if (isMaintenanceMode) {
     return <MaintenanceNotice />;
   }
@@ -170,8 +144,6 @@ function App() {
         setIsMobileMenuOpen={setIsMobileMenuOpen}
         isMobileSearchOpen={isMobileSearchOpen}
         setIsMobileSearchOpen={setIsMobileSearchOpen}
-        isCashModalOpen={isCashModalOpen}
-        setIsCashModalOpen={setIsCashModalOpen}
       />
     </BrowserRouter>
   );

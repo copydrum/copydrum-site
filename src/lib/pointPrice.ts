@@ -11,6 +11,7 @@ import { convertUSDToKRW } from './priceFormatter';
  * @returns 포인트 가격 (100P 단위로 내림 처리된 값)
  */
 export function calculatePointPrice(priceKRW: number): number {
+  if (!priceKRW || priceKRW <= 0) return 0;
   const pointPriceRaw = priceKRW * 0.85;
   return Math.floor(pointPriceRaw / 100) * 100;
 }

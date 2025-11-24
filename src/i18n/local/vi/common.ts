@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - Tải bản nhạc trống',
   'site.description': 'Tải bản nhạc trống chất lượng cao. Có sẵn bản nhạc trống cho mọi thể loại.',
 
+  // Header
+  'header.tagline': 'Bản nhạc trống cao cấp',
+
   // Navigation
   'nav.home': 'Trang chủ',
   'nav.categories': 'Danh mục bản nhạc',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': 'Giỏ hàng',
   'nav.mypage': 'Trang của tôi',
   'nav.myOrders': 'Đơn hàng của tôi',
+  'nav.purchaseHistory': 'Tải xuống',
   'nav.admin': 'Quản trị viên',
   'nav.login': 'Đăng nhập',
   'nav.register': 'Đăng ký',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': 'Đối tác',
 
   // Search
-  'search.placeholder': 'Tìm kiếm theo bài hát, nghệ sĩ, thể loại...',
+  'search.placeholder': 'Tìm kiếm theo bài hát hoặc nghệ sĩ...',
   'search.button': 'Tìm kiếm',
   'search.noResults': 'Không tìm thấy kết quả.',
 
@@ -173,5 +177,17 @@ export default {
   'mobile.cash.noBonus': 'Không có thưởng',
   'mobile.cash.bonusLabel': '+{{amount}} P thưởng ({{percent}})',
   'mobile.cash.processing': 'Đang xử lý...',
+
+  // Purchase History
+  'purchaseHistory.title': 'Tải xuống',
+  'purchaseHistory.description': 'Xem và tải lại các bản nhạc trống bạn đã mua.',
+  'purchaseHistory.listTitle': 'Bản nhạc đã mua',
+  'purchaseHistory.totalCount': 'Tổng: {{count}} mục',
+  'purchaseHistory.emptyMessage': 'Không có bản nhạc nào để tải xuống.',
+  'purchaseHistory.loading': 'Đang tải...',
+  
+  // Sheet
+  'sheet.buyNow': 'Mua Ngay',
+  'sheet.buyNowProcessing': 'Đang xử lý...',
 };
 

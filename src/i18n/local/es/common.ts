@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - Descarga de partituras de batería',
   'site.description': 'Descarga partituras de batería de alta calidad. Partituras de todos los géneros disponibles.',
 
+  // Header
+  'header.tagline': 'Partituras de batería premium',
+
   // Navigation
   'nav.home': 'Inicio',
   'nav.categories': 'Categorías de partituras',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': 'Carrito',
   'nav.mypage': 'Mi página',
   'nav.myOrders': 'Mis pedidos',
+  'nav.purchaseHistory': 'Descargas',
   'nav.admin': 'Administrador',
   'nav.login': 'Iniciar sesión',
   'nav.register': 'Registrarse',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': 'Colaboración',
 
   // Search
-  'search.placeholder': 'Buscar por canción, artista, género...',
+  'search.placeholder': 'Buscar por canción o artista...',
   'search.button': 'Buscar',
   'search.noResults': 'No se encontraron resultados.',
 
@@ -102,6 +106,7 @@ export default {
   'footer.legal': 'Legal',
   'footer.followUs': 'Síguenos',
   'footer.copyright': '© 2025 CopyDrum. Todos los derechos reservados.',
+  'footer.contactInfoGlobal': 'Si tiene alguna consulta, envíela a través de "Consulta 1:1" en Mi Página.',
 
   // Common
   'common.or': 'o',
@@ -173,5 +178,17 @@ export default {
   'mobile.cash.noBonus': 'Sin bonificación',
   'mobile.cash.bonusLabel': '+{{amount}} P de bono ({{percent}})',
   'mobile.cash.processing': 'Procesando...',
+
+  // Purchase History
+  'purchaseHistory.title': 'Descargas',
+  'purchaseHistory.description': 'Vea y vuelva a descargar las partituras de batería que ha comprado.',
+  'purchaseHistory.listTitle': 'Partituras compradas',
+  'purchaseHistory.totalCount': 'Total: {{count}} elemento(s)',
+  'purchaseHistory.emptyMessage': 'No hay partituras descargables disponibles.',
+  'purchaseHistory.loading': 'Cargando...',
+  
+  // Sheet
+  'sheet.buyNow': 'Comprar Ahora',
+  'sheet.buyNowProcessing': 'Procesando...',
 };
 

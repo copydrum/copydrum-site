@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - 爵士鼓譜下載',
   'site.description': '下載高品質的爵士鼓譜。提供所有風格的鼓譜。',
 
+  // Header
+  'header.tagline': '優質鼓譜專業網站',
+
   // Navigation
   'nav.home': '首頁',
   'nav.categories': '樂譜分類',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': '購物車',
   'nav.mypage': '我的頁面',
   'nav.myOrders': '我的訂單',
+  'nav.purchaseHistory': '下載',
   'nav.admin': '管理員',
   'nav.login': '登入',
   'nav.register': '註冊',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': '合作夥伴',
 
   // Search
-  'search.placeholder': '搜尋歌曲、藝術家、風格...',
+  'search.placeholder': '搜尋歌曲、藝術家...',
   'search.button': '搜尋',
   'search.noResults': '未找到搜尋結果。',
 
@@ -102,6 +106,7 @@ export default {
   'footer.legal': '法律',
   'footer.followUs': '關注我們',
   'footer.copyright': '© 2025 CopyDrum. 版權所有。',
+  'footer.contactInfoGlobal': '如有任何疑問，請透過「我的頁面」中的「1:1詢問」提交。',
 
   // Common
   'common.or': '或',
@@ -173,5 +178,17 @@ export default {
   'mobile.cash.noBonus': '無額外回饋',
   'mobile.cash.bonusLabel': '+{{amount}} P 回饋 ({{percent}})',
   'mobile.cash.processing': '處理中...',
+
+  // Purchase History
+  'purchaseHistory.title': '購買記錄',
+  'purchaseHistory.description': '您可以隨時重新下載已購買的樂譜。',
+  'purchaseHistory.listTitle': '已購買的樂譜',
+  'purchaseHistory.totalCount': '共{{count}}項',
+  'purchaseHistory.emptyMessage': '沒有可下載的樂譜。',
+  'purchaseHistory.loading': '載入中...',
+  
+  // Sheet
+  'sheet.buyNow': '立即購買',
+  'sheet.buyNowProcessing': '處理中...',
 };
 

@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - Drum Sheet Music Download',
   'site.description': 'Download high-quality drum sheet music. Drum notation for all genres available.',
 
+  // Header
+  'header.tagline': 'Premium Drum Sheet Music',
+
   // Navigation
   'nav.home': 'Home',
   'nav.categories': 'Sheet Categories',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': 'Cart',
   'nav.mypage': 'My Page',
   'nav.myOrders': 'My Orders',
+  'nav.purchaseHistory': 'Downloads',
   'nav.admin': 'Admin',
   'nav.login': 'Login',
   'nav.register': 'Sign Up',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': 'Partnership',
 
   // Search
-  'search.placeholder': 'Search by song, artist, genre...',
+  'search.placeholder': 'Search by song title or artist...',
   'search.button': 'Search',
   'search.noResults': 'No search results found.',
 
@@ -297,6 +301,9 @@ export default {
   // Cart Page
   'cart.loginRequired': 'Login is required',
   'cart.loginRequiredDescription': 'Please log in to view your cart.',
+  'cart.addedConfirm': 'Item added to cart. Go to cart?',
+  'cart.alreadyInCart': 'Item is already in the cart.',
+  'cart.addFailed': 'Failed to add item to cart.',
   'cart.selectItemsToDelete': 'Please select items to delete.',
   'cart.confirmDelete': 'Are you sure you want to delete {{count}} selected item(s)?',
   'cart.confirmClear': 'Are you sure you want to clear your entire cart?',
@@ -414,6 +421,7 @@ export default {
   'footer.telecomLicense': 'Telecom Sales Business Registration: 2020-Sejong-0099',
   'footer.address': 'Address: 836, 8F, Gangnam Jeil Tower, 454 Namsejong-ro, Sejong',
   'footer.contactInfo': 'Contact: 070-7570-0028 (Please use 1:1 inquiry or KakaoTalk chat as phone contact is difficult during work hours.)',
+  'footer.contactInfoGlobal': 'If you have any inquiries, please submit them through "1:1 Inquiry" in My Page.',
 
   // Home Page - Additional translations
   'home.eventSaleEvent': '100 Won Sale Event',
@@ -469,12 +477,24 @@ export default {
   'category.drumSolo': 'Drum Solo',
   'category.drumCover': 'Drum Cover',
   'category.other': 'Other',
+
+  // Purchase History
+  'purchaseHistory.title': 'Downloads',
+  'purchaseHistory.description': 'View and re-download the drum sheets you have purchased.',
+  'purchaseHistory.listTitle': 'Purchased Sheets',
+  'purchaseHistory.totalCount': 'Total {{count}} items',
+  'purchaseHistory.emptyMessage': 'There are no downloadable sheets.',
+  'purchaseHistory.loading': 'Loading...',
   'categories.difficultyNotSet': 'Difficulty not set',
   'categories.addToCart': 'cart',
   'categories.alreadyInCart': 'Already in Cart',
   'categories.buyNow': 'Buy Now',
   'categories.buyNowInstant': 'Buy Now',
   'categories.eventBuyNow': 'Buy for 100 Won',
+  
+  // Sheet
+  'sheet.buyNow': 'Buy Now',
+  'sheet.buyNowProcessing': 'Processing...',
   'categories.previewSheet': 'Preview Sheet',
   'categories.playYoutube': 'Play on YouTube',
   'categories.goToDetail': 'Go to Detail Page',

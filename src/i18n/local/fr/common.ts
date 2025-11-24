@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - Téléchargement de partitions de batterie',
   'site.description': 'Téléchargez des partitions de batterie de haute qualité. Partitions pour tous les genres disponibles.',
 
+  // Header
+  'header.tagline': 'Partitions de batterie premium',
+
   // Navigation
   'nav.home': 'Accueil',
   'nav.categories': 'Catégories de partitions',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': 'Panier',
   'nav.mypage': 'Ma page',
   'nav.myOrders': 'Mes commandes',
+  'nav.purchaseHistory': 'Téléchargements',
   'nav.admin': 'Administrateur',
   'nav.login': 'Connexion',
   'nav.register': "S'inscrire",
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': 'Partenariat',
 
   // Search
-  'search.placeholder': 'Rechercher par titre, artiste, genre...',
+  'search.placeholder': 'Rechercher par titre ou artiste...',
   'search.button': 'Rechercher',
   'search.noResults': 'Aucun résultat trouvé.',
 
@@ -102,6 +106,7 @@ export default {
   'footer.legal': 'Légal',
   'footer.followUs': 'Suivez-nous',
   'footer.copyright': '© 2025 CopyDrum. Tous droits réservés.',
+  'footer.contactInfoGlobal': 'Si vous avez des questions, veuillez les soumettre via "Demande 1:1" dans Ma Page.',
 
   // Common
   'common.or': 'ou',
@@ -173,5 +178,17 @@ export default {
   'mobile.cash.noBonus': 'Pas de bonus',
   'mobile.cash.bonusLabel': '+{{amount}} P bonus ({{percent}})',
   'mobile.cash.processing': 'Traitement en cours...',
+
+  // Purchase History
+  'purchaseHistory.title': 'Téléchargements',
+  'purchaseHistory.description': 'Consultez et téléchargez à nouveau les partitions de batterie que vous avez achetées.',
+  'purchaseHistory.listTitle': 'Partitions achetées',
+  'purchaseHistory.totalCount': 'Total: {{count}} élément(s)',
+  'purchaseHistory.emptyMessage': 'Aucune partition téléchargeable disponible.',
+  'purchaseHistory.loading': 'Chargement...',
+  
+  // Sheet
+  'sheet.buyNow': 'Acheter Maintenant',
+  'sheet.buyNowProcessing': 'Traitement en cours...',
 };
 

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import MainHeader from '../../components/common/MainHeader';
 import Footer from '../../components/common/Footer';
-import UserSidebar from '../../components/feature/UserSidebar';
 import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
@@ -91,8 +90,7 @@ export default function GuidePage() {
         }
       ],
       cta: [
-        { label: t('guidePage.sections.effectiveSearch.cta.categories'), href: '/categories' },
-        { label: t('guidePage.sections.effectiveSearch.cta.freeSheets'), href: '/free-sheets' }
+        { label: t('guidePage.sections.effectiveSearch.cta.categories'), href: '/categories' }
       ]
     },
     {
@@ -114,10 +112,7 @@ export default function GuidePage() {
           detail: t('guidePage.sections.chooseSheet.steps.price.detail')
         }
       ],
-      cta: [
-        { label: t('guidePage.sections.chooseSheet.cta.eventSale'), href: '/event-sale' },
-        { label: t('guidePage.sections.chooseSheet.cta.collections'), href: '/collections' }
-      ]
+      cta: []
     },
     {
       title: t('guidePage.sections.purchaseProcess.title'),
@@ -195,8 +190,7 @@ export default function GuidePage() {
   return (
     <div className="min-h-screen bg-white">
       <MainHeader user={user} />
-      <UserSidebar user={user} />
-      <div className={user ? 'md:mr-64' : ''}>
+      <div>
         <section className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white py-20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <span className="inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium bg-white/15 mb-6">
@@ -347,13 +341,6 @@ export default function GuidePage() {
                 >
                   {t('guidePage.helpNeeded.cta.findSheets')}
                   <i className="ri-arrow-right-up-line text-lg ml-2"></i>
-                </a>
-                <a
-                  href="/event-sale"
-                  className="inline-flex items-center px-6 py-3 rounded-full bg-white/20 text-white font-semibold hover:bg-white/25 transition-colors cursor-pointer"
-                >
-                  {t('guidePage.helpNeeded.cta.eventSale')}
-                  <i className="ri-flashlight-line text-lg ml-2"></i>
                 </a>
               </div>
             </div>

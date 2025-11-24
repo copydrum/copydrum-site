@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - ドラム楽譜ダウンロード',
   'site.description': '高品質なドラム楽譜をダウンロード。あらゆるジャンルのドラム楽譜を提供します。',
 
+  // Header
+  'header.tagline': 'プレミアムドラム楽譜サイト',
+
   // Navigation
   'nav.home': 'ホーム',
   'nav.categories': '楽譜カテゴリー',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': 'カート',
   'nav.mypage': 'マイページ',
   'nav.myOrders': '注文履歴',
+  'nav.purchaseHistory': 'ダウンロード',
   'nav.admin': '管理者',
   'nav.login': 'ログイン',
   'nav.register': '新規登録',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': '提携について',
 
   // Search
-  'search.placeholder': '曲名、アーティスト、ジャンルで検索...',
+  'search.placeholder': '曲名、アーティスト名で検索...',
   'search.button': '検索',
   'search.noResults': '検索結果が見つかりません。',
 
@@ -297,6 +301,9 @@ export default {
   // Cart Page
   'cart.loginRequired': 'ログインが必要です',
   'cart.loginRequiredDescription': 'カートを確認するにはログインしてください。',
+  'cart.addedConfirm': 'カートに商品を追加しました。カートに移動しますか？',
+  'cart.alreadyInCart': 'すでにカートに追加されている商品です。',
+  'cart.addFailed': 'カートへの追加に失敗しました。',
   'cart.selectItemsToDelete': '削除する項目を選択してください。',
   'cart.confirmDelete': '選択した{{count}}個の項目を削除しますか？',
   'cart.confirmClear': 'カートを空にしますか？',
@@ -414,6 +421,7 @@ export default {
   'footer.telecomLicense': '通信販売業届出: 2020-Sejong-0099',
   'footer.address': '住所: 世宗特別自治市 南世宗路 454 江南第一タワー 8階 836号',
   'footer.contactInfo': '連絡先: 070-7570-0028 (業務中は電話に出られない場合があるため、1:1お問い合わせまたはカカオトーク相談をご利用ください)',
+  'footer.contactInfoGlobal': 'ご質問がございましたら、マイページの「1:1お問い合わせ」からお問い合わせください。',
 
   // Home Page - Additional translations
   'home.eventSaleEvent': '100円セールイベント',
@@ -469,12 +477,24 @@ export default {
   'category.drumSolo': 'ドラムソロ',
   'category.drumCover': 'ドラムカバー',
   'category.other': 'その他',
+
+  // Purchase History
+  'purchaseHistory.title': '購入履歴',
+  'purchaseHistory.description': '購入した楽譜をいつでも再ダウンロードできます。',
+  'purchaseHistory.listTitle': '購入した楽譜',
+  'purchaseHistory.totalCount': '全{{count}}件',
+  'purchaseHistory.emptyMessage': 'ダウンロード可能な楽譜はありません。',
+  'purchaseHistory.loading': '読み込み中...',
   'categories.difficultyNotSet': '難易度未設定',
   'categories.addToCart': 'カート',
   'categories.alreadyInCart': 'カートに入っています',
   'categories.buyNow': '購入',
   'categories.buyNowInstant': '即購入',
   'categories.eventBuyNow': '100円で購入',
+  
+  // Sheet
+  'sheet.buyNow': '今すぐ購入',
+  'sheet.buyNowProcessing': '処理中...',
   'categories.previewSheet': '楽譜プレビュー',
   'categories.playYoutube': 'YouTube再生',
   'categories.goToDetail': '詳細ページへ',

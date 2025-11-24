@@ -4,11 +4,8 @@ import type { ChangeEvent, FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
-import PointChargeModal from '../../components/payments/PointChargeModal';
 import MainHeader from '../../components/common/MainHeader';
-import UserSidebar from '../../components/feature/UserSidebar';
 import { useCart } from '../../hooks/useCart';
-import { useUserCashBalance } from '../../hooks/useUserCashBalance';
 import type { FavoriteSheet } from '../../lib/favorites';
 import { fetchUserFavorites, removeFavorite } from '../../lib/favorites';
 import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
@@ -20,7 +17,7 @@ import { getUserDisplayName } from '../../utils/userDisplayName';
 
 import type { VirtualAccountInfo } from '../../lib/payments';
 
-type TabKey = 'profile' | 'purchases' | 'downloads' | 'favorites' | 'cash' | 'inquiries' | 'custom-orders';
+type TabKey = 'profile' | 'purchases' | 'downloads' | 'favorites' | 'inquiries' | 'custom-orders';
 
 type MaybeDateString = string | null | undefined;
 
@@ -100,25 +97,6 @@ interface CustomOrderSummary {
   updated_at: string;
 }
 
-type CashTransactionType = 'charge' | 'use' | 'admin_add' | 'admin_deduct';
-
-interface CashHistoryEntry {
-  id: string;
-  transaction_type: CashTransactionType;
-  amount: number;
-  bonus_amount: number;
-  balance_after: number;
-  description: string | null;
-  created_at: string;
-  sheet?: {
-    id: string;
-    title: string | null;
-  } | null;
-  order_id?: string | null;
-}
-
-// CASH_TYPE_META는 컴포넌트 내부에서 t()를 사용하여 동적으로 생성
-
 const formatDate = (value: MaybeDateString) => (value ? new Date(value).toLocaleDateString('ko-KR') : '-');
 const formatDateTime = (value: MaybeDateString) => (value ? new Date(value).toLocaleString('ko-KR') : '-');
 
@@ -165,43 +143,17 @@ export default function MyPage() {
     (inquiryStatusMap[status as keyof typeof inquiryStatusMap] ?? { label: t('mypage.status.inquiry.processing'), className: 'bg-gray-100 text-gray-600' }),
     [inquiryStatusMap, t]);
 
-  const CASH_TYPE_META = useMemo(() => ({
-    charge: {
-      label: t('mypage.cash.types.charge'),
-      badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-      amountClass: 'text-emerald-600',
-    },
-    use: {
-      label: t('mypage.cash.types.use'),
-      badgeClass: 'bg-red-50 text-red-600 border border-red-200',
-      amountClass: 'text-red-500',
-    },
-    admin_add: {
-      label: t('mypage.cash.types.adminAdd'),
-      badgeClass: 'bg-purple-50 text-purple-700 border border-purple-200',
-      amountClass: 'text-purple-600',
-    },
-    admin_deduct: {
-      label: t('mypage.cash.types.adminDeduct'),
-      badgeClass: 'bg-amber-50 text-amber-700 border border-amber-200',
-      amountClass: 'text-amber-600',
-    },
-  }), [t]);
 
   const getTabs = useCallback((): { id: TabKey; label: string; icon: string; description?: string }[] => [
     { id: 'profile', label: t('mypage.tabs.profile.label'), icon: 'ri-user-line', description: t('mypage.tabs.profile.description') },
     { id: 'purchases', label: t('mypage.tabs.purchases.label'), icon: 'ri-shopping-bag-line', description: t('mypage.tabs.purchases.description') },
     { id: 'downloads', label: t('mypage.tabs.downloads.label'), icon: 'ri-download-2-line', description: t('mypage.tabs.downloads.description') },
     { id: 'favorites', label: t('mypage.tabs.favorites.label'), icon: 'ri-heart-line', description: t('mypage.tabs.favorites.description') },
-    { id: 'cash', label: t('mypage.tabs.cash.label'), icon: 'ri-coin-line', description: t('mypage.tabs.cash.description') },
     { id: 'inquiries', label: t('mypage.tabs.inquiries.label'), icon: 'ri-question-answer-line', description: t('mypage.tabs.inquiries.description') },
     { id: 'custom-orders', label: t('mypage.tabs.customOrders.label'), icon: 'ri-file-text-line', description: t('mypage.tabs.customOrders.description') },
   ], [t]);
 
   const [user, setUser] = useState<User | null>(null);
-
-  // 캐시 잔액 조회: 통일된 훅 사용 (profiles 테이블의 credits 필드가 기준)
-  const { credits: userCashBalance, loading: cashBalanceLoading, error: cashBalanceError, refresh: refreshCashBalance } = useUserCashBalance(user);
   const [loading, setLoading] = useState(true);
 
   // URL 쿼리 파라미터에서 탭 정보 읽기
@@ -209,13 +161,12 @@ export default function MyPage() {
     const tabParam = searchParams.get('tab') || searchParams.get('section');
     if (
       tabParam &&
-      ['profile', 'purchases', 'downloads', 'favorites', 'cash', 'inquiries', 'custom-orders'].includes(tabParam)
+      ['profile', 'purchases', 'downloads', 'favorites', 'inquiries', 'custom-orders'].includes(tabParam)
     ) {
       return tabParam as TabKey;
     }
     // section 파라미터 매핑 (기존 호환성 유지)
     const sectionParam = searchParams.get('section');
-    if (sectionParam === 'cash-history') return 'cash';
     if (sectionParam === 'profile') return 'profile';
     if (sectionParam === 'inquiries') return 'inquiries';
     return 'profile';
@@ -227,9 +178,6 @@ export default function MyPage() {
   const [profileForm, setProfileForm] = useState({ name: '', phone: '' });
   const [profileSaving, setProfileSaving] = useState(false);
 
-  // 캐시충전 모달 상태
-  const [showCashChargeModal, setShowCashChargeModal] = useState(false);
-
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [downloads, setDownloads] = useState<DownloadableItem[]>([]);
   const [selectedDownloadIds, setSelectedDownloadIds] = useState<string[]>([]);
@@ -238,8 +186,6 @@ export default function MyPage() {
   const [bulkDownloading, setBulkDownloading] = useState(false);
   const [favorites, setFavorites] = useState<FavoriteSheet[]>([]);
   const [customOrders, setCustomOrders] = useState<CustomOrderSummary[]>([]);
-  const [cashHistory, setCashHistory] = useState<CashHistoryEntry[]>([]);
-  const [cashHistoryLoading, setCashHistoryLoading] = useState(false);
   const [userInquiries, setUserInquiries] = useState<CustomerInquiry[]>([]);
   const [inquiriesLoading, setInquiriesLoading] = useState(false);
   const [inquirySubmitting, setInquirySubmitting] = useState(false);
@@ -252,53 +198,6 @@ export default function MyPage() {
   });
 
   const [searchQuery, setSearchQuery] = useState('');
-
-  const loadCashTransactions = useCallback(async (currentUser: User) => {
-    setCashHistoryLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('cash_transactions')
-        .select(
-          `
-            id,
-            transaction_type,
-            amount,
-            bonus_amount,
-            balance_after,
-            description,
-            created_at,
-            sheet:drum_sheets (id, title),
-            related_order:orders (id)
-          `,
-        )
-        .eq('user_id', currentUser.id)
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (error) {
-        throw error;
-      }
-
-      const normalized = (data ?? []).map((entry: any) => ({
-        id: entry.id as string,
-        transaction_type: entry.transaction_type as CashTransactionType,
-        amount: entry.amount ?? 0,
-        bonus_amount: entry.bonus_amount ?? 0,
-        balance_after: entry.balance_after ?? 0,
-        description: entry.description ?? null,
-        created_at: entry.created_at as string,
-        sheet: entry.sheet ?? null,
-        order_id: entry.related_order?.id ?? null,
-      }));
-
-      setCashHistory(normalized);
-    } catch (error) {
-      console.error(t('mypage.console.cashHistoryError'), error);
-      setCashHistory([]);
-    } finally {
-      setCashHistoryLoading(false);
-    }
-  }, []);
 
   const loadUserInquiries = useCallback(async (currentUser: User) => {
     setInquiriesLoading(true);
@@ -603,14 +502,13 @@ export default function MyPage() {
           loadOrders(currentUser),
           loadFavoritesList(currentUser),
           loadCustomOrders(currentUser),
-          loadCashTransactions(currentUser),
           loadUserInquiries(currentUser),
         ]);
       } finally {
         setLoading(false);
       }
     },
-    [loadProfile, loadOrders, loadFavoritesList, loadCustomOrders, loadCashTransactions, loadUserInquiries]
+    [loadProfile, loadOrders, loadFavoritesList, loadCustomOrders, loadUserInquiries]
   );
 
   // URL 쿼리 파라미터 변경 시 탭 업데이트
@@ -700,22 +598,34 @@ export default function MyPage() {
 
   const stats = useMemo(
     () => [
-      { label: t('mypage.stats.purchasedSheets'), value: totalPurchasedSheets },
-      { label: t('mypage.stats.availableDownloads'), value: downloads.length },
-      { label: t('mypage.stats.favoriteSheets'), value: favorites.length },
-      { label: t('mypage.stats.inquiries'), value: userInquiries.length },
-      { label: t('mypage.stats.customOrders'), value: customOrders.length },
+      { 
+        label: t('mypage.stats.purchasedSheets'), 
+        value: totalPurchasedSheets,
+        path: '/purchases'
+      },
+      { 
+        label: t('mypage.stats.availableDownloads'), 
+        value: downloads.length,
+        path: '/purchases'
+      },
+      { 
+        label: t('mypage.stats.favoriteSheets'), 
+        value: favorites.length,
+        path: '/mypage?tab=favorites'
+      },
+      { 
+        label: t('mypage.stats.inquiries'), 
+        value: userInquiries.length,
+        path: '/mypage?tab=inquiries'
+      },
+      { 
+        label: t('mypage.stats.customOrders'), 
+        value: customOrders.length,
+        path: '/custom-orders'
+      },
     ],
     [totalPurchasedSheets, downloads.length, favorites.length, userInquiries.length, customOrders.length, t]
   );
-
-  const handleCashCharge = () => {
-    setShowCashChargeModal(true);
-  };
-
-  const handleCloseCashChargeModal = () => {
-    setShowCashChargeModal(false);
-  };
 
   const handleSearch = () => {
     if (!searchQuery.trim()) return;
@@ -814,7 +724,6 @@ export default function MyPage() {
         email: user.email,
         name: updates.name,
         phone: updates.phone,
-        credits: userCashBalance, // 통일된 캐시 잔액 사용
         updated_at: new Date().toISOString(),
       });
       if (profileError) throw profileError;
@@ -827,7 +736,7 @@ export default function MyPage() {
             email: user.email ?? null,
             name: updates.name,
             phone: updates.phone,
-            credits: userCashBalance, // 통일된 캐시 잔액 사용
+            credits: 0,
             created_at: user.created_at,
           }
       );
@@ -1178,11 +1087,7 @@ export default function MyPage() {
         <MainHeader user={user} />
       </div>
 
-      <div className="hidden lg:block">
-        <UserSidebar user={user} />
-      </div>
-
-      <div className={`${user ? 'lg:pr-64' : ''} pt-[76px] md:pt-0`}>
+      <div className="pt-[76px] md:pt-0">
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-10">
           {loading ? (
             renderLoader()
@@ -1211,38 +1116,41 @@ export default function MyPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-red-100 bg-gradient-to-r from-red-50 via-rose-50 to-orange-50 shadow-sm p-6 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-red-500">{t('mypage.profile.cashBalance')}</p>
-                      {cashBalanceLoading ? (
-                        <p className="mt-2 text-3xl font-black text-gray-400 animate-pulse">로딩 중...</p>
-                      ) : cashBalanceError ? (
-                        <p className="mt-2 text-lg font-bold text-red-600">
-                          오류: {cashBalanceError.message}
-                        </p>
-                      ) : (
-                        <p className="mt-2 text-3xl font-black text-gray-900">
-                          {userCashBalance.toLocaleString('en-US')} P
-                        </p>
-                      )}
-                      <p className="mt-1 text-xs text-gray-500">{t('mypage.profile.cashBalanceDescription')}</p>
-                    </div>
-                    <button
-                      onClick={handleCashCharge}
-                      className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-semibold shadow-lg hover:bg-red-600 transition"
-                    >
-                      {t('mypage.profile.chargeCash')}
-                    </button>
-                  </div>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  {stats.map((item) => (
-                    <div key={item.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                      <p className="text-sm text-gray-500">{item.label}</p>
-                      <p className="mt-2 text-2xl font-extrabold text-gray-900">{item.value.toLocaleString('ko-KR')}</p>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {stats.map((item) => {
+                    const handleCardClick = () => {
+                      // 쿼리 파라미터가 있는 경우 URL 파싱
+                      if (item.path.includes('?')) {
+                        const [path, query] = item.path.split('?');
+                        navigate(`${path}?${query}`);
+                      } else {
+                        navigate(item.path);
+                      }
+                    };
+
+                    return (
+                      <div
+                        key={item.label}
+                        onClick={handleCardClick}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleCardClick();
+                          }
+                        }}
+                        className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 cursor-pointer hover:shadow-md hover:border-blue-200 transition-all group"
+                      >
+                        <p className="text-sm text-gray-500">{item.label}</p>
+                        <p className="mt-2 text-2xl font-extrabold text-gray-900 group-hover:text-blue-600 transition-colors">
+                          {item.value.toLocaleString('ko-KR')}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
 
@@ -1528,148 +1436,21 @@ export default function MyPage() {
                         </div>
                         <div className="text-right">
                           <p className="text-sm text-gray-500">{t('mypage.downloads.totalItems', { count: downloads.length })}</p>
-                          {selectedDownloadIds.length > 0 ? (
-                            <p className="mt-1 text-xs text-blue-600">{t('mypage.downloads.selectedItems', { count: selectedDownloadIds.length })}</p>
-                          ) : null}
                         </div>
                       </div>
 
-                      {downloads.length > 0 ? (
-                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              onClick={handleToggleSelectAllDownloads}
-                              disabled={downloads.length === 0 || bulkDownloading}
-                              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold transition ${downloads.length === 0 || bulkDownloading
-                                ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
-                                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                                }`}
-                            >
-                              <i className="ri-checkbox-multiple-line text-base" />
-                              {downloads.length > 0 && selectedDownloadIds.length === downloads.length ? t('mypage.downloads.deselectAll') : t('mypage.downloads.selectAll')}
-                            </button>
-                            <button
-                              onClick={clearDownloadSelection}
-                              disabled={selectedDownloadIds.length === 0 || bulkDownloading}
-                              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold transition ${selectedDownloadIds.length === 0 || bulkDownloading
-                                ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
-                                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                                }`}
-                            >
-                              <i className="ri-close-circle-line text-base" />
-                              {t('mypage.downloads.deselectAll')}
-                            </button>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              onClick={handleDownloadSelected}
-                              disabled={selectedDownloadIds.length === 0 || bulkDownloading}
-                              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition ${selectedDownloadIds.length === 0 || bulkDownloading
-                                ? 'bg-blue-300 cursor-not-allowed'
-                                : 'bg-blue-600 hover:bg-blue-700'
-                                }`}
-                            >
-                              <i className="ri-download-2-line text-base" />
-                              {bulkDownloading ? t('mypage.downloads.downloading') : t('mypage.downloads.downloadSelected')}
-                            </button>
-                            <button
-                              onClick={handleDownloadAll}
-                              disabled={downloads.length === 0 || bulkDownloading}
-                              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition ${downloads.length === 0 || bulkDownloading
-                                ? 'bg-indigo-300 cursor-not-allowed'
-                                : 'bg-indigo-600 hover:bg-indigo-700'
-                                }`}
-                            >
-                              <i className="ri-stack-line text-base" />
-                              {bulkDownloading ? t('mypage.downloads.downloading') : t('mypage.downloads.downloadAll')}
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {downloads.length === 0 ? (
-                        <div className="py-16 text-center text-gray-500">
-                          <i className="ri-download-2-line text-4xl text-gray-300 mb-4" />
-                          <p className="font-medium">{t('mypage.downloads.noDownloads')}</p>
-                        </div>
-                      ) : (
-                        <div className="grid gap-4 md:grid-cols-2">
-                          {downloads.map((item) => {
-                            const itemKey = buildDownloadKey(item.order_id, item.id);
-                            const isSelected = selectedDownloadIds.includes(itemKey);
-                            const isDownloading = bulkDownloading || downloadingKeys.includes(itemKey);
-                            const isDownloadableStatus = DOWNLOADABLE_STATUSES.includes(
-                              (item.order_status ?? '').toLowerCase(),
-                            );
-
-                            return (
-                              <div
-                                key={itemKey}
-                                className={`rounded-xl border p-4 space-y-3 transition ${isSelected
-                                  ? 'border-blue-300 bg-blue-50/70 shadow-sm'
-                                  : 'border-gray-100 bg-white hover:border-blue-200'
-                                  }`}
-                              >
-                                <div className="flex items-start gap-3">
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() => toggleDownloadSelection(item)}
-                                    disabled={bulkDownloading || !isDownloadableStatus}
-                                    className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                  />
-                                  <div className="flex flex-1 items-center gap-3">
-                                    <img
-                                      src={
-                                        item.drum_sheets?.thumbnail_url ||
-                                        generateDefaultThumbnail(96, 96)
-                                      }
-                                      alt={item.drum_sheets?.title ?? t('mypage.downloads.noDownloads')}
-                                      className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
-                                      onError={(event) => {
-                                        (event.target as HTMLImageElement).src = generateDefaultThumbnail(96, 96);
-                                      }}
-                                    />
-                                    <div>
-                                      <h4 className="font-semibold text-gray-900">
-                                        {item.drum_sheets?.title ?? t('mypage.favorites.deletedSheet')}
-                                      </h4>
-                                      <p className="text-sm text-gray-500">{item.drum_sheets?.artist ?? '-'}</p>
-                                      <p className="text-xs text-gray-400">{t('mypage.downloads.purchaseDate')} {formatDate(item.order_created_at)}</p>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <button
-                                    onClick={() => handleDownload(item)}
-                                    disabled={isDownloading || !isDownloadableStatus}
-                                    className={`flex-1 min-w-[120px] px-3 py-2 rounded-lg text-sm font-semibold text-white transition ${isDownloading || !isDownloadableStatus
-                                      ? 'bg-blue-300 cursor-not-allowed'
-                                      : 'bg-blue-600 hover:bg-blue-700'
-                                      }`}
-                                  >
-                                    {isDownloading
-                                      ? t('mypage.downloads.downloading')
-                                      : isDownloadableStatus
-                                        ? t('mypage.downloads.download')
-                                        : t('mypage.downloads.downloadUnavailable')}
-                                  </button>
-                                  <button
-                                    onClick={() => handlePreview(item)}
-                                    disabled={bulkDownloading}
-                                    className={`flex-1 min-w-[120px] px-3 py-2 rounded-lg text-sm font-semibold transition ${bulkDownloading
-                                      ? 'border border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
-                                      : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
-                                      }`}
-                                  >
-                                    {t('mypage.downloads.preview')}
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                      <div className="rounded-xl border border-blue-100 bg-blue-50 p-6 text-center">
+                        <i className="ri-download-2-line text-4xl text-blue-500 mb-4" />
+                        <h4 className="text-lg font-semibold text-gray-900 mb-2">{t('purchaseHistory.title')}</h4>
+                        <p className="text-sm text-gray-600 mb-4">{t('purchaseHistory.description')}</p>
+                        <button
+                          onClick={() => navigate('/purchases')}
+                          className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+                        >
+                          <i className="ri-arrow-right-line text-base" />
+                          {t('mypage.downloads.goToPurchaseHistory')}
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -1931,98 +1712,6 @@ export default function MyPage() {
                     </div>
                   )}
 
-                  {activeTab === 'cash' && (
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-xl font-bold text-gray-900">{t('mypage.cash.title')}</h3>
-                          <p className="text-sm text-gray-500">{t('mypage.cash.description')}</p>
-                        </div>
-                        <button
-                          onClick={handleCashCharge}
-                          className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
-                        >
-                          {t('mypage.cash.chargeCash')}
-                        </button>
-                      </div>
-
-                      <div className="rounded-xl border border-blue-100 bg-blue-50 p-6">
-                        <p className="text-sm text-blue-600">{t('mypage.cash.availableCash')}</p>
-                        {cashBalanceLoading ? (
-                          <p className="mt-2 text-3xl font-bold text-blue-400 animate-pulse">로딩 중...</p>
-                        ) : cashBalanceError ? (
-                          <p className="mt-2 text-lg font-bold text-red-600">
-                            오류: {cashBalanceError.message}
-                          </p>
-                        ) : (
-                          <p className="mt-2 text-3xl font-bold text-blue-900">
-                            {userCashBalance.toLocaleString('en-US')} P
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-3">
-                        {cashHistoryLoading ? (
-                          <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
-                            <p className="font-medium">{t('mypage.cash.loadingHistory')}</p>
-                          </div>
-                        ) : cashHistory.length === 0 ? (
-                          <div className="py-16 text-center text-gray-500 border border-dashed border-gray-200 rounded-xl">
-                            <p className="font-medium">{t('mypage.cash.noHistory')}</p>
-                            <p className="text-sm">{t('mypage.cash.noHistoryDescription')}</p>
-                          </div>
-                        ) : (
-                          cashHistory.map((entry) => {
-                            const meta =
-                              CASH_TYPE_META[entry.transaction_type] ?? {
-                                label: t('mypage.cash.types.record'),
-                                badgeClass: 'bg-gray-100 text-gray-600 border border-gray-200',
-                                amountClass: 'text-gray-700',
-                              };
-                            const amount = entry.amount ?? 0;
-                            const amountSign = amount >= 0 ? '+' : '-';
-                            const description =
-                              entry.description || (entry.sheet?.title ? `${t('mypage.cash.sheet')}: ${entry.sheet.title}` : t('mypage.cash.noDescription'));
-                            return (
-                              <div
-                                key={entry.id}
-                                className="flex flex-col gap-3 rounded-xl border border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                              >
-                                <div className="flex-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span
-                                      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${meta.badgeClass}`}
-                                    >
-                                      {meta.label}
-                                    </span>
-                                    <span className="text-xs text-gray-400">{formatDateTime(entry.created_at)}</span>
-                                  </div>
-                                  <p className="mt-2 text-sm font-semibold text-gray-900">{description}</p>
-                                </div>
-                                <div className="text-right min-w-[140px]">
-                                  <p className={`text-lg font-bold ${meta.amountClass}`}>
-                                    {amountSign}
-                                    {Math.abs(amount).toLocaleString('en-US')} P
-                                  </p>
-                                  {entry.bonus_amount > 0 && (
-                                    <p className="text-xs text-emerald-600 mt-1">
-                                      {t('mypage.cash.bonus')} +{entry.bonus_amount.toLocaleString('en-US')} P
-                                    </p>
-                                  )}
-                                  {entry.balance_after !== undefined && (
-                                    <p className="text-xs text-gray-400 mt-1">
-                                      {t('mypage.cash.balance')} {entry.balance_after.toLocaleString('en-US')} P
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-                  )}
-
                   {activeTab === 'custom-orders' && (
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
                       <div className="flex items-center justify-between">
@@ -2093,25 +1782,6 @@ export default function MyPage() {
           )}
         </main>
       </div>
-
-      {/* 포인트 충전 모달 */}
-      <PointChargeModal
-        open={showCashChargeModal}
-        onClose={handleCloseCashChargeModal}
-        user={user}
-        profile={profile}
-        userCash={userCashBalance}
-        cashLoading={cashBalanceLoading}
-        cashError={cashBalanceError}
-        onCashUpdate={async () => {
-          if (user) {
-            await Promise.all([
-              loadCashTransactions(user),
-              refreshCashBalance(),
-            ]);
-          }
-        }}
-      />
 
       <button
         onClick={() => navigate('/cart')}

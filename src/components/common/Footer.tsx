@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useCallback } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { isGlobalSiteHost } from '../../config/hostType';
+import { isGlobalSiteHost, isKoreanSiteHost } from '../../config/hostType';
 
 interface FooterLink {
   label: string;
@@ -14,7 +14,16 @@ export default function Footer() {
   const { t } = useTranslation();
   const currentYear = new Date().getFullYear();
   const location = useLocation();
-  const isGlobalSite = typeof window !== 'undefined' && isGlobalSiteHost(window.location.host);
+  const [isGlobalSite, setIsGlobalSite] = useState<boolean>(false);
+  const [isKoreanSite, setIsKoreanSite] = useState<boolean>(false);
+
+  // 호스트 타입을 컴포넌트 마운트 시 한 번만 계산
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsGlobalSite(isGlobalSiteHost(window.location.host));
+      setIsKoreanSite(isKoreanSiteHost(window.location.host));
+    }
+  }, []);
 
   // 카테고리 링크 (i18n 사용)
   const categoryLinks: FooterLink[] = [
@@ -143,7 +152,14 @@ export default function Footer() {
               <p>{t('footer.companyInfo')}</p>
               <p>{t('footer.telecomLicense')}</p>
               <p>{t('footer.address')}</p>
-              <p>{t('footer.contactInfo')}</p>
+              {isKoreanSite ? (
+                <>
+                  <p>{t('footer.contactInfo')}</p>
+                  <p>{t('footer.email')}</p>
+                </>
+              ) : (
+                <p>{t('footer.contactInfoGlobal')}</p>
+              )}
               <div className="mt-8 pt-8 border-t border-gray-800 text-center text-gray-400 text-sm">
                 <p>&copy; {new Date().getFullYear()} CopyDrum. All rights reserved.</p>
                 {isGlobalSite && (

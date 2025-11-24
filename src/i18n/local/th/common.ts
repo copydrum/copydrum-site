@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - ดาวน์โหลดโน้ตกลอง',
   'site.description': 'ดาวน์โหลดโน้ตกลองคุณภาพสูง มีโน้ตกลองทุกแนวเพลง',
 
+  // Header
+  'header.tagline': 'โน้ตกลองพรีเมียม',
+
   // Navigation
   'nav.home': 'หน้าแรก',
   'nav.categories': 'หมวดหมู่โน้ต',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': 'ตะกร้า',
   'nav.mypage': 'หน้าของฉัน',
   'nav.myOrders': 'คำสั่งซื้อของฉัน',
+  'nav.purchaseHistory': 'ดาวน์โหลด',
   'nav.admin': 'ผู้ดูแลระบบ',
   'nav.login': 'เข้าสู่ระบบ',
   'nav.register': 'สมัครสมาชิก',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': 'ความร่วมมือ',
 
   // Search
-  'search.placeholder': 'ค้นหาตามเพลง ศิลปิน แนวเพลง...',
+  'search.placeholder': 'ค้นหาตามเพลง หรือศิลปิน...',
   'search.button': 'ค้นหา',
   'search.noResults': 'ไม่พบผลการค้นหา',
 
@@ -173,5 +177,17 @@ export default {
   'mobile.cash.noBonus': 'ไม่มีโบนัส',
   'mobile.cash.bonusLabel': '+{{amount}} P โบนัส ({{percent}})',
   'mobile.cash.processing': 'กำลังดำเนินการ...',
+
+  // Purchase History
+  'purchaseHistory.title': 'ดาวน์โหลด',
+  'purchaseHistory.description': 'ดูและดาวน์โหลดโน้ตกลองที่คุณซื้ออีกครั้ง',
+  'purchaseHistory.listTitle': 'โน้ตที่ซื้อแล้ว',
+  'purchaseHistory.totalCount': 'ทั้งหมด {{count}} รายการ',
+  'purchaseHistory.emptyMessage': 'ไม่มีโน้ตที่ดาวน์โหลดได้',
+  'purchaseHistory.loading': 'กำลังโหลด...',
+  
+  // Sheet
+  'sheet.buyNow': 'ซื้อทันที',
+  'sheet.buyNowProcessing': 'กำลังประมวลผล...',
 };
 

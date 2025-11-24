@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
-import UserSidebar from '../../components/feature/UserSidebar';
 import MainHeader from '../../components/common/MainHeader';
 
 const CustomOrderPage = () => {
@@ -99,11 +98,8 @@ const CustomOrderPage = () => {
     <div className="min-h-screen bg-white">
       <MainHeader user={user} />
 
-      {/* User Sidebar - Always shown when logged in */}
-      <UserSidebar user={user} />
-
-      {/* Main Content - Reserve space for sidebar when logged in */}
-      <div className={user ? 'md:mr-64' : ''}>
+      {/* Main Content */}
+      <div>
         {/* Main Content */}
         <main className="max-w-4xl mx-auto px-4 py-12">
           {/* Hero Section */}

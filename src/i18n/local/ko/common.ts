@@ -4,6 +4,9 @@ export default {
   'site.title': '카피드럼 - 드럼 악보 다운로드',
   'site.description': '고품질 드럼 악보를 다운로드하세요. 모든 장르의 드럼 악보를 제공합니다.',
 
+  // Header
+  'header.tagline': '드럼악보 전문 사이트',
+
   // Navigation
   'nav.home': '홈',
   'nav.categories': '악보 카테고리',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': '장바구니',
   'nav.mypage': '마이페이지',
   'nav.myOrders': '주문내역',
+  'nav.purchaseHistory': '구매내역',
   'nav.admin': '관리자',
   'nav.login': '로그인',
   'nav.register': '회원가입',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': '제휴문의',
 
   // Search
-  'search.placeholder': '곡명, 아티스트, 장르로 검색...',
+  'search.placeholder': '곡명, 아티스트로 검색...',
   'search.button': '검색',
   'search.noResults': '검색 결과가 없습니다.',
 
@@ -298,6 +302,9 @@ export default {
   // Cart Page
   'cart.loginRequired': '로그인이 필요합니다',
   'cart.loginRequiredDescription': '장바구니를 확인하려면 로그인해주세요.',
+  'cart.addedConfirm': '장바구니에 상품이 담겼습니다. 장바구니로 이동하시겠습니까?',
+  'cart.alreadyInCart': '이미 장바구니에 담긴 상품입니다.',
+  'cart.addFailed': '장바구니 추가에 실패했습니다.',
   'cart.selectItemsToDelete': '삭제할 상품을 선택해주세요.',
   'cart.confirmDelete': '선택한 {{count}}개 상품을 삭제하시겠습니까?',
   'cart.confirmClear': '장바구니를 전체 비우시겠습니까?',
@@ -400,6 +407,8 @@ export default {
   'footer.telecomLicense': '통신판매업 신고 : 제2020세종0099호',
   'footer.address': '주소 세종 남세종로 454 강남제일타워 8층 836호',
   'footer.contactInfo': '연락처 070-7570-0028 (작업중에 연락이 어렵습니다. 1:1문의 또는 카카오톡 채팅을 이용해주세요.)',
+  'footer.email': '이메일: copydrum@hanmail.net',
+  'footer.contactInfoGlobal': '문의사항이 있으시면 마이페이지의 1:1 문의하기를 이용해 주세요.',
 
   // Home Page - Additional translations
   'home.eventSaleEvent': '100원 특가 이벤트',
@@ -456,12 +465,24 @@ export default {
   'category.drumSolo': '드럼솔로',
   'category.drumCover': '드럼커버',
   'category.other': '기타',
+
+  // Purchase History
+  'purchaseHistory.title': '구매내역',
+  'purchaseHistory.description': '구매한 악보를 언제든지 다시 다운로드할 수 있습니다.',
+  'purchaseHistory.listTitle': '구매한 악보',
+  'purchaseHistory.totalCount': '총 {{count}}개',
+  'purchaseHistory.emptyMessage': '다운로드 가능한 악보가 없습니다.',
+  'purchaseHistory.loading': '로딩 중...',
   'categories.difficultyNotSet': '난이도 정보 없음',
   'categories.addToCart': '장바구니',
   'categories.alreadyInCart': '장바구니에 담김',
   'categories.buyNow': '바로구매',
   'categories.buyNowInstant': '바로구매',
   'categories.eventBuyNow': '100원 즉시 구매',
+  
+  // Sheet
+  'sheet.buyNow': '바로구매',
+  'sheet.buyNowProcessing': '처리 중...',
   'categories.previewSheet': '악보 미리보기',
   'categories.playYoutube': '유튜브 재생',
   'categories.goToDetail': '상세 페이지로 이동',

@@ -8,6 +8,7 @@ const CustomOrderPage = lazy(() => import('../pages/custom-order/page'));
 const SheetDetailPage = lazy(() => import('../pages/sheet-detail/page'));
 const CartPage = lazy(() => import('../pages/cart/page'));
 const MyPage = lazy(() => import('../pages/mypage/page'));
+const PurchasesPage = lazy(() => import('../pages/purchases/page'));
 const LoginPage = lazy(() => import('../pages/auth/login'));
 const RegisterPage = lazy(() => import('../pages/auth/register'));
 const ForgotPasswordPage = lazy(() => import('../pages/auth/forgot-password'));
@@ -19,11 +20,6 @@ const CustomOrdersPage = lazy(() => import('../pages/custom-orders/page'));
 const CustomOrderDetailPage = lazy(() => import('../pages/custom-order-detail/page'));
 const CustomerSupportPage = lazy(() => import('../pages/customer-support/page'));
 const GuidePage = lazy(() => import('../pages/guide/page'));
-const EventSalePage = lazy(() => import('../pages/event-sale/page'));
-const EventSaleDetailPage = lazy(() => import('../pages/event-sale/detail'));
-const CollectionsPage = lazy(() => import('../pages/collections/page'));
-const CollectionDetailPage = lazy(() => import('../pages/collections/detail'));
-const FreeSheetsPage = lazy(() => import('../pages/free-sheets/page'));
 const NotFoundPage = lazy(() => import('../pages/NotFound'));
 const CompanyAboutPage = lazy(() => import('../pages/company/about'));
 const PartnershipPage = lazy(() => import('../pages/company/partnership'));
@@ -92,6 +88,14 @@ const routes: RouteObject[] = [
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <MyPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/purchases',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <PurchasesPage />
       </Suspense>
     ),
   },
@@ -212,46 +216,6 @@ const routes: RouteObject[] = [
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <GuidePage />
-      </Suspense>
-    ),
-  },
-  {
-    path: '/event-sale',
-    element: (
-      <Suspense fallback={<LoadingSpinner />}>
-        <EventSalePage />
-      </Suspense>
-    ),
-  },
-  {
-    path: '/event-sale/:eventId',
-    element: (
-      <Suspense fallback={<LoadingSpinner />}>
-        <EventSaleDetailPage />
-      </Suspense>
-    ),
-  },
-  {
-    path: '/collections',
-    element: (
-      <Suspense fallback={<LoadingSpinner />}>
-        <CollectionsPage />
-      </Suspense>
-    ),
-  },
-  {
-    path: '/collections/:collectionId',
-    element: (
-      <Suspense fallback={<LoadingSpinner />}>
-        <CollectionDetailPage />
-      </Suspense>
-    ),
-  },
-  {
-    path: '/free-sheets',
-    element: (
-      <Suspense fallback={<LoadingSpinner />}>
-        <FreeSheetsPage />
       </Suspense>
     ),
   },

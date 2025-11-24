@@ -4,6 +4,9 @@ export default {
   'site.title': 'CopyDrum - Download de Partituras de Bateria',
   'site.description': 'Baixe partituras de bateria de alta qualidade. Partituras de bateria para todos os gêneros disponíveis.',
 
+  // Header
+  'header.tagline': 'Partituras de bateria premium',
+
   // Navigation
   'nav.home': 'Início',
   'nav.categories': 'Categorias de Partituras',
@@ -11,6 +14,7 @@ export default {
   'nav.cart': 'Carrinho',
   'nav.mypage': 'Minha Página',
   'nav.myOrders': 'Meus Pedidos',
+  'nav.purchaseHistory': 'Downloads',
   'nav.admin': 'Administrador',
   'nav.login': 'Entrar',
   'nav.register': 'Cadastrar',
@@ -24,7 +28,7 @@ export default {
   'nav.company.partnership': 'Parceria',
 
   // Search
-  'search.placeholder': 'Pesquisar por música, artista, gênero...',
+  'search.placeholder': 'Pesquisar por música ou artista...',
   'search.button': 'Pesquisar',
   'search.noResults': 'Nenhum resultado encontrado.',
 
@@ -173,5 +177,17 @@ export default {
   'mobile.cash.noBonus': 'Sem bônus',
   'mobile.cash.bonusLabel': '+{{amount}} P de bônus ({{percent}})',
   'mobile.cash.processing': 'Processando...',
+
+  // Purchase History
+  'purchaseHistory.title': 'Downloads',
+  'purchaseHistory.description': 'Visualize e baixe novamente as partituras de bateria que você comprou.',
+  'purchaseHistory.listTitle': 'Partituras compradas',
+  'purchaseHistory.totalCount': 'Total: {{count}} item(ns)',
+  'purchaseHistory.emptyMessage': 'Não há partituras disponíveis para download.',
+  'purchaseHistory.loading': 'Carregando...',
+  
+  // Sheet
+  'sheet.buyNow': 'Comprar Agora',
+  'sheet.buyNowProcessing': 'Processando...',
 };
 
