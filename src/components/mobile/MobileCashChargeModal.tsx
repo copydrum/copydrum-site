@@ -42,9 +42,9 @@ export default function MobileCashChargeModal({
   const [userCash, setUserCash] = useState(0);
   const [cashLoading, setCashLoading] = useState(false);
 
-  // 통합 통화 로직 적용
+  // 통합 통화 로직 적용 (locale 기반)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
-  const currency = useMemo(() => getSiteCurrency(hostname), [hostname]);
+  const currency = useMemo(() => getSiteCurrency(hostname, i18n.language), [hostname, i18n.language]);
   const isKoreanSite = currency === 'KRW';
   const isGlobalSite = currency === 'USD' || currency === 'JPY';
 

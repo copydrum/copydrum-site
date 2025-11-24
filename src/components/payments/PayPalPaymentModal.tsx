@@ -29,7 +29,7 @@ export default function PayPalPaymentModal({
     const initializedRef = useRef(false);
 
     const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
-    const currency = useMemo(() => getSiteCurrency(hostname), [hostname]);
+    const currency = useMemo(() => getSiteCurrency(hostname, i18n.language), [hostname, i18n.language]);
 
     const formatCurrency = useCallback((value: number) => {
         const converted = convertFromKrw(value, currency);

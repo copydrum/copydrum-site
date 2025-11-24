@@ -6,6 +6,7 @@ export default {
 
   // Header
   'header.tagline': 'Premium Drum Sheet Music',
+  'header.signup': 'Sign Up',
 
   // Navigation
   'nav.home': 'Home',

@@ -6,6 +6,7 @@ export default {
 
   // Header
   'header.tagline': 'Spartiti per batteria premium',
+  'header.signup': 'Registrati',
 
   // Navigation
   'nav.home': 'Home',

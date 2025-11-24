@@ -55,9 +55,9 @@ export default function SheetDetailPage() {
   const { i18n, t } = useTranslation();
   const { isKoreanSite } = useSiteLanguage();
 
-  // Phase 4: 통합 통화 로직 적용 (currency를 먼저 선언)
+  // Phase 4: 통합 통화 로직 적용 (locale 기반)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
-  const currency = getSiteCurrency(hostname);
+  const currency = getSiteCurrency(hostname, i18n.language);
 
   const displayPrice = sheet ? sheet.price : 0;
 

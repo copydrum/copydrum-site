@@ -6,6 +6,7 @@ export default {
 
   // Header
   'header.tagline': 'प्रीमियम ड्रम शीट संगीत',
+  'header.signup': 'साइन अप करें',
 
   // Navigation
   'nav.home': 'होम',

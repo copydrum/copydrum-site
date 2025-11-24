@@ -6,6 +6,7 @@ export default {
 
   // Header
   'header.tagline': '優質鼓譜專業網站',
+  'header.signup': '註冊',
 
   // Navigation
   'nav.home': '首頁',

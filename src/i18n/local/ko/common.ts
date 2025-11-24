@@ -6,6 +6,7 @@ export default {
 
   // Header
   'header.tagline': '드럼악보 전문 사이트',
+  'header.signup': '회원가입',
 
   // Navigation
   'nav.home': '홈',

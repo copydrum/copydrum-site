@@ -215,6 +215,12 @@ export default function MainHeader({ user }: MainHeaderProps) {
                 >
                   {t('nav.login')}
                 </button>
+                <button
+                  onClick={() => navigate('/auth/register')}
+                  className="text-white hover:text-purple-300 text-sm font-medium px-3 py-1.5 rounded-md hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  {t('header.signup')}
+                </button>
               </>
             )}
           </div>

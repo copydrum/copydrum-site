@@ -6,6 +6,7 @@ export default {
 
   // Header
   'header.tagline': 'Bản nhạc trống cao cấp',
+  'header.signup': 'Đăng ký',
 
   // Navigation
   'nav.home': 'Trang chủ',

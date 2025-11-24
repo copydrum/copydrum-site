@@ -6,6 +6,7 @@ export default {
 
   // Header
   'header.tagline': 'Premium Schlagzeugnoten',
+  'header.signup': 'Registrieren',
 
   // Navigation
   'nav.home': 'Startseite',

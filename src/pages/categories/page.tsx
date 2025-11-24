@@ -82,9 +82,9 @@ const CategoriesPage: React.FC = () => {
   const { i18n, t } = useTranslation();
   const { isKoreanSite } = useSiteLanguage();
 
-  // 통합 통화 로직 적용
+  // 통합 통화 로직 적용 (locale 기반)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
-  const currency = getSiteCurrency(hostname);
+  const currency = getSiteCurrency(hostname, i18n.language);
 
   // 장르 목록 (순서대로) - 한글 원본 (한글 사이트용)
   const genreListKo = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];

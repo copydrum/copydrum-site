@@ -6,6 +6,7 @@ export default {
 
   // Header
   'header.tagline': 'Преміум ноти для барабанів',
+  'header.signup': 'Реєстрація',
 
   // Navigation
   'nav.home': 'Головна',

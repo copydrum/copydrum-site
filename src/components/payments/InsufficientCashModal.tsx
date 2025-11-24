@@ -20,9 +20,9 @@ export const InsufficientCashModal = ({
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
 
-  // 통합 통화 로직 적용
+  // 통합 통화 로직 적용 (locale 기반)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
-  const currency = getSiteCurrency(hostname);
+  const currency = getSiteCurrency(hostname, i18n.language);
 
   // 캐시 금액 포맷 함수 (사이트 통화에 맞게 변환 및 포맷)
   const formatCashAmount = (amount: number) => {

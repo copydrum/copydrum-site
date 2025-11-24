@@ -1,8 +1,9 @@
 import { getSiteCurrency, convertFromKrw } from '../../lib/currency';
 import * as PortOne from '@portone/browser-sdk/v2';
-import { isGlobalSiteHost } from '../../config/hostType';
+import { isGlobalSiteHost, isJapaneseSiteHost, isEnglishSiteHost } from '../../config/hostType';
 import { getActiveCurrency } from './getActiveCurrency';
 import { DEFAULT_USD_RATE } from '../priceFormatter';
+import { getLocaleFromHost } from '../../i18n/getLocaleFromHost';
 
 // PortOne currency type
 type PortOneCurrency = 'CURRENCY_KRW' | 'CURRENCY_USD' | 'CURRENCY_JPY';
@@ -265,18 +266,28 @@ export const requestPayPalPayment = async (
     // Always use the fixed container - PortOne SDK will find .portone-ui-container automatically
     // But we can also specify it explicitly via element parameter
 
-    // 현재 활성 통화 가져오기
+    // PayPal 통화 결정 로직
+    // 1. 일본어 사이트: JPY
+    // 2. 영어 사이트: USD
+    // 3. 나머지 14개 언어: USD (UI는 각 언어 통화, PayPal은 USD)
+    // 4. 한국어 사이트: 이미 isGlobalSite 체크로 차단됨
     const hostname = window.location.hostname;
-    let currency = getSiteCurrency(hostname);
-
-    // 로컬 환경에서는 i18n 설정에 따름 (테스트 용이성)
-    if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
-      currency = getActiveCurrency() as any;
+    const locale = getLocaleFromHost(window.location.host);
+    
+    // PayPal 통화 결정
+    let paypalCurrency: 'USD' | 'JPY' = 'USD';
+    if (locale === 'ja' || isJapaneseSiteHost(hostname)) {
+      paypalCurrency = 'JPY';
+    } else if (locale === 'en' || isEnglishSiteHost(hostname)) {
+      paypalCurrency = 'USD';
+    } else {
+      // 나머지 14개 언어는 모두 USD
+      paypalCurrency = 'USD';
     }
 
-    // KRW 금액을 타겟 통화로 변환
-    const convertedAmount = convertFromKrw(params.amount, currency);
-    const portOneCurrency = toPortOneCurrency(currency);
+    // KRW 금액을 PayPal 통화로 변환
+    const convertedAmount = convertFromKrw(params.amount, paypalCurrency);
+    const portOneCurrency = toPortOneCurrency(paypalCurrency);
 
     // Request data와 콜백을 분리하여 전달
     // PortOne SDK는 자동으로 .portone-ui-container를 찾지만, 명시적으로 지정할 수도 있음

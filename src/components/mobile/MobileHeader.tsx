@@ -97,6 +97,16 @@ export default function MobileHeader({
               </span>
             )}
           </button>
+          {!user && (
+            <button
+              type="button"
+              onClick={() => navigate('/auth/register')}
+              aria-label={t('header.signup')}
+              className="flex items-center justify-center px-3 py-1.5 rounded-md text-sm font-medium text-white hover:bg-blue-600 transition-colors"
+            >
+              {t('header.signup')}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => navigate(user ? '/mypage' : '/auth/login')}

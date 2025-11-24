@@ -6,6 +6,7 @@ export default {
 
   // Header
   'header.tagline': 'โน้ตกลองพรีเมียม',
+  'header.signup': 'สมัครสมาชิก',
 
   // Navigation
   'nav.home': 'หน้าแรก',

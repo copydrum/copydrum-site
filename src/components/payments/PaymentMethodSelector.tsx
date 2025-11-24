@@ -133,9 +133,9 @@ export const PaymentMethodSelector = ({
     }
   }, [open, i18nInstance]);
 
-  // 통합 통화 로직 적용
+  // 통합 통화 로직 적용 (locale 기반)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
-  const currency = useMemo(() => getSiteCurrency(hostname), [hostname]);
+  const currency = useMemo(() => getSiteCurrency(hostname, i18nInstance.language), [hostname, i18nInstance.language]);
   const isKoreanSite = currency === 'KRW';
   // 한국 사이트가 아니면 모두 글로벌 사이트로 처리
   const isGlobalSite = !isKoreanSite;

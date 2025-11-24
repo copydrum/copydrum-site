@@ -6,6 +6,7 @@ export default {
 
   // Header
   'header.tagline': 'Premium davul notaları',
+  'header.signup': 'Kayıt Ol',
 
   // Navigation
   'nav.home': 'Ana Sayfa',

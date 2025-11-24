@@ -35,11 +35,11 @@ export default function CartPage() {
   const [showBankTransferModal, setShowBankTransferModal] = useState(false);
   const [showPayPalModal, setShowPayPalModal] = useState(false);
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   
   // 계산된 값들 (훅이 아님)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
-  const currency = getSiteCurrency(hostname);
+  const currency = getSiteCurrency(hostname, i18n.language);
 
   // useCallback도 훅이므로 최상단에 위치
   const formatPriceValue = useCallback(

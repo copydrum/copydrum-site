@@ -6,6 +6,7 @@ export default {
 
   // Header
   'header.tagline': 'Partitur drum premium',
+  'header.signup': 'Daftar',
 
   // Navigation
   'nav.home': 'Beranda',

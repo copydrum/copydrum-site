@@ -6,6 +6,7 @@ export default {
 
   // Header
   'header.tagline': 'Partituras de bateria premium',
+  'header.signup': 'Cadastrar-se',
 
   // Navigation
   'nav.home': 'Início',

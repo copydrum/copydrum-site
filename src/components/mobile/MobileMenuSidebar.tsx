@@ -286,13 +286,22 @@ export default function MobileMenuSidebar({
               </button>
             </>
           ) : (
-            <button
-              type="button"
-              onClick={() => handleNavigate('/login')}
-              className="flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
-            >
-              {t('nav.login')} / {t('nav.register')}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => handleNavigate('/auth/login')}
+                className="flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+              >
+                {t('nav.login')}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNavigate('/auth/register')}
+                className="flex w-full items-center justify-center rounded-xl bg-gray-100 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
+              >
+                {t('header.signup')}
+              </button>
+            </>
           )}
         </div>
       </aside>

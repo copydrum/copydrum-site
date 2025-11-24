@@ -6,6 +6,7 @@ export default {
 
   // Header
   'header.tagline': 'プレミアムドラム楽譜サイト',
+  'header.signup': '新規登録',
 
   // Navigation
   'nav.home': 'ホーム',

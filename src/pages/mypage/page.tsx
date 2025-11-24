@@ -107,7 +107,7 @@ export default function MyPage() {
   const { t, i18n } = useTranslation();
 
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
-  const currency = getSiteCurrency(hostname);
+  const currency = getSiteCurrency(hostname, i18n.language);
 
   const formatCurrency = useCallback(
     (value: number) => {

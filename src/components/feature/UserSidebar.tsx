@@ -33,9 +33,9 @@ export default function UserSidebar({ user }: UserSidebarProps) {
 
   const { cartItems } = useCart();
 
-  // 통합 통화 로직 적용
+  // 통합 통화 로직 적용 (locale 기반)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
-  const currency = useMemo(() => getSiteCurrency(hostname), [hostname]);
+  const currency = useMemo(() => getSiteCurrency(hostname, i18n.language), [hostname, i18n.language]);
   const isGlobalSite = currency !== 'KRW';
 
   const handleLogout = async () => {

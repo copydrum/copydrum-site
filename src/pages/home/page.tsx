@@ -254,12 +254,9 @@ export default function Home() {
     return match ? match[1] : '';
   };
 
-  // 100-yen event section: Currency formatting
-  // For Japanese locale (ja), display prices as JPY (¥100)
-  // For Korean locale (ko), keep KRW (₩100)
-  // For other locales (en, etc.), use existing behavior
+  // 통화 로직 적용 (locale 기반)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
-  const currency = getSiteCurrency(hostname);
+  const currency = getSiteCurrency(hostname, i18n.language);
 
   const formatCurrency = useCallback(
     (value: number) => {
