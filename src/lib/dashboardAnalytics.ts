@@ -34,15 +34,15 @@ type Bucket = {
   end: Date;
 };
 
-type PageViewRow = { created_at: string | null; user_id: string | null };
+type PageViewRow = { created_at: string | null; user_id: string | null; session_id: string | null; id?: string | null };
 type OrderRow = { created_at: string | null; total_amount: number | null };
 type ProfileRow = { created_at: string | null };
 type InquiryRow = { created_at: string | null };
 
 const PERIOD_CONFIG: Record<DashboardAnalyticsPeriod, { buckets: number }> = {
-  daily: { buckets: 7 },
-  weekly: { buckets: 1 },
-  monthly: { buckets: 12 },
+  daily: { buckets: 7 },      // 최근 7일
+  weekly: { buckets: 8 },     // 최근 8주
+  monthly: { buckets: 6 },    // 최근 6개월
 };
 
 const startOfDay = (date: Date): Date => {
@@ -92,8 +92,10 @@ const formatLabel = (date: Date, period: DashboardAnalyticsPeriod): string => {
   switch (period) {
     case 'daily':
       return `${month}-${day}`;
-    case 'weekly':
+    case 'weekly': {
+      // 주간별: 해당 주의 시작일 표시 (예: 01-15)
       return `${month}-${day}`;
+    }
     case 'monthly':
       return `${year}-${month}`;
   }
@@ -107,10 +109,9 @@ const createBuckets = (period: DashboardAnalyticsPeriod, bucketCount: number, no
     alignedNow = startOfDay(now);
     actualPeriod = 'daily';
   } else if (period === 'weekly') {
-    // 주간별은 오늘 날짜로부터 일주일 전까지 일별로 표시
-    alignedNow = startOfDay(now);
-    actualPeriod = 'daily';
-    bucketCount = 7; // 일주일치 = 7일
+    // 주간별: 주 단위로 그룹화
+    alignedNow = startOfWeek(now);
+    actualPeriod = 'weekly';
   } else {
     alignedNow = startOfMonth(now);
     actualPeriod = 'monthly';
@@ -178,19 +179,21 @@ const generateSeries = (
     if (bucketIndex >= 0) {
       series[bucketIndex].pageViews += 1;
       
-      // 고유 방문자 계산 (user_id 기준)
-      if (row.user_id) {
+      // 고유 방문자 계산 (session_id 기준)
+      // session_id가 있으면 사용, 없으면 id를 fallback으로 사용
+      const visitorKey = row.session_id || (row.id ? `anon-${row.id}` : null);
+      if (visitorKey) {
         if (!uniqueVisitorsPerBucket.has(bucketIndex)) {
           uniqueVisitorsPerBucket.set(bucketIndex, new Set());
         }
-        uniqueVisitorsPerBucket.get(bucketIndex)!.add(row.user_id);
+        uniqueVisitorsPerBucket.get(bucketIndex)!.add(visitorKey);
       }
     }
   });
 
   // 고유 방문자 수 설정
-  uniqueVisitorsPerBucket.forEach((userSet, bucketIndex) => {
-    series[bucketIndex].visitors = userSet.size;
+  uniqueVisitorsPerBucket.forEach((visitorSet, bucketIndex) => {
+    series[bucketIndex].visitors = visitorSet.size;
   });
 
   // 주문 수 및 매출 계산
@@ -227,7 +230,7 @@ const generateSeries = (
 const fetchPageViews = async (startIso: string, endIso: string): Promise<PageViewRow[]> => {
   const { data, error } = await supabase
     .from('page_views')
-    .select('created_at, user_id')
+    .select('id, created_at, user_id, session_id')
     .gte('created_at', startIso)
     .lt('created_at', endIso)
     .order('created_at', { ascending: true });
@@ -311,11 +314,28 @@ export const getDashboardAnalytics = async (
 
   const series = generateSeries(currentBuckets, currentPageViews, currentOrders, currentProfiles, currentInquiries);
 
-  const totalVisitors = currentPageViews.length;
+  // 고유 방문자 수 계산 (session_id 기준)
+  const uniqueVisitorsSet = new Set<string>();
+  currentPageViews.forEach((row) => {
+    const visitorKey = row.session_id || (row.id ? `anon-${row.id}` : null);
+    if (visitorKey) {
+      uniqueVisitorsSet.add(visitorKey);
+    }
+  });
+  const totalVisitors = uniqueVisitorsSet.size;
+
   const totalRevenue = sumRevenue(currentOrders);
   const totalNewUsers = currentProfiles.length;
 
-  const previousVisitors = previousPageViews.length;
+  // 이전 기간 고유 방문자 수 계산
+  const previousVisitorsSet = new Set<string>();
+  previousPageViews.forEach((row) => {
+    const visitorKey = row.session_id || (row.id ? `anon-${row.id}` : null);
+    if (visitorKey) {
+      previousVisitorsSet.add(visitorKey);
+    }
+  });
+  const previousVisitors = previousVisitorsSet.size;
   const previousRevenue = sumRevenue(previousOrders);
   const previousNewUsers = previousProfiles.length;
 
