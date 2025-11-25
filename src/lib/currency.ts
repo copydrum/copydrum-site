@@ -50,6 +50,8 @@ const LOCALE_TO_CURRENCY: Record<string, Currency> = {
     'ar': 'USD',
     'hi': 'INR',
     'fil': 'PHP',
+    'tr': 'USD',
+    'uk': 'USD',
 };
 
 // Currency → Locale 매핑 (formatCurrency에서 사용)
@@ -81,11 +83,21 @@ export function getSiteCurrency(hostname?: string, locale?: string): Currency {
         // locale이 'ko-KR' 형태일 수도 있으므로 첫 부분만 추출
         const localeCode = locale.split('-')[0];
         if (LOCALE_TO_CURRENCY[localeCode]) {
-            return LOCALE_TO_CURRENCY[localeCode];
+            const currency = LOCALE_TO_CURRENCY[localeCode];
+            // tr, uk 디버깅 로그
+            if (localeCode === 'tr' || localeCode === 'uk') {
+                console.log(`[Currency] Locale: ${locale} (code: ${localeCode}) → Currency: ${currency}`);
+            }
+            return currency;
         }
         // 전체 locale도 체크
         if (LOCALE_TO_CURRENCY[locale]) {
-            return LOCALE_TO_CURRENCY[locale];
+            const currency = LOCALE_TO_CURRENCY[locale];
+            // tr, uk 디버깅 로그
+            if (locale === 'tr' || locale === 'uk' || locale.startsWith('tr-') || locale.startsWith('uk-')) {
+                console.log(`[Currency] Locale: ${locale} → Currency: ${currency}`);
+            }
+            return currency;
         }
     }
 
@@ -93,11 +105,34 @@ export function getSiteCurrency(hostname?: string, locale?: string): Currency {
     if (hostname) {
         if (hostname.includes('en.copydrum.com')) return 'USD';
         if (hostname.includes('jp.copydrum.com') || hostname.includes('ja.copydrum.com')) return 'JPY';
+        if (hostname.includes('tr.copydrum.com')) {
+            console.log(`[Currency] Hostname: ${hostname} → Currency: USD`);
+            return 'USD';
+        }
+        if (hostname.includes('uk.copydrum.com')) {
+            console.log(`[Currency] Hostname: ${hostname} → Currency: USD`);
+            return 'USD';
+        }
         if (hostname.startsWith('en.')) return 'USD';
         if (hostname.startsWith('jp.') || hostname.startsWith('ja.')) return 'JPY';
+        if (hostname.startsWith('tr.')) {
+            console.log(`[Currency] Hostname: ${hostname} → Currency: USD`);
+            return 'USD';
+        }
+        if (hostname.startsWith('uk.')) {
+            console.log(`[Currency] Hostname: ${hostname} → Currency: USD`);
+            return 'USD';
+        }
     }
 
     // 3. 기본값: KRW
+    // tr, uk의 경우 기본값이 KRW로 떨어지면 경고
+    if (locale) {
+        const localeCode = locale.split('-')[0];
+        if (localeCode === 'tr' || localeCode === 'uk') {
+            console.warn(`[Currency] Warning: Locale ${locale} (code: ${localeCode}) not found in LOCALE_TO_CURRENCY, falling back to KRW. This should not happen!`);
+        }
+    }
     return 'KRW';
 }
 
