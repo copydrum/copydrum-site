@@ -74,6 +74,20 @@ export default function Login() {
   }, [location, searchParams]);
 
   useEffect(() => {
+    // 모바일 환경에서만 로그인 페이지 진입 시 스크롤을 최상단으로 이동
+    if (typeof window !== 'undefined') {
+      const isMobile = window.innerWidth < 768;
+      
+      if (isMobile) {
+        // setTimeout을 사용하여 DOM이 완전히 렌더링된 후 스크롤 이동
+        setTimeout(() => {
+          window.scrollTo({ top: 0, behavior: 'instant' });
+        }, 0);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     let isMounted = true;
 
     // A. 페이지 진입 시 세션 확인
