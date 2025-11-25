@@ -20,6 +20,7 @@ import {
 } from '../../lib/dashboardAnalytics';
 import { fetchAnalyticsData, type AnalyticsPeriod, type AnalyticsData } from '../../lib/analytics';
 import type { VirtualAccountInfo } from '../../lib/payments';
+import { completeOrderAfterPayment } from '../../lib/payments/completeOrderAfterPayment';
 import {
   ResponsiveContainer,
   LineChart,
@@ -2124,9 +2125,7 @@ const AdminPage: React.FC = () => {
           ? selectedOrder.transaction_id
           : `manual-${Date.now()}`;
 
-      // 공통 함수를 사용하여 주문 완료 처리
-      const { completeOrderAfterPayment } = await import('../../lib/payments/completeOrderAfterPayment');
-
+      // 공통 함수를 사용하여 주문 완료 처리 (일반 import로 변경하여 동적 import 오류 방지)
       const paymentMethod = (selectedOrder.payment_method as any) || 'bank_transfer';
 
       await completeOrderAfterPayment(selectedOrder.id, paymentMethod, {
