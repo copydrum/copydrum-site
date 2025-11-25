@@ -1,6 +1,6 @@
 import { BrowserRouter, useLocation } from 'react-router-dom';
 import { AppRoutes } from './router';
-import { useEffect, Suspense, useState } from 'react';
+import { useEffect, Suspense, useState, useRef } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { RouteErrorBoundary } from './components/common/RouteErrorBoundary';
 import { supabase } from './lib/supabase';
@@ -10,6 +10,7 @@ import MobileMenuSidebar from './components/mobile/MobileMenuSidebar';
 import MobileSearchOverlay from './components/mobile/MobileSearchOverlay';
 import HreflangTags from './components/common/HreflangTags';
 import MaintenanceNotice from './components/common/MaintenanceNotice';
+import { recordPageView } from './lib/dashboardAnalytics';
 
 console.log('VITE_MAINTENANCE_MODE =', import.meta.env.VITE_MAINTENANCE_MODE);
 
@@ -30,6 +31,80 @@ function AppInner({
 }: AppInnerProps) {
   const location = useLocation();
   const isAdminPage = location.pathname.startsWith('/admin');
+  const sessionIdRef = useRef<string | null>(null);
+  const previousPathRef = useRef<string>('');
+
+  // 세션 ID 생성 또는 가져오기
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const SESSION_ID_KEY = 'copydrum_session_id';
+    const SESSION_EXPIRY_MS = 30 * 60 * 1000; // 30분
+
+    const stored = localStorage.getItem(SESSION_ID_KEY);
+    if (stored) {
+      try {
+        const { sessionId, timestamp } = JSON.parse(stored);
+        const now = Date.now();
+        if (now - timestamp < SESSION_EXPIRY_MS) {
+          sessionIdRef.current = sessionId;
+          return;
+        }
+      } catch {
+        // 파싱 실패 시 새로 생성
+      }
+    }
+
+    // 새 세션 ID 생성
+    const newSessionId = crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    sessionIdRef.current = newSessionId;
+    localStorage.setItem(SESSION_ID_KEY, JSON.stringify({ sessionId: newSessionId, timestamp: Date.now() }));
+  }, []);
+
+  // 페이지뷰 기록 (관리자 페이지 제외)
+  useEffect(() => {
+    if (isAdminPage) return;
+    if (typeof window === 'undefined') return;
+
+    const currentPath = location.pathname + location.search;
+    
+    // 같은 경로로의 중복 기록 방지 (초기 로드 제외)
+    if (previousPathRef.current === currentPath && previousPathRef.current !== '') {
+      return;
+    }
+    previousPathRef.current = currentPath;
+
+    // 페이지뷰 기록 (비동기, 에러는 조용히 처리)
+    const logPageView = async () => {
+      try {
+        const pageUrl = window.location.href;
+        const referrer = document.referrer || null;
+        const userAgent = navigator.userAgent || null;
+
+        await recordPageView({
+          user_id: user?.id ?? null,
+          session_id: sessionIdRef.current,
+          page_url: pageUrl,
+          referrer,
+          user_agent: userAgent,
+        });
+
+        console.log('[PageView] 기록 완료:', { pageUrl, userId: user?.id ?? 'anonymous' });
+      } catch (error) {
+        // 에러는 조용히 처리 (콘솔에만 기록)
+        console.warn('[PageView] 기록 실패:', error);
+      }
+    };
+
+    // 약간의 지연을 두어 페이지 로드 완료 후 기록
+    const timeoutId = setTimeout(() => {
+      void logPageView();
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [location.pathname, location.search, user?.id, isAdminPage]);
 
   return (
     <Suspense fallback={<div>로딩 중...</div>}>

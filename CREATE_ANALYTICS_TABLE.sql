@@ -18,14 +18,19 @@ CREATE INDEX IF NOT EXISTS idx_page_views_user_id ON page_views(user_id);
 -- 기본 RLS 설정
 ALTER TABLE page_views ENABLE ROW LEVEL SECURITY;
 
+-- 기존 정책 삭제 (이미 존재하는 경우)
+DROP POLICY IF EXISTS "Service role full access" ON page_views;
+DROP POLICY IF EXISTS "Authenticated users insert own page views" ON page_views;
+DROP POLICY IF EXISTS "Anonymous users can insert page views" ON page_views;
+
 -- 서비스 역할 전체 접근 허용 (서버 측 통계 집계용)
-CREATE POLICY IF NOT EXISTS "Service role full access"
+CREATE POLICY "Service role full access"
   ON page_views
   USING (auth.role() = 'service_role')
   WITH CHECK (auth.role() = 'service_role');
 
 -- 인증 사용자 수집 허용 (user_id가 본인인 경우 또는 미식별 방문 기록)
-CREATE POLICY IF NOT EXISTS "Authenticated users insert own page views"
+CREATE POLICY "Authenticated users insert own page views"
   ON page_views FOR INSERT
   WITH CHECK (
     auth.role() = 'authenticated'
@@ -33,6 +38,14 @@ CREATE POLICY IF NOT EXISTS "Authenticated users insert own page views"
       user_id IS NULL
       OR user_id = auth.uid()
     )
+  );
+
+-- 비로그인 사용자(anon)도 페이지뷰 기록 허용
+CREATE POLICY "Anonymous users can insert page views"
+  ON page_views FOR INSERT
+  WITH CHECK (
+    auth.role() = 'anon'
+    AND user_id IS NULL
   );
 
 
