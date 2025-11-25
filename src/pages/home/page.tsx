@@ -112,19 +112,113 @@ export default function Home() {
     }
 
     try {
-      const query = supabase
+      // 1. 해당 장르의 모든 활성 악보 가져오기
+      const { data: sheets, error: sheetsError } = await supabase
         .from('drum_sheets')
-        .select('id, title, artist, price, thumbnail_url, youtube_url, is_featured, category_id')
+        .select('id, title, artist, price, thumbnail_url, youtube_url, category_id, created_at')
         .eq('is_active', true)
-        .eq('category_id', selectedGenre)
-        .order('is_featured', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(10);
+        .eq('category_id', selectedGenre);
 
-      const { data, error } = await query;
+      if (sheetsError) throw sheetsError;
+      if (!sheets || sheets.length === 0) {
+        setPopularSheets([]);
+        return;
+      }
 
-      if (error) throw error;
-      setPopularSheets(data || []);
+      // 2. 최근 7일 날짜 계산
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const sevenDaysAgoISO = sevenDaysAgo.toISOString();
+
+      // 3. 악보 ID 목록 추출
+      const sheetIds = sheets.map(sheet => sheet.id);
+
+      // 4. 배치로 최근 7일 구매수 가져오기 (모든 악보에 대해 한 번에)
+      const { data: allOrderItems, error: orderItemsError } = await supabase
+        .from('order_items')
+        .select(`
+          drum_sheet_id,
+          order_id,
+          created_at,
+          orders!inner (
+            id,
+            status
+          )
+        `)
+        .in('drum_sheet_id', sheetIds)
+        .gte('created_at', sevenDaysAgoISO)
+        .eq('orders.status', 'completed');
+
+      // 5. 배치로 최근 7일 조회수 가져오기 (모든 악보에 대해 한 번에)
+      // page_views에서 /sheet-detail/{id} 패턴이 포함된 모든 레코드 가져오기
+      const { data: allPageViews, error: pageViewsError } = await supabase
+        .from('page_views')
+        .select('page_url, created_at')
+        .gte('created_at', sevenDaysAgoISO)
+        .ilike('page_url', '%/sheet-detail/%');
+
+      // 6. 클라이언트에서 그룹핑하여 각 악보의 구매수와 조회수 계산
+      const purchaseCountMap = new Map<string, number>();
+      const viewCountMap = new Map<string, number>();
+
+      // 구매수 집계
+      if (allOrderItems && !orderItemsError) {
+        allOrderItems.forEach(item => {
+          if (item.drum_sheet_id) {
+            purchaseCountMap.set(
+              item.drum_sheet_id,
+              (purchaseCountMap.get(item.drum_sheet_id) || 0) + 1
+            );
+          }
+        });
+      }
+
+      // 조회수 집계
+      if (allPageViews && !pageViewsError) {
+        allPageViews.forEach(view => {
+          // URL에서 악보 ID 추출: /sheet-detail/{id} 패턴
+          const match = view.page_url.match(/\/sheet-detail\/([^/?]+)/);
+          if (match && match[1]) {
+            const sheetId = match[1];
+            if (sheetIds.includes(sheetId)) {
+              viewCountMap.set(
+                sheetId,
+                (viewCountMap.get(sheetId) || 0) + 1
+              );
+            }
+          }
+        });
+      }
+
+      // 7. 각 악보에 점수 계산
+      const purchaseWeight = 1.0;
+      const viewWeight = 0.1;
+      const sheetsWithScores = sheets.map(sheet => {
+        const purchaseCount = purchaseCountMap.get(sheet.id) || 0;
+        const viewCount = viewCountMap.get(sheet.id) || 0;
+        const score = (purchaseCount * purchaseWeight) + (viewCount * viewWeight);
+
+        return {
+          ...sheet,
+          purchaseCount,
+          viewCount,
+          score
+        };
+      });
+
+      // 8. 점수 기준으로 정렬 (내림차순), 동점일 경우 최신순
+      sheetsWithScores.sort((a, b) => {
+        if (b.score !== a.score) {
+          return b.score - a.score;
+        }
+        // 동점일 경우 created_at 최신순
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+
+      // 9. 상위 10개만 선택
+      const topSheets = sheetsWithScores.slice(0, 10).map(({ purchaseCount, viewCount, score, ...sheet }) => sheet);
+
+      setPopularSheets(topSheets);
     } catch (error) {
       console.error(t('home.console.popularSheetsLoadError'), error);
       setPopularSheets([]);
