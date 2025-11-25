@@ -26,6 +26,18 @@ export default function Footer() {
     }
   }, []);
 
+  // 일본어 사이트에서 責任者 항목 확인 로그
+  useEffect(() => {
+    if (isJapaneseSite) {
+      console.log('[Footer] 일본어 사이트 감지 - 特定商取引法に基づく表記 섹션 표시');
+      console.log('[Footer] 責任者: キム・ジュンウ');
+      console.log('[Footer] i18n.language:', i18n.language);
+      if (typeof window !== 'undefined') {
+        console.log('[Footer] hostname:', window.location.hostname);
+      }
+    }
+  }, [isJapaneseSite, i18n.language]);
+
   // 카테고리 링크 (i18n 사용)
   const categoryLinks: FooterLink[] = [
     { label: t('category.kpop'), href: '/categories?search=가요' },
@@ -154,7 +166,7 @@ export default function Footer() {
               <h3 className="text-base font-semibold text-white mb-4">【特定商取引法に基づく表記】</h3>
               <div className="space-y-2">
                 <p><span className="font-medium">販売業者：</span>株式会社KG Inicis Japan</p>
-                <p><span className="font-medium">責任者：</span>강만수</p>
+                <p><span className="font-medium">責任者：</span>キム・ジュンウ</p>
                 <p><span className="font-medium">住所：</span>東京都新宿区新宿２丁目１番１０号</p>
                 <p><span className="font-medium">電話番号：</span>03-6825-5531</p>
                 <p><span className="font-medium">メールアドレス：</span>copydrum@hanmail.net</p>
