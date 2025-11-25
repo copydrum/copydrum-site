@@ -273,7 +273,7 @@ export const requestPayPalPayment = async (
     // 3. 한국어 사이트: 이미 isGlobalSite 체크로 차단됨
     const hostname = window.location.hostname;
     const locale = getLocaleFromHost(window.location.host);
-    
+
     // PayPal 통화 결정: 일본어만 JPY, 나머지는 모두 USD
     const isJapanSite = locale === 'ja' || isJapaneseSiteHost(hostname);
     const paypalCurrency: 'USD' | 'JPY' = isJapanSite ? 'JPY' : 'USD';
@@ -334,7 +334,7 @@ export const requestPayPalPayment = async (
       originalAmount: params.amount,
       convertedAmount,
       finalAmount,
-      '금액 설명': paypalCurrency === 'USD' 
+      '금액 설명': paypalCurrency === 'USD'
         ? `${params.amount} KRW → ${convertedAmount.toFixed(2)} USD → ${finalAmount} 센트`
         : `${params.amount} KRW → ${convertedAmount.toFixed(0)} JPY → ${finalAmount} 엔`,
     });
@@ -344,7 +344,7 @@ export const requestPayPalPayment = async (
     await PortOne.loadPaymentUI(requestData, {
       onPaymentSuccess: async (paymentResult: any) => {
         console.log('[portone-paypal] onPaymentSuccess', paymentResult);
-        
+
         // PayPal 결제 성공 후 주문 상태 업데이트
         try {
           const imp_uid = paymentResult.paymentId || paymentResult.imp_uid || paymentResult.id;
@@ -370,11 +370,16 @@ export const requestPayPalPayment = async (
           });
 
           if (error) {
-            console.error('[portone-paypal] Edge Function 호출 오류', error);
-            // 에러가 발생해도 사용자 콜백은 호출 (결제는 성공했으므로)
+            console.error('[portone-paypal] Edge Function 호출 오류 (Supabase Client Error)', {
+              message: error.message,
+              details: error,
+              params: { imp_uid, orderId: params.orderId }
+            });
           } else if (!data || !data.success) {
-            console.error('[portone-paypal] Edge Function 응답 오류', data);
-            // 에러가 발생해도 사용자 콜백은 호출
+            console.error('[portone-paypal] Edge Function 응답 오류 (Server Logic Error)', {
+              data,
+              params: { imp_uid, orderId: params.orderId }
+            });
           } else {
             console.log('[portone-paypal] 주문 상태 업데이트 성공', data);
           }

@@ -3840,15 +3840,15 @@ const AdminPage: React.FC = () => {
     const data = imageData.data;
     const width = imageData.width;
     const height = imageData.height;
-    
+
     // 하단 절반에만 모자이크 적용
     const startY = Math.floor(height * 0.4);
-    
+
     for (let y = startY; y < height; y += blockSize) {
       for (let x = 0; x < width; x += blockSize) {
         // 블록의 평균 색상 계산
         let r = 0, g = 0, b = 0, count = 0;
-        
+
         for (let dy = 0; dy < blockSize && y + dy < height; dy++) {
           for (let dx = 0; dx < blockSize && x + dx < width; dx++) {
             const idx = ((y + dy) * width + (x + dx)) * 4;
@@ -3858,12 +3858,12 @@ const AdminPage: React.FC = () => {
             count++;
           }
         }
-        
+
         if (count > 0) {
           r = Math.floor(r / count);
           g = Math.floor(g / count);
           b = Math.floor(b / count);
-          
+
           // 블록 전체를 평균 색상으로 채우기
           for (let dy = 0; dy < blockSize && y + dy < height; dy++) {
             for (let dx = 0; dx < blockSize && x + dx < width; dx++) {
@@ -3877,7 +3877,7 @@ const AdminPage: React.FC = () => {
         }
       }
     }
-    
+
     return imageData;
   };
   // PDF 파일 업로드 및 미리보기 생성
@@ -3913,43 +3913,43 @@ const AdminPage: React.FC = () => {
       let previewImageUrl = '';
       try {
         console.log('미리보기 이미지 생성 시작 (클라이언트 사이드 렌더링)');
-        
+
         // PDF.js로 PDF의 첫 페이지를 Canvas로 렌더링
         const arrayBuffer = await file.arrayBuffer();
         const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
         const pdf = await loadingTask.promise;
-        
+
         if (pdf.numPages === 0) {
           throw new Error('PDF에 페이지가 없습니다.');
         }
-        
+
         // 첫 페이지 가져오기
         const page = await pdf.getPage(1);
         const viewport = page.getViewport({ scale: 2.0 }); // 고해상도
-        
+
         // Canvas 생성
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         if (!context) {
           throw new Error('Canvas context를 가져올 수 없습니다.');
         }
-        
+
         canvas.width = viewport.width;
         canvas.height = viewport.height;
-        
+
         // PDF 페이지를 Canvas에 렌더링
         await page.render({
           canvasContext: context,
           viewport: viewport
         }).promise;
-        
+
         console.log('PDF 렌더링 완료, Canvas 크기:', canvas.width, 'x', canvas.height);
-        
+
         // 모자이크 효과 적용 (하단 절반)
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
         const mosaicImageData = applyMosaicToImageData(imageData, 15);
         context.putImageData(mosaicImageData, 0, 0);
-        
+
         // Canvas를 Blob으로 변환
         const blob = await new Promise<Blob>((resolve, reject) => {
           canvas.toBlob((blob) => {
@@ -3960,33 +3960,33 @@ const AdminPage: React.FC = () => {
             }
           }, 'image/jpeg', 0.85);
         });
-        
+
         console.log('이미지 Blob 생성 완료, 크기:', blob.size, 'bytes');
-        
+
         // Supabase Storage에 이미지 업로드
         const imageFileName = `preview_${Date.now()}_${crypto.randomUUID().substring(0, 8)}.jpg`;
         const imageFilePath = `previews/${imageFileName}`;
-        
+
         const { error: imageUploadError } = await supabase.storage
           .from('drum-sheets')
           .upload(imageFilePath, blob, {
             contentType: 'image/jpeg',
             upsert: true
           });
-        
+
         if (imageUploadError) {
           throw new Error(`이미지 업로드 실패: ${imageUploadError.message}`);
         }
-        
+
         // 공개 URL 생성
         const { data: imageUrlData } = supabase.storage
           .from('drum-sheets')
           .getPublicUrl(imageFilePath);
-        
+
         previewImageUrl = imageUrlData.publicUrl;
         setNewSheet(prev => ({ ...prev, preview_image_url: previewImageUrl }));
         console.log('미리보기 이미지 생성 성공:', previewImageUrl);
-        
+
       } catch (previewError) {
         // 미리보기 이미지 생성 실패는 치명적 오류가 아니므로 로그만 남기고 계속 진행
         console.warn('미리보기 이미지 생성 중 오류 발생 (악보 등록은 계속 진행):', previewError);
@@ -4023,7 +4023,7 @@ const AdminPage: React.FC = () => {
       // difficulty 값 검증 및 정규화
       // ⚠️ 중요: 데이터베이스는 한국어 값('초급', '중급', '고급')만 허용합니다!
       let difficultyInput = (newSheet.difficulty || '초급').trim();
-      
+
       // 영어/한국어 난이도를 한국어로 변환 (데이터베이스 제약 조건에 맞춤)
       const difficultyMap: Record<string, string> = {
         // 영어 → 한국어 (대소문자 구분 없이)
@@ -4035,18 +4035,18 @@ const AdminPage: React.FC = () => {
         '중급': '중급',
         '고급': '고급'
       };
-      
+
       // 소문자로 변환하여 매핑 (영어 값 처리)
       const normalizedInput = difficultyInput.toLowerCase();
       let difficulty = difficultyMap[normalizedInput] || difficultyMap[difficultyInput] || '초급';
-      
+
       // 최종 검증: 허용된 한국어 값만 사용
       const validDifficulties = ['초급', '중급', '고급'];
       if (!validDifficulties.includes(difficulty)) {
         console.warn(`유효하지 않은 difficulty 값: ${newSheet.difficulty}, 기본값 '초급' 사용`);
         difficulty = '초급';
       }
-      
+
       const insertData: any = {
         title: newSheet.title.trim(),
         artist: newSheet.artist.trim(),
@@ -4086,7 +4086,7 @@ const AdminPage: React.FC = () => {
         최종값: insertData.difficulty,
         타입: typeof insertData.difficulty
       });
-      
+
       // difficulty 값이 확실히 올바른지 다시 한 번 확인 (한국어 값으로)
       const validKoreanDifficulties = ['초급', '중급', '고급'];
       if (!validKoreanDifficulties.includes(insertData.difficulty)) {
@@ -4094,7 +4094,7 @@ const AdminPage: React.FC = () => {
         insertData.difficulty = '초급';
         console.warn('difficulty를 기본값 "초급"으로 변경');
       }
-      
+
       // 최종 검증: 모든 필수 필드 확인
       console.log('=== 최종 검증 ===');
       console.log('title:', insertData.title);
@@ -4103,22 +4103,22 @@ const AdminPage: React.FC = () => {
       console.log('price:', insertData.price, typeof insertData.price);
       console.log('category_id:', insertData.category_id);
       console.log('pdf_url:', insertData.pdf_url ? '있음' : '없음');
-      
+
       // difficulty 값을 문자열로 명시적으로 변환 (혹시 모를 타입 문제 방지)
       insertData.difficulty = String(insertData.difficulty);
-      
+
       // 최종 검증: difficulty가 정확히 허용된 한국어 값 중 하나인지 확인
       const finalDifficulty = validKoreanDifficulties.find(
         d => d === insertData.difficulty
       ) || '초급';
-      
+
       if (finalDifficulty !== insertData.difficulty) {
         console.warn(`difficulty 값 "${insertData.difficulty}"를 "${finalDifficulty}"로 수정`);
         insertData.difficulty = finalDifficulty;
       }
-      
+
       console.log('=== 최종 difficulty 값 (한국어) ===', insertData.difficulty);
-      
+
       const { data, error } = await supabase
         .from('drum_sheets')
         .insert([insertData])
@@ -4155,7 +4155,7 @@ const AdminPage: React.FC = () => {
       loadSheets();
     } catch (error: any) {
       console.error('악보 추가 오류:', error);
-      
+
       // Supabase 에러인 경우 상세 메시지 표시
       let errorMessage = '악보 추가 중 오류가 발생했습니다.';
       if (error?.message) {
@@ -4167,7 +4167,7 @@ const AdminPage: React.FC = () => {
       if (error?.hint) {
         errorMessage += `\n힌트: ${error.hint}`;
       }
-      
+
       alert(errorMessage);
     }
   };
@@ -4217,7 +4217,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
       for (let i = 0; i < sheetCsvData.length; i++) {
         const row = sheetCsvData[i];
         const rowNum = i + 2; // 헤더 제외하고 1부터 시작, 실제로는 2행부터
-        
+
         try {
           // CSV 필드 파싱 (새 형식: 곡명, 아티스트, 난이도, 파일명, 유튜브링크장르, 가격)
           const title = norm(row.곡명 || row.title || row.Title || row['곡 제목'] || '');
@@ -4256,11 +4256,11 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
           try {
             console.log(`행 ${rowNum}: Spotify 정보 가져오기 시작...`);
             const spotifyResult = await searchTrackAndGetCoverWithAlbum(artist, title);
-            
+
             if (spotifyResult) {
               thumbnailUrl = spotifyResult.albumCoverUrl || '';
               albumName = spotifyResult.albumName || '';
-              
+
               // 장르가 있으면 카테고리 자동 선택
               if (spotifyResult.genre) {
                 const matchingCategory = categories.find(cat =>
@@ -4271,7 +4271,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   console.log(`행 ${rowNum}: 카테고리 자동 선택: ${matchingCategory.name}`);
                 }
               }
-              
+
               console.log(`행 ${rowNum}: Spotify 정보 가져오기 완료 - 썸네일: ${thumbnailUrl ? '있음' : '없음'}`);
             }
           } catch (spotifyError) {
@@ -4402,7 +4402,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
       // UTF-8 BOM 제거
       const cleanText = text.replace(/^\uFEFF/, '');
       const lines = cleanText.split('\n').filter(line => line.trim());
-      
+
       if (lines.length < 2) {
         alert('CSV 파일 형식이 올바르지 않습니다. 최소 2줄(헤더 + 데이터 1줄)이 필요합니다.');
         return;
@@ -4413,7 +4413,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
         const result: string[] = [];
         let current = '';
         let inQuotes = false;
-        
+
         for (let i = 0; i < line.length; i++) {
           const char = line[i];
           if (char === '"') {
@@ -6590,7 +6590,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   <li><strong>가격</strong> (선택) - 가격 (숫자, 기본값: 0)</li>
                 </ul>
                 <p className="mt-2 text-xs text-gray-500">
-                  * 썸네일은 Spotify API로 자동 가져옵니다.<br/>
+                  * 썸네일은 Spotify API로 자동 가져옵니다.<br />
                   * PDF 파일은 별도로 업로드해야 합니다.
                 </p>
               </div>
@@ -6624,249 +6624,249 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
             <h3 className="text-lg font-semibold text-gray-900 mb-4">새 악보 추가</h3>
             <div className="flex-1 overflow-y-auto pr-2">
               <div className="space-y-4">
-              {/* 제목과 아티스트 - 가로 배치 */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">제목</label>
-                  <input
-                    type="text"
-                    value={newSheet.title}
-                    onChange={(e) => setNewSheet({ ...newSheet, title: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">아티스트</label>
-                  <div className="flex space-x-2">
+                {/* 제목과 아티스트 - 가로 배치 */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">제목</label>
                     <input
                       type="text"
-                      value={newSheet.artist}
-                      onChange={(e) => setNewSheet({ ...newSheet, artist: e.target.value })}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      value={newSheet.title}
+                      onChange={(e) => setNewSheet({ ...newSheet, title: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
-                    <button
-                      type="button"
-                      onClick={() => fetchSpotifyInfo(newSheet.title, newSheet.artist)}
-                      disabled={!newSheet.title || !newSheet.artist || isLoadingSpotify}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1 whitespace-nowrap"
-                    >
-                      {isLoadingSpotify ? (
-                        <>
-                          <i className="ri-loader-4-line animate-spin w-4 h-4"></i>
-                          <span>검색 중...</span>
-                        </>
-                      ) : (
-                        <>
-                          <i className="ri-music-2-line w-4 h-4"></i>
-                          <span>Spotify 검색</span>
-                        </>
-                      )}
-                    </button>
                   </div>
-                </div>
-              </div>
-
-              {/* Spotify 정보 표시 */}
-              {(newSheet.thumbnail_url || newSheet.album_name) && (
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  {newSheet.thumbnail_url && (
-                    <div className="mb-3">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">앨범 썸네일</label>
-                      <img
-                        src={newSheet.thumbnail_url}
-                        alt="앨범 썸네일"
-                        className="w-32 h-32 object-cover rounded-lg border border-gray-300"
-                      />
-                    </div>
-                  )}
-                  {newSheet.album_name && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">앨범명</label>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">아티스트</label>
+                    <div className="flex space-x-2">
                       <input
                         type="text"
-                        value={newSheet.album_name}
-                        onChange={(e) => setNewSheet({ ...newSheet, album_name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                        value={newSheet.artist}
+                        onChange={(e) => setNewSheet({ ...newSheet, artist: e.target.value })}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
+                      <button
+                        type="button"
+                        onClick={() => fetchSpotifyInfo(newSheet.title, newSheet.artist)}
+                        disabled={!newSheet.title || !newSheet.artist || isLoadingSpotify}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1 whitespace-nowrap"
+                      >
+                        {isLoadingSpotify ? (
+                          <>
+                            <i className="ri-loader-4-line animate-spin w-4 h-4"></i>
+                            <span>검색 중...</span>
+                          </>
+                        ) : (
+                          <>
+                            <i className="ri-music-2-line w-4 h-4"></i>
+                            <span>Spotify 검색</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Spotify 정보 표시 */}
+                {(newSheet.thumbnail_url || newSheet.album_name) && (
+                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    {newSheet.thumbnail_url && (
+                      <div className="mb-3">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">앨범 썸네일</label>
+                        <img
+                          src={newSheet.thumbnail_url}
+                          alt="앨범 썸네일"
+                          className="w-32 h-32 object-cover rounded-lg border border-gray-300"
+                        />
+                      </div>
+                    )}
+                    {newSheet.album_name && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">앨범명</label>
+                        <input
+                          type="text"
+                          value={newSheet.album_name}
+                          onChange={(e) => setNewSheet({ ...newSheet, album_name: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 유튜브 URL과 썸네일 URL - 가로 배치 */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">유튜브 URL (선택)</label>
+                    <div className="flex space-x-2">
+                      <input
+                        type="text"
+                        value={newSheet.youtube_url}
+                        onChange={(e) => {
+                          const url = e.target.value;
+                          setNewSheet({ ...newSheet, youtube_url: url });
+                          // 유튜브 URL이 입력되면 자동으로 썸네일 가져오기
+                          if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
+                            fetchYoutubeThumbnail(url);
+                          }
+                        }}
+                        placeholder="https://www.youtube.com/watch?v=영상ID"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      />
+                      {newSheet.youtube_url && extractVideoId(newSheet.youtube_url) && (
+                        <button
+                          type="button"
+                          onClick={() => fetchYoutubeThumbnail(newSheet.youtube_url)}
+                          className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-1 whitespace-nowrap"
+                        >
+                          <i className="ri-youtube-line w-4 h-4"></i>
+                          <span className="text-sm">썸네일</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 URL (선택)</label>
+                    <input
+                      type="text"
+                      value={newSheet.thumbnail_url}
+                      onChange={(e) => setNewSheet({ ...newSheet, thumbnail_url: e.target.value })}
+                      placeholder="썸네일 이미지 URL"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* 썸네일 미리보기 */}
+                {newSheet.thumbnail_url && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 미리보기</label>
+                    <img
+                      src={newSheet.thumbnail_url}
+                      alt="썸네일 미리보기"
+                      className="w-32 h-32 object-cover rounded-lg border border-gray-300"
+                      onError={(e) => {
+                        // maxresdefault.jpg 실패 시 0.jpg로 폴백
+                        const img = e.target as HTMLImageElement;
+                        const currentSrc = img.src;
+                        if (currentSrc.includes('maxresdefault.jpg')) {
+                          const videoId = extractVideoId(newSheet.youtube_url);
+                          if (videoId) {
+                            img.src = `https://img.youtube.com/vi/${videoId}/0.jpg`;
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* PDF 파일 업로드 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">PDF 파일</label>
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setNewSheet(prev => ({ ...prev, pdf_file: file }));
+                        handlePdfUpload(file);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                  {isUploadingPdf && (
+                    <p className="mt-1 text-sm text-blue-600">PDF 업로드 및 처리 중...</p>
+                  )}
+                  {newSheet.page_count > 0 && (
+                    <p className="mt-1 text-sm text-gray-600">페이지수: {newSheet.page_count}페이지</p>
+                  )}
+                  {newSheet.preview_image_url && (
+                    <div className="mt-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">미리보기 이미지</label>
+                      <div className="relative">
+                        <img
+                          src={newSheet.preview_image_url}
+                          alt="미리보기"
+                          className="w-full max-w-md object-contain rounded-lg border border-gray-300 bg-gray-50"
+                          onError={(e) => {
+                            console.error('미리보기 이미지 로드 실패:', newSheet.preview_image_url);
+                            const img = e.target as HTMLImageElement;
+                            img.style.display = 'none';
+                            // 에러 메시지 표시
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800';
+                            errorDiv.textContent = '미리보기 이미지를 불러올 수 없습니다.';
+                            img.parentElement?.appendChild(errorDiv);
+                          }}
+                          onLoad={() => {
+                            console.log('미리보기 이미지 로드 성공:', newSheet.preview_image_url);
+                          }}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
-              )}
 
-              {/* 유튜브 URL과 썸네일 URL - 가로 배치 */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">유튜브 URL (선택)</label>
-                  <div className="flex space-x-2">
+                {/* 페이지수, 템포, 난이도, 가격 - 2x2 그리드 */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">페이지수</label>
                     <input
-                      type="text"
-                      value={newSheet.youtube_url}
-                      onChange={(e) => {
-                        const url = e.target.value;
-                        setNewSheet({ ...newSheet, youtube_url: url });
-                        // 유튜브 URL이 입력되면 자동으로 썸네일 가져오기
-                        if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
-                          fetchYoutubeThumbnail(url);
-                        }
-                      }}
-                      placeholder="https://www.youtube.com/watch?v=영상ID"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      type="number"
+                      value={newSheet.page_count}
+                      onChange={(e) => setNewSheet({ ...newSheet, page_count: Number(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      min="0"
                     />
-                    {newSheet.youtube_url && extractVideoId(newSheet.youtube_url) && (
-                      <button
-                        type="button"
-                        onClick={() => fetchYoutubeThumbnail(newSheet.youtube_url)}
-                        className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-1 whitespace-nowrap"
-                      >
-                        <i className="ri-youtube-line w-4 h-4"></i>
-                        <span className="text-sm">썸네일</span>
-                      </button>
-                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">템포 (BPM)</label>
+                    <input
+                      type="number"
+                      value={newSheet.tempo}
+                      onChange={(e) => setNewSheet({ ...newSheet, tempo: Number(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      min="0"
+                      placeholder="예: 120"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">난이도</label>
+                    <select
+                      value={newSheet.difficulty}
+                      onChange={(e) => setNewSheet({ ...newSheet, difficulty: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-8"
+                    >
+                      <option value="초급">초급</option>
+                      <option value="중급">중급</option>
+                      <option value="고급">고급</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">가격</label>
+                    <input
+                      type="number"
+                      value={newSheet.price}
+                      onChange={(e) => setNewSheet({ ...newSheet, price: Number(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 URL (선택)</label>
-                  <input
-                    type="text"
-                    value={newSheet.thumbnail_url}
-                    onChange={(e) => setNewSheet({ ...newSheet, thumbnail_url: e.target.value })}
-                    placeholder="썸네일 이미지 URL"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                  />
-                </div>
-              </div>
-              
-              {/* 썸네일 미리보기 */}
-              {newSheet.thumbnail_url && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 미리보기</label>
-                  <img
-                    src={newSheet.thumbnail_url}
-                    alt="썸네일 미리보기"
-                    className="w-32 h-32 object-cover rounded-lg border border-gray-300"
-                    onError={(e) => {
-                      // maxresdefault.jpg 실패 시 0.jpg로 폴백
-                      const img = e.target as HTMLImageElement;
-                      const currentSrc = img.src;
-                      if (currentSrc.includes('maxresdefault.jpg')) {
-                        const videoId = extractVideoId(newSheet.youtube_url);
-                        if (videoId) {
-                          img.src = `https://img.youtube.com/vi/${videoId}/0.jpg`;
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              )}
 
-              {/* PDF 파일 업로드 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">PDF 파일</label>
-                <input
-                  type="file"
-                  accept=".pdf"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setNewSheet(prev => ({ ...prev, pdf_file: file }));
-                      handlePdfUpload(file);
-                    }
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                />
-                {isUploadingPdf && (
-                  <p className="mt-1 text-sm text-blue-600">PDF 업로드 및 처리 중...</p>
-                )}
-                {newSheet.page_count > 0 && (
-                  <p className="mt-1 text-sm text-gray-600">페이지수: {newSheet.page_count}페이지</p>
-                )}
-                {newSheet.preview_image_url && (
-                  <div className="mt-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">미리보기 이미지</label>
-                    <div className="relative">
-                      <img
-                        src={newSheet.preview_image_url}
-                        alt="미리보기"
-                        className="w-full max-w-md object-contain rounded-lg border border-gray-300 bg-gray-50"
-                        onError={(e) => {
-                          console.error('미리보기 이미지 로드 실패:', newSheet.preview_image_url);
-                          const img = e.target as HTMLImageElement;
-                          img.style.display = 'none';
-                          // 에러 메시지 표시
-                          const errorDiv = document.createElement('div');
-                          errorDiv.className = 'p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800';
-                          errorDiv.textContent = '미리보기 이미지를 불러올 수 없습니다.';
-                          img.parentElement?.appendChild(errorDiv);
-                        }}
-                        onLoad={() => {
-                          console.log('미리보기 이미지 로드 성공:', newSheet.preview_image_url);
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 페이지수, 템포, 난이도, 가격 - 2x2 그리드 */}
-              <div className="grid grid-cols-2 gap-4">
+                {/* 카테고리 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">페이지수</label>
-                  <input
-                    type="number"
-                    value={newSheet.page_count}
-                    onChange={(e) => setNewSheet({ ...newSheet, page_count: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    min="0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">템포 (BPM)</label>
-                  <input
-                    type="number"
-                    value={newSheet.tempo}
-                    onChange={(e) => setNewSheet({ ...newSheet, tempo: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    min="0"
-                    placeholder="예: 120"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">난이도</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
                   <select
-                    value={newSheet.difficulty}
-                    onChange={(e) => setNewSheet({ ...newSheet, difficulty: e.target.value })}
+                    value={newSheet.category_id}
+                    onChange={(e) => setNewSheet({ ...newSheet, category_id: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-8"
                   >
-                    <option value="초급">초급</option>
-                    <option value="중급">중급</option>
-                    <option value="고급">고급</option>
+                    <option value="">카테고리 선택</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
+                    ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">가격</label>
-                  <input
-                    type="number"
-                    value={newSheet.price}
-                    onChange={(e) => setNewSheet({ ...newSheet, price: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-              
-              {/* 카테고리 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
-                <select
-                  value={newSheet.category_id}
-                  onChange={(e) => setNewSheet({ ...newSheet, category_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-8"
-                >
-                  <option value="">카테고리 선택</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>{category.name}</option>
-                  ))}
-                </select>
-              </div>
               </div>
             </div>
             <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200 flex-shrink-0">
@@ -8048,6 +8048,32 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
       )}
     </div>
   );
+  const handleForceCompleteOrder = async () => {
+    if (!selectedOrder) return;
+    if (!confirm('정말로 이 주문을 강제 완료 처리하시겠습니까?\n\n주의: 이 작업은 되돌릴 수 없으며, 즉시 주문 상태가 "완료"로 변경되고 관련 포인트/구매 내역이 처리됩니다.')) {
+      return;
+    }
+
+    setOrderActionLoading('confirm');
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-complete-order', {
+        body: { orderId: selectedOrder.id },
+      });
+
+      if (error) throw error;
+      if (!data || (data.error)) throw new Error(data?.error || 'Unknown error');
+
+      alert('주문이 강제로 완료 처리되었습니다.');
+      handleCloseOrderDetail();
+      loadOrders();
+    } catch (error: any) {
+      console.error('강제 완료 처리 오류:', error);
+      alert(`처리 중 오류가 발생했습니다: ${error.message}`);
+    } finally {
+      setOrderActionLoading(null);
+    }
+  };
+
   const renderOrderDetailModal = () => {
     if (!isOrderDetailModalOpen || !selectedOrder) {
       return null;
@@ -8379,6 +8405,14 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                     캐시가 복원됩니다.
                   </p>
                   <div className="flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={handleForceCompleteOrder}
+                      disabled={orderActionLoading !== null || normalizedSelectedStatus === 'completed' || normalizedSelectedStatus === 'refunded'}
+                      className="inline-flex flex-1 items-center justify-center rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      강제 완료 처리
+                    </button>
                     <button
                       type="button"
                       onClick={handleDeleteOrderWithoutRefund}
