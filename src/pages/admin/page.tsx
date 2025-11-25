@@ -3834,6 +3834,52 @@ const AdminPage: React.FC = () => {
       return 0;
     }
   };
+
+  // 이미지 데이터에 모자이크 효과 적용
+  const applyMosaicToImageData = (imageData: ImageData, blockSize: number = 15): ImageData => {
+    const data = imageData.data;
+    const width = imageData.width;
+    const height = imageData.height;
+    
+    // 하단 절반에만 모자이크 적용
+    const startY = Math.floor(height * 0.4);
+    
+    for (let y = startY; y < height; y += blockSize) {
+      for (let x = 0; x < width; x += blockSize) {
+        // 블록의 평균 색상 계산
+        let r = 0, g = 0, b = 0, count = 0;
+        
+        for (let dy = 0; dy < blockSize && y + dy < height; dy++) {
+          for (let dx = 0; dx < blockSize && x + dx < width; dx++) {
+            const idx = ((y + dy) * width + (x + dx)) * 4;
+            r += data[idx];
+            g += data[idx + 1];
+            b += data[idx + 2];
+            count++;
+          }
+        }
+        
+        if (count > 0) {
+          r = Math.floor(r / count);
+          g = Math.floor(g / count);
+          b = Math.floor(b / count);
+          
+          // 블록 전체를 평균 색상으로 채우기
+          for (let dy = 0; dy < blockSize && y + dy < height; dy++) {
+            for (let dx = 0; dx < blockSize && x + dx < width; dx++) {
+              const idx = ((y + dy) * width + (x + dx)) * 4;
+              data[idx] = r;
+              data[idx + 1] = g;
+              data[idx + 2] = b;
+              // alpha는 유지
+            }
+          }
+        }
+      }
+    }
+    
+    return imageData;
+  };
   // PDF 파일 업로드 및 미리보기 생성
   const handlePdfUpload = async (file: File) => {
     setIsUploadingPdf(true);
@@ -3862,36 +3908,99 @@ const AdminPage: React.FC = () => {
 
       const pdfUrl = urlData.publicUrl;
 
-      // 4. 미리보기 이미지 생성 (Supabase Edge Function 호출)
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('로그인이 필요합니다.');
-      }
-
-      const previewResponse = await fetch(
-        `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/pdf-to-image-mosaic`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'apikey': import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ pdfUrl })
+      // 4. 미리보기 이미지 생성 (클라이언트 사이드에서 PDF.js로 렌더링)
+      // 실패해도 악보 등록은 계속 진행되도록 try-catch로 분리
+      let previewImageUrl = '';
+      try {
+        console.log('미리보기 이미지 생성 시작 (클라이언트 사이드 렌더링)');
+        
+        // PDF.js로 PDF의 첫 페이지를 Canvas로 렌더링
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        
+        if (pdf.numPages === 0) {
+          throw new Error('PDF에 페이지가 없습니다.');
         }
-      );
-
-      if (previewResponse.ok) {
-        const previewData = await previewResponse.json();
-        if (previewData.imageUrl) {
-          setNewSheet(prev => ({ ...prev, preview_image_url: previewData.imageUrl }));
+        
+        // 첫 페이지 가져오기
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 2.0 }); // 고해상도
+        
+        // Canvas 생성
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) {
+          throw new Error('Canvas context를 가져올 수 없습니다.');
         }
+        
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        // PDF 페이지를 Canvas에 렌더링
+        await page.render({
+          canvasContext: context,
+          viewport: viewport
+        }).promise;
+        
+        console.log('PDF 렌더링 완료, Canvas 크기:', canvas.width, 'x', canvas.height);
+        
+        // 모자이크 효과 적용 (하단 절반)
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        const mosaicImageData = applyMosaicToImageData(imageData, 15);
+        context.putImageData(mosaicImageData, 0, 0);
+        
+        // Canvas를 Blob으로 변환
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Canvas를 Blob으로 변환 실패'));
+            }
+          }, 'image/jpeg', 0.85);
+        });
+        
+        console.log('이미지 Blob 생성 완료, 크기:', blob.size, 'bytes');
+        
+        // Supabase Storage에 이미지 업로드
+        const imageFileName = `preview_${Date.now()}_${crypto.randomUUID().substring(0, 8)}.jpg`;
+        const imageFilePath = `previews/${imageFileName}`;
+        
+        const { error: imageUploadError } = await supabase.storage
+          .from('drum-sheets')
+          .upload(imageFilePath, blob, {
+            contentType: 'image/jpeg',
+            upsert: true
+          });
+        
+        if (imageUploadError) {
+          throw new Error(`이미지 업로드 실패: ${imageUploadError.message}`);
+        }
+        
+        // 공개 URL 생성
+        const { data: imageUrlData } = supabase.storage
+          .from('drum-sheets')
+          .getPublicUrl(imageFilePath);
+        
+        previewImageUrl = imageUrlData.publicUrl;
+        setNewSheet(prev => ({ ...prev, preview_image_url: previewImageUrl }));
+        console.log('미리보기 이미지 생성 성공:', previewImageUrl);
+        
+      } catch (previewError) {
+        // 미리보기 이미지 생성 실패는 치명적 오류가 아니므로 로그만 남기고 계속 진행
+        console.warn('미리보기 이미지 생성 중 오류 발생 (악보 등록은 계속 진행):', previewError);
       }
 
       // PDF URL을 상태에 저장 (나중에 DB에 저장할 때 사용)
       setNewSheet(prev => ({ ...prev, pdf_url: pdfUrl }));
 
-      alert(`PDF 업로드 완료! 페이지수: ${pageCount}페이지`);
+      // 미리보기 이미지 생성 성공 여부에 따라 메시지 변경
+      if (previewImageUrl) {
+        alert(`PDF 업로드 완료! 페이지수: ${pageCount}페이지`);
+      } else {
+        alert(`PDF 업로드 완료! 페이지수: ${pageCount}페이지\n\n⚠️ 미리보기 이미지 생성에 실패했습니다. 악보는 정상적으로 등록되지만 미리보기 이미지가 없을 수 있습니다.`);
+      }
     } catch (error) {
       console.error('PDF 업로드 오류:', error);
       alert('PDF 업로드 중 오류가 발생했습니다.');
@@ -3905,51 +4014,133 @@ const AdminPage: React.FC = () => {
       return;
     }
 
+    if (!newSheet.pdf_url) {
+      alert('PDF 파일을 업로드해주세요.');
+      return;
+    }
+
     try {
+      // difficulty 값 검증 및 정규화
+      // ⚠️ 중요: 데이터베이스는 한국어 값('초급', '중급', '고급')만 허용합니다!
+      let difficultyInput = (newSheet.difficulty || '초급').trim();
+      
+      // 영어/한국어 난이도를 한국어로 변환 (데이터베이스 제약 조건에 맞춤)
+      const difficultyMap: Record<string, string> = {
+        // 영어 → 한국어 (대소문자 구분 없이)
+        'beginner': '초급',
+        'intermediate': '중급',
+        'advanced': '고급',
+        // 한국어 → 한국어 (그대로 유지)
+        '초급': '초급',
+        '중급': '중급',
+        '고급': '고급'
+      };
+      
+      // 소문자로 변환하여 매핑 (영어 값 처리)
+      const normalizedInput = difficultyInput.toLowerCase();
+      let difficulty = difficultyMap[normalizedInput] || difficultyMap[difficultyInput] || '초급';
+      
+      // 최종 검증: 허용된 한국어 값만 사용
+      const validDifficulties = ['초급', '중급', '고급'];
+      if (!validDifficulties.includes(difficulty)) {
+        console.warn(`유효하지 않은 difficulty 값: ${newSheet.difficulty}, 기본값 '초급' 사용`);
+        difficulty = '초급';
+      }
+      
       const insertData: any = {
-        title: newSheet.title,
-        artist: newSheet.artist,
-        difficulty: newSheet.difficulty,
-        price: newSheet.price,
+        title: newSheet.title.trim(),
+        artist: newSheet.artist.trim(),
+        difficulty: difficulty, // 정규화된 값 사용 (반드시 포함)
+        price: Number(newSheet.price) || 0,
         category_id: newSheet.category_id,
+        pdf_url: newSheet.pdf_url, // 필수 필드
         is_active: true
       };
 
-      // 썸네일과 앨범명이 있으면 추가
+      // 선택적 필드 추가
       if (newSheet.thumbnail_url) {
-        insertData.thumbnail_url = newSheet.thumbnail_url;
+        insertData.thumbnail_url = newSheet.thumbnail_url.trim();
       }
       if (newSheet.album_name) {
-        insertData.album_name = newSheet.album_name;
+        insertData.album_name = newSheet.album_name.trim();
       }
-      if (newSheet.page_count > 0) {
-        insertData.page_count = newSheet.page_count;
+      if (newSheet.page_count && newSheet.page_count > 0) {
+        insertData.page_count = Number(newSheet.page_count);
       }
-      if (newSheet.tempo > 0) {
-        insertData.tempo = newSheet.tempo;
-      }
-      if (newSheet.pdf_url) {
-        insertData.pdf_url = newSheet.pdf_url;
+      if (newSheet.tempo && newSheet.tempo > 0) {
+        insertData.tempo = Number(newSheet.tempo);
       }
       if (newSheet.preview_image_url) {
-        insertData.preview_image_url = newSheet.preview_image_url;
+        insertData.preview_image_url = newSheet.preview_image_url.trim();
       }
       if (newSheet.youtube_url) {
-        insertData.youtube_url = newSheet.youtube_url;
+        insertData.youtube_url = newSheet.youtube_url.trim();
       }
 
-      const { error } = await supabase
+      // difficulty 값 최종 확인 및 로깅
+      console.log('=== 악보 추가 데이터 ===');
+      console.log(JSON.stringify(insertData, null, 2));
+      console.log('difficulty 값 확인:', {
+        원본: newSheet.difficulty,
+        정규화됨: difficulty,
+        최종값: insertData.difficulty,
+        타입: typeof insertData.difficulty
+      });
+      
+      // difficulty 값이 확실히 올바른지 다시 한 번 확인 (한국어 값으로)
+      const validKoreanDifficulties = ['초급', '중급', '고급'];
+      if (!validKoreanDifficulties.includes(insertData.difficulty)) {
+        console.error('❌ 유효하지 않은 difficulty 값 감지:', insertData.difficulty);
+        insertData.difficulty = '초급';
+        console.warn('difficulty를 기본값 "초급"으로 변경');
+      }
+      
+      // 최종 검증: 모든 필수 필드 확인
+      console.log('=== 최종 검증 ===');
+      console.log('title:', insertData.title);
+      console.log('artist:', insertData.artist);
+      console.log('difficulty:', insertData.difficulty, '타입:', typeof insertData.difficulty);
+      console.log('price:', insertData.price, typeof insertData.price);
+      console.log('category_id:', insertData.category_id);
+      console.log('pdf_url:', insertData.pdf_url ? '있음' : '없음');
+      
+      // difficulty 값을 문자열로 명시적으로 변환 (혹시 모를 타입 문제 방지)
+      insertData.difficulty = String(insertData.difficulty);
+      
+      // 최종 검증: difficulty가 정확히 허용된 한국어 값 중 하나인지 확인
+      const finalDifficulty = validKoreanDifficulties.find(
+        d => d === insertData.difficulty
+      ) || '초급';
+      
+      if (finalDifficulty !== insertData.difficulty) {
+        console.warn(`difficulty 값 "${insertData.difficulty}"를 "${finalDifficulty}"로 수정`);
+        insertData.difficulty = finalDifficulty;
+      }
+      
+      console.log('=== 최종 difficulty 값 (한국어) ===', insertData.difficulty);
+      
+      const { data, error } = await supabase
         .from('drum_sheets')
-        .insert([insertData]);
+        .insert([insertData])
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('=== Supabase 에러 상세 ===');
+        console.error('에러 메시지:', error.message);
+        console.error('에러 코드:', error.code);
+        console.error('에러 상세:', error.details);
+        console.error('에러 힌트:', error.hint);
+        console.error('전체 에러 객체:', JSON.stringify(error, null, 2));
+        throw error;
+      }
 
+      console.log('악보 추가 성공:', data);
       alert('악보가 추가되었습니다.');
       setIsAddingSheet(false);
       setNewSheet({
         title: '',
         artist: '',
-        difficulty: 'beginner',
+        difficulty: '초급',
         price: 0,
         category_id: '',
         thumbnail_url: '',
@@ -3962,9 +4153,22 @@ const AdminPage: React.FC = () => {
         youtube_url: ''
       });
       loadSheets();
-    } catch (error) {
+    } catch (error: any) {
       console.error('악보 추가 오류:', error);
-      alert('악보 추가 중 오류가 발생했습니다.');
+      
+      // Supabase 에러인 경우 상세 메시지 표시
+      let errorMessage = '악보 추가 중 오류가 발생했습니다.';
+      if (error?.message) {
+        errorMessage += `\n\n오류: ${error.message}`;
+      }
+      if (error?.details) {
+        errorMessage += `\n상세: ${error.details}`;
+      }
+      if (error?.hint) {
+        errorMessage += `\n힌트: ${error.hint}`;
+      }
+      
+      alert(errorMessage);
     }
   };
 
@@ -3973,22 +4177,23 @@ const AdminPage: React.FC = () => {
   };
 
   const downloadSheetCsvSample = () => {
-    const categoryId = categories.length > 0 ? categories[0].id : '';
-    const csvContent = `title,artist,difficulty,price,category_id,is_active
-곡 제목 1,아티스트 1,beginner,10000,${categoryId},true
-곡 제목 2,아티스트 2,intermediate,15000,${categoryId},true
-곡 제목 3,아티스트 3,advanced,20000,${categoryId},true`;
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csvContent = `곡명,아티스트,난이도,파일명,유튜브링크장르,가격
+ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://www.youtube.com/watch?v=영상ID,3000
+곡 제목 2,아티스트 2,초급,아티스트2-곡제목2.pdf,,5000
+곡 제목 3,아티스트 3,고급,아티스트3-곡제목3.pdf,https://youtu.be/영상ID,10000`;
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' }); // UTF-8 BOM 추가
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', 'sheet_sample.csv');
+    link.setAttribute('download', '악보_대량등록_샘플.csv');
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
+  // PDF 파일을 로컬 폴더에서 읽는 함수 (Electron이나 Tauri 같은 데스크톱 앱이 아닌 경우 제한적)
+  // 브라우저에서는 직접 파일 시스템 접근이 불가하므로, 사용자가 PDF 파일을 선택하도록 안내
   const processSheetCsvData = async () => {
     if (sheetCsvData.length === 0) {
       alert('처리할 데이터가 없습니다.');
@@ -3998,63 +4203,173 @@ const AdminPage: React.FC = () => {
     setIsSheetCsvProcessing(true);
 
     try {
-      const parsed = [];
       const norm = (s: any) => (s ?? '').toString().trim();
       const num = (s: any) => {
         const n = parseFloat(norm(s));
         return isNaN(n) ? 0 : n;
       };
 
-      for (const row of sheetCsvData) {
-        const title = norm(row.title || row.Title || row.곡제목 || '');
-        const artist = norm(row.artist || row.Artist || row.아티스트 || '');
-        const difficulty = norm(row.difficulty || row.Difficulty || row.난이도 || 'beginner');
-        const price = num(row.price || row.Price || row.가격 || 0);
-        const categoryId = norm(row.category_id || row.categoryId || row.Category_ID || row.카테고리ID || '');
-        const isActive = norm(row.is_active || row.isActive || row.Is_Active || row.활성 || 'true').toLowerCase() === 'true';
-
-        if (!title || !artist) continue;
-
-        const validDifficulty = ['beginner', 'intermediate', 'advanced'].includes(difficulty.toLowerCase())
-          ? difficulty.toLowerCase()
-          : 'beginner';
-
-        parsed.push({
-          title,
-          artist,
-          difficulty: validDifficulty,
-          price: Math.max(0, price),
-          category_id: categoryId || null,
-          is_active: isActive
-        });
-      }
-
-      if (parsed.length === 0) {
-        alert('유효한 데이터가 없습니다.');
-        setIsSheetCsvProcessing(false);
-        return;
-      }
-
-      // 배치로 삽입 (100개씩)
-      const batchSize = 100;
       let successCount = 0;
       let errorCount = 0;
+      const errors: string[] = [];
 
-      for (let i = 0; i < parsed.length; i += batchSize) {
-        const batch = parsed.slice(i, i + batchSize);
-        const { error } = await supabase
-          .from('drum_sheets')
-          .insert(batch);
+      // 각 행을 순차적으로 처리 (Spotify API 호출 및 PDF 처리 포함)
+      for (let i = 0; i < sheetCsvData.length; i++) {
+        const row = sheetCsvData[i];
+        const rowNum = i + 2; // 헤더 제외하고 1부터 시작, 실제로는 2행부터
+        
+        try {
+          // CSV 필드 파싱 (새 형식: 곡명, 아티스트, 난이도, 파일명, 유튜브링크장르, 가격)
+          const title = norm(row.곡명 || row.title || row.Title || row['곡 제목'] || '');
+          const artist = norm(row.아티스트 || row.artist || row.Artist || '');
+          const difficultyInput = norm(row.난이도 || row.difficulty || row.Difficulty || '초급');
+          const fileName = norm(row.파일명 || row.filename || row.fileName || row['파일명'] || '');
+          const youtubeUrlGenre = norm(row.유튜브링크장르 || row.youtube_url || row.youtubeUrl || row['유튜브링크장르'] || '');
+          const price = num(row.가격 || row.price || row.Price || 0);
 
-        if (error) {
-          console.error(`배치 ${Math.floor(i / batchSize) + 1} 오류:`, error);
-          errorCount += batch.length;
-        } else {
-          successCount += batch.length;
+          if (!title || !artist) {
+            console.warn(`행 ${rowNum}: 제목 또는 아티스트가 없어 건너뜁니다.`);
+            errorCount++;
+            errors.push(`행 ${rowNum}: 제목 또는 아티스트 없음`);
+            continue;
+          }
+
+          console.log(`\n=== 행 ${rowNum} 처리 시작: ${title} - ${artist} ===`);
+
+          // 1. difficulty 값 정규화 (한국어로 변환)
+          let difficulty = difficultyInput;
+          const difficultyMap: Record<string, string> = {
+            'beginner': '초급',
+            'intermediate': '중급',
+            'advanced': '고급',
+            '초급': '초급',
+            '중급': '중급',
+            '고급': '고급'
+          };
+          difficulty = difficultyMap[difficulty.toLowerCase()] || '초급';
+
+          // 2. Spotify API로 썸네일 및 앨범 정보 가져오기
+          let thumbnailUrl = '';
+          let albumName = '';
+          let categoryId = '';
+
+          try {
+            console.log(`행 ${rowNum}: Spotify 정보 가져오기 시작...`);
+            const spotifyResult = await searchTrackAndGetCoverWithAlbum(artist, title);
+            
+            if (spotifyResult) {
+              thumbnailUrl = spotifyResult.albumCoverUrl || '';
+              albumName = spotifyResult.albumName || '';
+              
+              // 장르가 있으면 카테고리 자동 선택
+              if (spotifyResult.genre) {
+                const matchingCategory = categories.find(cat =>
+                  cat.name.toLowerCase().includes(spotifyResult.genre!.toLowerCase())
+                );
+                if (matchingCategory) {
+                  categoryId = matchingCategory.id;
+                  console.log(`행 ${rowNum}: 카테고리 자동 선택: ${matchingCategory.name}`);
+                }
+              }
+              
+              console.log(`행 ${rowNum}: Spotify 정보 가져오기 완료 - 썸네일: ${thumbnailUrl ? '있음' : '없음'}`);
+            }
+          } catch (spotifyError) {
+            console.warn(`행 ${rowNum}: Spotify 정보 가져오기 실패 (계속 진행):`, spotifyError);
+          }
+
+          // 3. 유튜브 URL 파싱 (유튜브링크장르 필드에서 URL 추출)
+          let youtubeUrl = '';
+          if (youtubeUrlGenre) {
+            // URL인지 확인
+            if (youtubeUrlGenre.startsWith('http://') || youtubeUrlGenre.startsWith('https://')) {
+              youtubeUrl = youtubeUrlGenre;
+            } else {
+              // 장르로 처리 (나중에 사용 가능)
+              console.log(`행 ${rowNum}: 장르 정보: ${youtubeUrlGenre}`);
+            }
+          }
+
+          // 4. PDF 파일 처리
+          // 브라우저에서는 로컬 파일 시스템에 직접 접근할 수 없으므로,
+          // PDF 파일은 별도로 업로드해야 합니다.
+          // 여기서는 파일명만 기록하고, 실제 PDF는 나중에 개별 등록으로 업로드하도록 안내
+          let pdfUrl = '';
+          let previewImageUrl = '';
+          let pageCount = 0;
+
+          if (fileName) {
+            console.log(`행 ${rowNum}: PDF 파일명: ${fileName} (별도 업로드 필요)`);
+            // TODO: 서버 사이드 Edge Function을 통해 로컬 폴더에서 PDF 파일을 읽어서 처리
+            // 현재는 브라우저 제약으로 인해 PDF 파일 처리가 제한적입니다.
+            // PDF 파일은 개별 등록 기능을 통해 업로드하거나,
+            // 서버 사이드 스크립트를 통해 처리해야 합니다.
+          }
+
+          // 5. 데이터베이스에 삽입
+          const insertData: any = {
+            title: title.trim(),
+            artist: artist.trim(),
+            difficulty: difficulty,
+            price: Math.max(0, price),
+            is_active: true
+          };
+
+          if (categoryId) {
+            insertData.category_id = categoryId;
+          }
+          if (thumbnailUrl) {
+            insertData.thumbnail_url = thumbnailUrl;
+          }
+          if (albumName) {
+            insertData.album_name = albumName;
+          }
+          if (youtubeUrl) {
+            insertData.youtube_url = youtubeUrl;
+          }
+          if (pdfUrl) {
+            insertData.pdf_url = pdfUrl;
+          }
+          if (previewImageUrl) {
+            insertData.preview_image_url = previewImageUrl;
+          }
+          if (pageCount > 0) {
+            insertData.page_count = pageCount;
+          }
+
+          console.log(`행 ${rowNum}: 데이터베이스 삽입 시작...`);
+          const { error: insertError } = await supabase
+            .from('drum_sheets')
+            .insert([insertData]);
+
+          if (insertError) {
+            console.error(`행 ${rowNum} 삽입 오류:`, insertError);
+            errorCount++;
+            errors.push(`행 ${rowNum}: ${insertError.message}`);
+          } else {
+            successCount++;
+            console.log(`행 ${rowNum}: 성공적으로 등록됨`);
+          }
+
+          // API 부하 방지를 위한 대기 (Spotify API 호출 간격)
+          if (i < sheetCsvData.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+
+        } catch (rowError) {
+          console.error(`행 ${rowNum} 처리 오류:`, rowError);
+          errorCount++;
+          errors.push(`행 ${rowNum}: ${rowError instanceof Error ? rowError.message : '알 수 없는 오류'}`);
         }
       }
 
-      alert(`CSV 처리가 완료되었습니다.\n성공: ${successCount}개\n실패: ${errorCount}개`);
+      let message = `CSV 처리가 완료되었습니다.\n성공: ${successCount}개\n실패: ${errorCount}개`;
+      if (errors.length > 0 && errors.length <= 10) {
+        message += `\n\n오류 상세:\n${errors.join('\n')}`;
+      } else if (errors.length > 10) {
+        message += `\n\n오류 상세 (최대 10개):\n${errors.slice(0, 10).join('\n')}\n... 외 ${errors.length - 10}개`;
+      }
+      alert(message);
 
       setShowSheetBulkModal(false);
       setSheetCsvFile(null);
@@ -4084,23 +4399,55 @@ const AdminPage: React.FC = () => {
         return;
       }
 
-      const lines = text.split('\n').filter(line => line.trim());
+      // UTF-8 BOM 제거
+      const cleanText = text.replace(/^\uFEFF/, '');
+      const lines = cleanText.split('\n').filter(line => line.trim());
+      
       if (lines.length < 2) {
-        alert('CSV 파일 형식이 올바르지 않습니다.');
+        alert('CSV 파일 형식이 올바르지 않습니다. 최소 2줄(헤더 + 데이터 1줄)이 필요합니다.');
         return;
       }
 
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      // CSV 파싱 (쉼표로 분리, 따옴표 처리)
+      const parseCsvLine = (line: string): string[] => {
+        const result: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        result.push(current.trim());
+        return result;
+      };
+
+      const headers = parseCsvLine(lines[0]).map(h => h.trim());
+      console.log('CSV 헤더:', headers);
+
       const data = lines.slice(1).map((line, index) => {
-        const values = line.split(',').map(v => v.trim());
+        const values = parseCsvLine(line);
         const row: any = {};
         headers.forEach((header, idx) => {
           row[header] = values[idx] || '';
         });
         return row;
-      }).filter(item => item.title || item.artist);
+      }).filter(item => {
+        // 곡명 또는 아티스트가 있는 행만 포함
+        const title = item.곡명 || item.title || item.Title || '';
+        const artist = item.아티스트 || item.artist || item.Artist || '';
+        return title.trim() || artist.trim();
+      });
 
       console.log('CSV 파일 내용:', data);
+      console.log(`총 ${data.length}개의 악보 데이터 발견`);
       setSheetCsvData(data);
     };
 
@@ -6233,15 +6580,19 @@ const AdminPage: React.FC = () => {
               </div>
 
               <div className="text-sm text-gray-600">
-                <p className="mb-2">CSV 파일 형식:</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>title (필수) - 곡 제목</li>
-                  <li>artist (필수) - 아티스트명</li>
-                  <li>difficulty (선택) - beginner/intermediate/advanced</li>
-                  <li>price (선택) - 가격 (숫자)</li>
-                  <li>category_id (선택) - 카테고리 ID</li>
-                  <li>is_active (선택) - true/false (기본값: true)</li>
+                <p className="mb-2">CSV 파일 형식 (순서대로):</p>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  <li><strong>곡명</strong> (필수) - 곡 제목</li>
+                  <li><strong>아티스트</strong> (필수) - 아티스트명</li>
+                  <li><strong>난이도</strong> (선택) - 초급/중급/고급 또는 beginner/intermediate/advanced</li>
+                  <li><strong>파일명</strong> (선택) - PDF 파일명 (예: ALLDAY PROJECT - ONE MORE TIME.pdf)</li>
+                  <li><strong>유튜브링크장르</strong> (선택) - 유튜브 URL 또는 장르 정보</li>
+                  <li><strong>가격</strong> (선택) - 가격 (숫자, 기본값: 0)</li>
                 </ul>
+                <p className="mt-2 text-xs text-gray-500">
+                  * 썸네일은 Spotify API로 자동 가져옵니다.<br/>
+                  * PDF 파일은 별도로 업로드해야 합니다.
+                </p>
               </div>
 
               <button
@@ -6268,46 +6619,50 @@ const AdminPage: React.FC = () => {
 
       {/* 새 악보 추가 모달 */}
       {isAddingSheet && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-5xl max-h-[90vh] flex flex-col">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">새 악보 추가</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">제목</label>
-                <input
-                  type="text"
-                  value={newSheet.title}
-                  onChange={(e) => setNewSheet({ ...newSheet, title: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">아티스트</label>
-                <div className="flex space-x-2">
+            <div className="flex-1 overflow-y-auto pr-2">
+              <div className="space-y-4">
+              {/* 제목과 아티스트 - 가로 배치 */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">제목</label>
                   <input
                     type="text"
-                    value={newSheet.artist}
-                    onChange={(e) => setNewSheet({ ...newSheet, artist: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={newSheet.title}
+                    onChange={(e) => setNewSheet({ ...newSheet, title: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <button
-                    type="button"
-                    onClick={() => fetchSpotifyInfo(newSheet.title, newSheet.artist)}
-                    disabled={!newSheet.title || !newSheet.artist || isLoadingSpotify}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
-                  >
-                    {isLoadingSpotify ? (
-                      <>
-                        <i className="ri-loader-4-line animate-spin w-4 h-4"></i>
-                        <span>검색 중...</span>
-                      </>
-                    ) : (
-                      <>
-                        <i className="ri-music-2-line w-4 h-4"></i>
-                        <span>Spotify 검색</span>
-                      </>
-                    )}
-                  </button>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">아티스트</label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={newSheet.artist}
+                      onChange={(e) => setNewSheet({ ...newSheet, artist: e.target.value })}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fetchSpotifyInfo(newSheet.title, newSheet.artist)}
+                      disabled={!newSheet.title || !newSheet.artist || isLoadingSpotify}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1 whitespace-nowrap"
+                    >
+                      {isLoadingSpotify ? (
+                        <>
+                          <i className="ri-loader-4-line animate-spin w-4 h-4"></i>
+                          <span>검색 중...</span>
+                        </>
+                      ) : (
+                        <>
+                          <i className="ri-music-2-line w-4 h-4"></i>
+                          <span>Spotify 검색</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -6338,68 +6693,71 @@ const AdminPage: React.FC = () => {
                 </div>
               )}
 
-              {/* 유튜브 URL */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">유튜브 URL (선택)</label>
-                <div className="flex space-x-2">
-                  <input
-                    type="text"
-                    value={newSheet.youtube_url}
-                    onChange={(e) => {
-                      const url = e.target.value;
-                      setNewSheet({ ...newSheet, youtube_url: url });
-                      // 유튜브 URL이 입력되면 자동으로 썸네일 가져오기
-                      if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
-                        fetchYoutubeThumbnail(url);
-                      }
-                    }}
-                    placeholder="https://www.youtube.com/watch?v=영상ID 또는 https://youtu.be/영상ID"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                  />
-                  {newSheet.youtube_url && extractVideoId(newSheet.youtube_url) && (
-                    <button
-                      type="button"
-                      onClick={() => fetchYoutubeThumbnail(newSheet.youtube_url)}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-1"
-                    >
-                      <i className="ri-youtube-line w-4 h-4"></i>
-                      <span>썸네일 가져오기</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* 썸네일 URL 직접 입력 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 URL (선택)</label>
-                <input
-                  type="text"
-                  value={newSheet.thumbnail_url}
-                  onChange={(e) => setNewSheet({ ...newSheet, thumbnail_url: e.target.value })}
-                  placeholder="썸네일 이미지 URL"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                />
-                {newSheet.thumbnail_url && (
-                  <div className="mt-2">
-                    <img
-                      src={newSheet.thumbnail_url}
-                      alt="썸네일 미리보기"
-                      className="w-32 h-32 object-cover rounded-lg border border-gray-300"
-                      onError={(e) => {
-                        // maxresdefault.jpg 실패 시 0.jpg로 폴백
-                        const img = e.target as HTMLImageElement;
-                        const currentSrc = img.src;
-                        if (currentSrc.includes('maxresdefault.jpg')) {
-                          const videoId = extractVideoId(newSheet.youtube_url);
-                          if (videoId) {
-                            img.src = `https://img.youtube.com/vi/${videoId}/0.jpg`;
-                          }
+              {/* 유튜브 URL과 썸네일 URL - 가로 배치 */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">유튜브 URL (선택)</label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={newSheet.youtube_url}
+                      onChange={(e) => {
+                        const url = e.target.value;
+                        setNewSheet({ ...newSheet, youtube_url: url });
+                        // 유튜브 URL이 입력되면 자동으로 썸네일 가져오기
+                        if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
+                          fetchYoutubeThumbnail(url);
                         }
                       }}
+                      placeholder="https://www.youtube.com/watch?v=영상ID"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                     />
+                    {newSheet.youtube_url && extractVideoId(newSheet.youtube_url) && (
+                      <button
+                        type="button"
+                        onClick={() => fetchYoutubeThumbnail(newSheet.youtube_url)}
+                        className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-1 whitespace-nowrap"
+                      >
+                        <i className="ri-youtube-line w-4 h-4"></i>
+                        <span className="text-sm">썸네일</span>
+                      </button>
+                    )}
                   </div>
-                )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 URL (선택)</label>
+                  <input
+                    type="text"
+                    value={newSheet.thumbnail_url}
+                    onChange={(e) => setNewSheet({ ...newSheet, thumbnail_url: e.target.value })}
+                    placeholder="썸네일 이미지 URL"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
               </div>
+              
+              {/* 썸네일 미리보기 */}
+              {newSheet.thumbnail_url && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 미리보기</label>
+                  <img
+                    src={newSheet.thumbnail_url}
+                    alt="썸네일 미리보기"
+                    className="w-32 h-32 object-cover rounded-lg border border-gray-300"
+                    onError={(e) => {
+                      // maxresdefault.jpg 실패 시 0.jpg로 폴백
+                      const img = e.target as HTMLImageElement;
+                      const currentSrc = img.src;
+                      if (currentSrc.includes('maxresdefault.jpg')) {
+                        const videoId = extractVideoId(newSheet.youtube_url);
+                        if (videoId) {
+                          img.src = `https://img.youtube.com/vi/${videoId}/0.jpg`;
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              )}
 
               {/* PDF 파일 업로드 */}
               <div>
@@ -6425,62 +6783,79 @@ const AdminPage: React.FC = () => {
                 {newSheet.preview_image_url && (
                   <div className="mt-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">미리보기 이미지</label>
-                    <img
-                      src={newSheet.preview_image_url}
-                      alt="미리보기"
-                      className="w-full max-w-md object-cover rounded-lg border border-gray-300"
-                    />
+                    <div className="relative">
+                      <img
+                        src={newSheet.preview_image_url}
+                        alt="미리보기"
+                        className="w-full max-w-md object-contain rounded-lg border border-gray-300 bg-gray-50"
+                        onError={(e) => {
+                          console.error('미리보기 이미지 로드 실패:', newSheet.preview_image_url);
+                          const img = e.target as HTMLImageElement;
+                          img.style.display = 'none';
+                          // 에러 메시지 표시
+                          const errorDiv = document.createElement('div');
+                          errorDiv.className = 'p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800';
+                          errorDiv.textContent = '미리보기 이미지를 불러올 수 없습니다.';
+                          img.parentElement?.appendChild(errorDiv);
+                        }}
+                        onLoad={() => {
+                          console.log('미리보기 이미지 로드 성공:', newSheet.preview_image_url);
+                        }}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* 페이지수 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">페이지수</label>
-                <input
-                  type="number"
-                  value={newSheet.page_count}
-                  onChange={(e) => setNewSheet({ ...newSheet, page_count: Number(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  min="0"
-                />
+              {/* 페이지수, 템포, 난이도, 가격 - 2x2 그리드 */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">페이지수</label>
+                  <input
+                    type="number"
+                    value={newSheet.page_count}
+                    onChange={(e) => setNewSheet({ ...newSheet, page_count: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">템포 (BPM)</label>
+                  <input
+                    type="number"
+                    value={newSheet.tempo}
+                    onChange={(e) => setNewSheet({ ...newSheet, tempo: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    min="0"
+                    placeholder="예: 120"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">난이도</label>
+                  <select
+                    value={newSheet.difficulty}
+                    onChange={(e) => setNewSheet({ ...newSheet, difficulty: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-8"
+                  >
+                    <option value="초급">초급</option>
+                    <option value="중급">중급</option>
+                    <option value="고급">고급</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">가격</label>
+                  <input
+                    type="number"
+                    value={newSheet.price}
+                    onChange={(e) => setNewSheet({ ...newSheet, price: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
               </div>
-
-              {/* 템포 */}
+              
+              {/* 카테고리 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">템포 (BPM)</label>
-                <input
-                  type="number"
-                  value={newSheet.tempo}
-                  onChange={(e) => setNewSheet({ ...newSheet, tempo: Number(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  min="0"
-                  placeholder="예: 120"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">난이도</label>
-                <select
-                  value={newSheet.difficulty}
-                  onChange={(e) => setNewSheet({ ...newSheet, difficulty: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-8"
-                >
-                  <option value="beginner">초급</option>
-                  <option value="intermediate">중급</option>
-                  <option value="advanced">고급</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">가격</label>
-                <input
-                  type="number"
-                  value={newSheet.price}
-                  onChange={(e) => setNewSheet({ ...newSheet, price: Number(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-707 mb-1">카테고리</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
                 <select
                   value={newSheet.category_id}
                   onChange={(e) => setNewSheet({ ...newSheet, category_id: e.target.value })}
@@ -6492,15 +6867,16 @@ const AdminPage: React.FC = () => {
                   ))}
                 </select>
               </div>
+              </div>
             </div>
-            <div className="flex justify-end space-x-3 mt-6">
+            <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200 flex-shrink-0">
               <button
                 onClick={() => {
                   setIsAddingSheet(false);
                   setNewSheet({
                     title: '',
                     artist: '',
-                    difficulty: 'beginner',
+                    difficulty: '초급',
                     price: 0,
                     category_id: '',
                     thumbnail_url: '',
@@ -6541,7 +6917,7 @@ const AdminPage: React.FC = () => {
                   setEditingSheetData({
                     title: '',
                     artist: '',
-                    difficulty: 'beginner',
+                    difficulty: '초급',
                     price: 0,
                     category_id: '',
                     thumbnail_url: '',
@@ -6589,9 +6965,9 @@ const AdminPage: React.FC = () => {
                     onChange={(e) => setEditingSheetData({ ...editingSheetData, difficulty: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   >
-                    <option value="beginner">초급</option>
-                    <option value="intermediate">중급</option>
-                    <option value="advanced">고급</option>
+                    <option value="초급">초급</option>
+                    <option value="중급">중급</option>
+                    <option value="고급">고급</option>
                   </select>
                 </div>
 
@@ -6716,7 +7092,7 @@ const AdminPage: React.FC = () => {
                   setEditingSheetData({
                     title: '',
                     artist: '',
-                    difficulty: 'beginner',
+                    difficulty: '초급',
                     price: 0,
                     category_id: '',
                     thumbnail_url: '',
@@ -6784,7 +7160,7 @@ const AdminPage: React.FC = () => {
                     setEditingSheetData({
                       title: '',
                       artist: '',
-                      difficulty: 'beginner',
+                      difficulty: '초급',
                       price: 0,
                       category_id: '',
                       thumbnail_url: '',
