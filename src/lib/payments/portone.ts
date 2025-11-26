@@ -345,49 +345,10 @@ export const requestPayPalPayment = async (
       onPaymentSuccess: async (paymentResult: any) => {
         console.log('[portone-paypal] onPaymentSuccess', paymentResult);
 
-        // PayPal 결제 성공 후 주문 상태 업데이트
-        try {
-          const imp_uid = paymentResult.paymentId || paymentResult.imp_uid || paymentResult.id;
-          const merchant_uid = params.orderId;
-          const paid_amount = paymentResult.amount || paymentResult.paidAmount || finalAmount;
-
-          console.log('[portone-paypal] 주문 상태 업데이트 시작', {
-            imp_uid,
-            merchant_uid,
-            paid_amount,
-            orderId: params.orderId,
-          });
-
-          // payments-portone-paypal Edge Function 호출하여 주문 상태 업데이트
-          const { data, error } = await supabase.functions.invoke('payments-portone-paypal', {
-            body: {
-              imp_uid,
-              merchant_uid,
-              paid_amount: paypalCurrency === 'USD' ? paid_amount / 100 : paid_amount, // 센트를 USD로 변환
-              status: 'paid',
-              orderId: params.orderId,
-            },
-          });
-
-          if (error) {
-            console.error('[portone-paypal] Edge Function 호출 오류 (Supabase Client Error)', {
-              message: error.message,
-              details: error,
-              params: { imp_uid, orderId: params.orderId }
-            });
-          } else if (!data || !data.success) {
-            console.error('[portone-paypal] Edge Function 응답 오류 (Server Logic Error)', {
-              data,
-              params: { imp_uid, orderId: params.orderId }
-            });
-          } else {
-            console.log('[portone-paypal] 주문 상태 업데이트 성공', data);
-          }
-        } catch (updateError) {
-          console.error('[portone-paypal] 주문 상태 업데이트 중 예외 발생', updateError);
-          // 예외가 발생해도 사용자 콜백은 호출 (결제는 성공했으므로)
-        }
-
+        // 프론트엔드에서는 UI 처리만 수행
+        // 결제 상태 업데이트는 서버(Webhook 또는 서버 검증)에서 처리
+        // paymentId는 리다이렉트 URL로 전달되어 서버에서 검증됨
+        
         // 사용자 정의 성공 콜백 호출
         if (params.onSuccess) {
           params.onSuccess(paymentResult);

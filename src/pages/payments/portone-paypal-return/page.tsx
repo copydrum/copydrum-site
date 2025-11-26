@@ -36,63 +36,25 @@ export default function PortOnePayPalReturnPage() {
 
         // 결제 성공 여부 확인
         if (imp_success === 'true' && imp_uid && merchant_uid) {
-          // 결제 성공 - Edge Function 호출하여 주문 상태 업데이트
-          try {
-            const { data, error } = await supabase.functions.invoke('payments-portone-paypal', {
-              body: {
-                imp_uid,
-                merchant_uid,
-                paid_amount: searchParams.get('paid_amount')
-                  ? parseFloat(searchParams.get('paid_amount')!)
-                  : undefined,
-                status: 'paid',
-                orderId: merchant_uid,
-              },
-            });
+          // 프론트엔드에서는 UI만 표시
+          // 실제 결제 상태 검증 및 업데이트는 서버(Webhook 또는 서버 검증)에서 처리됨
+          console.log('[portone-paypal-return] 결제 성공 UI 표시', {
+            imp_uid,
+            merchant_uid,
+            note: '서버에서 결제 상태를 검증하고 업데이트합니다.',
+          });
 
-            if (error) {
-              console.error('[portone-paypal-return] Edge Function 호출 오류', error);
-              setResult({
-                success: false,
-                message: `결제 완료 처리 중 오류가 발생했습니다: ${error.message}`,
-                orderId: merchant_uid,
-              });
-              return;
-            }
+          setResult({
+            success: true,
+            message: t('payment.success') || 'Payment successful!',
+            orderId: merchant_uid,
+            imp_uid,
+          });
 
-            if (!data || !data.success) {
-              console.error('[portone-paypal-return] Edge Function 응답 오류', data);
-              setResult({
-                success: false,
-                message: data?.error?.message || '결제 완료 처리 중 오류가 발생했습니다.',
-                orderId: merchant_uid,
-              });
-              return;
-            }
-
-            console.log('[portone-paypal-return] 결제 완료 처리 성공', data);
-            setResult({
-              success: true,
-              message: t('payment.success') || 'Payment successful!',
-              orderId: merchant_uid,
-              imp_uid,
-            });
-
-            // 2초 후 주문 내역 페이지로 이동
-            setTimeout(() => {
-              navigate('/my-orders');
-            }, 2000);
-          } catch (error) {
-            console.error('[portone-paypal-return] 결제 완료 처리 중 예외', error);
-            setResult({
-              success: false,
-              message:
-                error instanceof Error
-                  ? error.message
-                  : '결제 완료 처리 중 예상치 못한 오류가 발생했습니다.',
-              orderId: merchant_uid,
-            });
-          }
+          // 2초 후 주문 내역 페이지로 이동
+          setTimeout(() => {
+            navigate('/my-orders');
+          }, 2000);
         } else {
           // 결제 실패 또는 취소
           const errorMessage =

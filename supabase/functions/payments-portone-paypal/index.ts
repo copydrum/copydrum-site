@@ -23,13 +23,22 @@ const buildResponse = <T>(payload: T, status = 200, origin?: string) =>
   });
 
 interface PortOnePayPalPayload {
-  imp_uid: string; // 포트원 거래 고유번호
+  imp_uid?: string; // 포트원 거래 고유번호 (deprecated - paymentId 사용 권장)
+  paymentId?: string; // PortOne payment ID (V2)
   merchant_uid: string; // 주문 ID
-  paid_amount?: number; // 실제 결제된 금액
-  status?: string; // 'paid', 'failed', 'cancelled' 등
   orderId: string; // 주문 ID (merchant_uid와 동일)
+  paid_amount?: number; // 실제 결제된 금액 (deprecated - PortOne API에서 조회)
+  status?: string; // 'paid', 'failed', 'cancelled' 등 (deprecated - PortOne API에서 조회)
 }
 
+/**
+ * 기존 payments-portone-paypal Edge Function
+ * 
+ * 이제는 PortOne API를 직접 조회하여 결제 상태를 검증합니다.
+ * 프론트엔드에서 호출하지 않도록 변경되었지만, 하위 호환성을 위해 유지합니다.
+ * 
+ * 실제 결제 확인은 portone-payment-confirm 또는 portone-webhook을 사용하세요.
+ */
 serve(async (req) => {
   const origin = req.headers.get("origin") ?? "";
 
@@ -53,165 +62,84 @@ serve(async (req) => {
     const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 
     const payload: PortOnePayPalPayload = await req.json();
-    const { imp_uid, merchant_uid, paid_amount, status, orderId } = payload;
+    const { imp_uid, paymentId, merchant_uid, orderId } = payload;
 
-    console.log("[portone-paypal] 결제 완료 요청", {
-      imp_uid,
+    // paymentId 또는 imp_uid 중 하나는 필수
+    const actualPaymentId = paymentId || imp_uid;
+
+    console.log("[portone-paypal] 결제 확인 요청 (PortOne API 조회 기반)", {
+      paymentId: actualPaymentId,
       merchant_uid,
-      paid_amount,
-      status,
       orderId,
+      note: "이 함수는 하위 호환성을 위해 유지됩니다. portone-payment-confirm 사용을 권장합니다.",
     });
 
-    if (!imp_uid || !merchant_uid || !orderId) {
+    if (!actualPaymentId || !merchant_uid || !orderId) {
       return buildResponse(
-        { success: false, error: { message: "imp_uid, merchant_uid, and orderId are required" } },
+        { success: false, error: { message: "paymentId (or imp_uid), merchant_uid, and orderId are required" } },
         400,
         origin
       );
     }
 
-    // 결제 상태 확인
-    if (status !== "paid") {
-      console.warn("[portone-paypal] 결제 상태가 paid가 아님", { status });
-      return buildResponse(
-        { success: false, error: { message: `Payment status is not paid: ${status}` } },
-        400,
-        origin
-      );
-    }
+    // portone-payment-confirm Edge Function 호출하여 최종 검증
+    const confirmUrl = `${supabaseUrl}/functions/v1/portone-payment-confirm`;
+    
+    try {
+      const confirmResponse = await fetch(confirmUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${serviceRoleKey}`,
+          "apikey": serviceRoleKey,
+        },
+        body: JSON.stringify({
+          paymentId: actualPaymentId,
+          orderId,
+        }),
+      });
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+      const confirmResult = await confirmResponse.json();
 
-    // 주문 확인 (order_items와 drum_sheets 포함)
-    const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .select("*, order_items(*, drum_sheets(*))")
-      .eq("id", orderId)
-      .single();
+      if (!confirmResponse.ok || !confirmResult.success) {
+        console.error("[portone-paypal] 결제 확인 실패", confirmResult);
+        return buildResponse(
+          {
+            success: false,
+            error: {
+              message: "Payment confirmation failed",
+              details: confirmResult.error,
+            },
+          },
+          confirmResponse.status,
+          origin
+        );
+      }
 
-    if (orderError || !order) {
-      console.error("[portone-paypal] 주문을 찾을 수 없음", { orderId, orderError });
-      return buildResponse(
-        { success: false, error: { message: "Order not found" } },
-        404,
-        origin
-      );
-    }
+      console.log("[portone-paypal] 결제 확인 및 처리 완료", {
+        paymentId: actualPaymentId,
+        orderId,
+      });
 
-    // 이미 결제 완료된 경우
-    if (order.payment_status === "paid") {
-      console.log("[portone-paypal] 이미 결제 완료된 주문", { orderId });
       return buildResponse({
         success: true,
-        data: { orderId, message: "Order already paid" },
+        data: confirmResult.data,
+        message: "Payment confirmed via PortOne API",
       }, 200, origin);
-    }
-
-    const now = new Date().toISOString();
-
-    // 1. 캐시 충전 처리
-    if (order.order_type === "cash") {
-      console.log("[portone-paypal] 캐시 충전 처리 시작");
-      const chargeAmount = order.total_amount;
-      const bonusCredits = order.metadata?.bonusCredits || 0;
-      const totalCredits = chargeAmount + bonusCredits;
-
-      // 사용자 프로필 업데이트 (RPC 사용 권장)
-      const { error: profileError } = await supabase.rpc("increment_user_credit", {
-        user_id_param: order.user_id,
-        amount_param: totalCredits
-      });
-
-      if (profileError) {
-        console.warn("[portone-paypal] RPC 실패, 직접 업데이트 시도:", profileError);
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("credit_amount")
-          .eq("id", order.user_id)
-          .single();
-
-        if (profile) {
-          await supabase
-            .from("profiles")
-            .update({ credit_amount: (profile.credit_amount || 0) + totalCredits })
-            .eq("id", order.user_id);
-        }
-      }
-
-      // 포인트 내역 기록
-      await supabase.from("point_history").insert({
-        user_id: order.user_id,
-        amount: totalCredits,
-        type: "charge",
-        description: `PayPal 캐시 충전 (주문번호: ${order.order_number || order.id})`,
-        metadata: { order_id: order.id, imp_uid }
-      });
-    }
-
-    // 2. 악보 구매 처리
-    if (order.order_type === "product" && order.order_items) {
-      console.log("[portone-paypal] 악보 구매 처리 시작");
-      const purchases = order.order_items.map((item: any) => ({
-        user_id: order.user_id,
-        sheet_id: item.drum_sheet_id,
-        order_id: order.id,
-        price: item.price,
-        is_active: true
-      }));
-
-      if (purchases.length > 0) {
-        const { error: purchaseError } = await supabase
-          .from("purchases")
-          .insert(purchases);
-
-        if (purchaseError) {
-          console.error("[portone-paypal] 구매 기록 생성 오류 (무시하고 진행):", purchaseError);
-        }
-      }
-    }
-
-    // 3. 주문 상태 업데이트
-    const { error: updateError } = await supabase
-      .from("orders")
-      .update({
-        payment_status: "paid",
-        payment_provider: "portone",
-        pg_transaction_id: imp_uid,
-        paid_at: now,
-        status: "completed", // 주문 상태도 완료로 변경
-        metadata: {
-          ...(order.metadata || {}),
-          portone_imp_uid: imp_uid,
-          portone_merchant_uid: merchant_uid,
-          portone_paid_amount: paid_amount,
-          portone_status: status,
-          payment_method: "paypal",
-          completed_by: "portone_webhook"
-        },
-      })
-      .eq("id", orderId);
-
-    if (updateError) {
-      console.error("[portone-paypal] 주문 업데이트 오류", updateError);
+    } catch (confirmError) {
+      console.error("[portone-paypal] 결제 확인 중 오류", confirmError);
       return buildResponse(
-        { success: false, error: { message: "Failed to update order" } },
+        {
+          success: false,
+          error: {
+            message: "Failed to confirm payment",
+            details: confirmError instanceof Error ? confirmError.message : String(confirmError),
+          },
+        },
         500,
         origin
       );
     }
-
-    console.log("[portone-paypal] 결제 완료 처리 성공", { orderId, imp_uid });
-
-    return buildResponse({
-      success: true,
-      data: {
-        orderId,
-        imp_uid,
-        merchant_uid,
-        paid_amount,
-      },
-    }, 200, origin);
   } catch (error) {
     console.error("[portone-paypal] 오류", error);
     return buildResponse(
@@ -226,6 +154,7 @@ serve(async (req) => {
     );
   }
 });
+
 
 
 
