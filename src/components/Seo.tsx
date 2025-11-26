@@ -47,12 +47,22 @@ export default function Seo({
     finalOgImageUrl = hostname ? `${hostname}${ogImageUrl}` : ogImageUrl;
   }
 
+  // Check if current site is ru.copydrum.com for Yandex verification
+  const isRussianSite = typeof window !== 'undefined' && 
+    (window.location.hostname === 'ru.copydrum.com' || 
+     window.location.hostname.startsWith('ru.'));
+
   return (
     <Helmet>
       {/* Basic Meta Tags */}
       <title>{finalTitle}</title>
       <meta name="description" content={finalDescription} />
       {keywords && <meta name="keywords" content={keywords} />}
+      
+      {/* Yandex Verification (Russian site only) */}
+      {isRussianSite && (
+        <meta name="yandex-verification" content="f0c26a336701f2fd" />
+      )}
       
       {/* Canonical URL */}
       {finalCanonicalUrl && <link rel="canonical" href={finalCanonicalUrl} />}
