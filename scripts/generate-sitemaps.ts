@@ -1,30 +1,30 @@
 /**
- * Sitemap Generation Script
+ * Multi-Language Sitemap Generation Script
  * 
- * This script generates XML sitemaps for all 17 locales including:
- * - Home pages
- * - Categories main page
- * - Category-specific pages
- * - Product detail pages
+ * Generates sitemap-index.xml and 17 language-specific sitemap files.
  * 
- * IMPORTANT: This script requires Supabase environment variables and should
- * NOT be run during Vercel build. It must be executed manually or in CI.
+ * Output structure:
+ *   /out/sitemap-index.xml
+ *   /out/sitemap/ko.xml
+ *   /out/sitemap/en.xml
+ *   ... (17 languages)
+ * 
+ * Each sitemap includes:
+ *   - Homepage (/)
+ *   - Categories page (/categories)
+ *   - Category pages with ID (/categories?category={id})
+ *   - Product detail pages (/sheet-detail/{id})
+ *   - Policy page (/policy/refund)
+ *   - About page (/company/about)
  * 
  * Usage:
- *   1. Set environment variables:
- *      SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npm run sitemap:generate
- *   
- *   2. After generation, commit the generated files to the repo:
- *      git add public/sitemap*.xml
- *      git commit -m "chore: update sitemaps"
- *      git push
+ *   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npm run generate:sitemaps
  * 
- * Note: Generated sitemap files in /public/ are committed to the repository
- * and served as static files by Vercel. No database access is needed during build.
+ * This script runs automatically after build via postbuild hook.
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { writeFileSync } from 'fs';
+import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -32,27 +32,28 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Language domain mapping - must match src/config/languageDomainMap.ts
-// Using www.copydrum.com for main sitemap index as per requirements
+// 17 languages with their domains
 const languageDomainMap: Record<string, string> = {
   ko: 'https://www.copydrum.com',
   en: 'https://en.copydrum.com',
   ja: 'https://jp.copydrum.com',
   de: 'https://de.copydrum.com',
-  es: 'https://es.copydrum.com',
   fr: 'https://fr.copydrum.com',
-  hi: 'https://hi.copydrum.com',
-  id: 'https://id.copydrum.com',
-  it: 'https://it.copydrum.com',
-  pt: 'https://pt.copydrum.com',
-  ru: 'https://ru.copydrum.com',
-  th: 'https://th.copydrum.com',
-  tr: 'https://tr.copydrum.com',
-  uk: 'https://uk.copydrum.com',
-  vi: 'https://vi.copydrum.com',
+  es: 'https://es.copydrum.com',
   'zh-CN': 'https://zh-cn.copydrum.com',
   'zh-TW': 'https://zh-tw.copydrum.com',
+  vi: 'https://vi.copydrum.com',
+  id: 'https://id.copydrum.com',
+  th: 'https://th.copydrum.com',
+  pt: 'https://pt.copydrum.com',
+  ru: 'https://ru.copydrum.com',
+  ar: 'https://ar.copydrum.com',
+  it: 'https://it.copydrum.com',
+  nl: 'https://nl.copydrum.com',
+  pl: 'https://pl.copydrum.com',
 };
+
+const LOCALES = Object.keys(languageDomainMap);
 
 interface DrumSheet {
   id: string;
@@ -78,7 +79,7 @@ function escapeXml(unsafe: string): string {
 }
 
 /**
- * Format date for sitemap (YYYY-MM-DD or ISO 8601)
+ * Format date for sitemap (YYYY-MM-DD)
  */
 function formatDate(dateString: string | null): string {
   if (!dateString) return new Date().toISOString().split('T')[0];
@@ -92,20 +93,21 @@ function formatDate(dateString: string | null): string {
 }
 
 /**
- * Generate sitemap XML for a single URL
+ * Generate a single URL entry
  */
-function generateUrlEntry(url: string, lastmod?: string, changefreq?: string, priority?: string): string {
+function generateUrlEntry(
+  url: string,
+  lastmod?: string,
+  changefreq: string = 'daily',
+  priority: string = '0.8'
+): string {
   let entry = '    <url>\n';
   entry += `      <loc>${escapeXml(url)}</loc>\n`;
   if (lastmod) {
     entry += `      <lastmod>${escapeXml(lastmod)}</lastmod>\n`;
   }
-  if (changefreq) {
-    entry += `      <changefreq>${escapeXml(changefreq)}</changefreq>\n`;
-  }
-  if (priority) {
-    entry += `      <priority>${escapeXml(priority)}</priority>\n`;
-  }
+  entry += `      <changefreq>${escapeXml(changefreq)}</changefreq>\n`;
+  entry += `      <priority>${escapeXml(priority)}</priority>\n`;
   entry += '    </url>\n';
   return entry;
 }
@@ -119,19 +121,20 @@ function generateLocaleSitemap(
   sheets: DrumSheet[],
   categories: Category[]
 ): string {
+  // XML must start with <?xml declaration, no leading whitespace or comments
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
   xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
 
-  // Home page
+  // Homepage (priority 1.0)
   xml += generateUrlEntry(`${baseUrl}/`, undefined, 'daily', '1.0');
 
   // Categories main page
-  xml += generateUrlEntry(`${baseUrl}/categories`, undefined, 'weekly', '0.8');
+  xml += generateUrlEntry(`${baseUrl}/categories`, undefined, 'daily', '0.8');
 
-  // Category-specific pages
+  // Category pages with ID
   categories.forEach((category) => {
     const categoryUrl = `${baseUrl}/categories?category=${category.id}`;
-    xml += generateUrlEntry(categoryUrl, undefined, 'weekly', '0.7');
+    xml += generateUrlEntry(categoryUrl, undefined, 'daily', '0.8');
   });
 
   // Product detail pages (only active sheets)
@@ -139,8 +142,14 @@ function generateLocaleSitemap(
   activeSheets.forEach((sheet) => {
     const sheetUrl = `${baseUrl}/sheet-detail/${sheet.id}`;
     const lastmod = formatDate(sheet.updated_at);
-    xml += generateUrlEntry(sheetUrl, lastmod, 'monthly', '0.6');
+    xml += generateUrlEntry(sheetUrl, lastmod, 'daily', '0.8');
   });
+
+  // Policy page
+  xml += generateUrlEntry(`${baseUrl}/policy/refund`, undefined, 'daily', '0.8');
+
+  // About page
+  xml += generateUrlEntry(`${baseUrl}/company/about`, undefined, 'daily', '0.8');
 
   xml += '</urlset>';
   return xml;
@@ -149,18 +158,22 @@ function generateLocaleSitemap(
 /**
  * Generate sitemap index
  */
-function generateSitemapIndex(locales: string[]): string {
+function generateSitemapIndex(): string {
+  // XML must start with <?xml declaration, no leading whitespace or comments
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
   xml += '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
 
-  locales.forEach((locale) => {
+  const today = formatDate(new Date().toISOString());
+
+  LOCALES.forEach((locale) => {
     const baseUrl = languageDomainMap[locale];
     if (!baseUrl) return;
 
-    const sitemapUrl = `${baseUrl}/sitemap-${locale}.xml`;
+    // Use /sitemap/{locale}.xml format
+    const sitemapUrl = `${baseUrl}/sitemap/${locale}.xml`;
     xml += '  <sitemap>\n';
     xml += `    <loc>${escapeXml(sitemapUrl)}</loc>\n`;
-    xml += `    <lastmod>${formatDate(new Date().toISOString())}</lastmod>\n`;
+    xml += `    <lastmod>${escapeXml(today)}</lastmod>\n`;
     xml += '  </sitemap>\n';
   });
 
@@ -213,58 +226,47 @@ async function main() {
 
   console.log(`Found ${categories?.length || 0} categories`);
 
-  // Generate sitemaps for each locale
-  const publicDir = join(__dirname, '..', 'public');
+  // Output directory (Vite builds to 'out' directory)
   const outDir = join(__dirname, '..', 'out');
-  const locales = Object.keys(languageDomainMap);
+  const sitemapDir = join(outDir, 'sitemap');
 
+  // Create sitemap directory if it doesn't exist
+  try {
+    mkdirSync(sitemapDir, { recursive: true });
+    console.log(`Created directory: ${sitemapDir}`);
+  } catch (error) {
+    // Directory might already exist, that's okay
+    console.log(`Directory exists: ${sitemapDir}`);
+  }
+
+  // Generate sitemaps for each locale
   console.log('\nGenerating locale sitemaps...');
-  for (const locale of locales) {
+  for (const locale of LOCALES) {
     const baseUrl = languageDomainMap[locale];
-    if (!baseUrl) continue;
+    if (!baseUrl) {
+      console.warn(`  ⚠ Skipping ${locale}: no domain mapping`);
+      continue;
+    }
 
     console.log(`  Generating sitemap for ${locale} (${baseUrl})...`);
     const sitemapXml = generateLocaleSitemap(locale, baseUrl, sheets || [], categories || []);
-    
-    // Write to public directory (for development and next build)
-    const publicFilename = join(publicDir, `sitemap-${locale}.xml`);
-    writeFileSync(publicFilename, sitemapXml, 'utf-8');
-    console.log(`    ✓ Wrote ${publicFilename}`);
-    
-    // Also write to out directory (for Vercel deployment after build)
-    try {
-      const outFilename = join(outDir, `sitemap-${locale}.xml`);
-      writeFileSync(outFilename, sitemapXml, 'utf-8');
-      console.log(`    ✓ Wrote ${outFilename}`);
-    } catch (error) {
-      // out directory might not exist yet, that's okay
-      console.log(`    ⚠ Could not write to out directory (may not exist yet)`);
-    }
+    const filename = join(sitemapDir, `${locale}.xml`);
+    writeFileSync(filename, sitemapXml, 'utf-8');
+    console.log(`    ✓ Wrote ${filename}`);
   }
 
   // Generate sitemap index
   console.log('\nGenerating sitemap index...');
-  const indexXml = generateSitemapIndex(locales);
-  
-  // Write to public directory
-  const publicIndexFilename = join(publicDir, 'sitemap.xml');
-  writeFileSync(publicIndexFilename, indexXml, 'utf-8');
-  console.log(`  ✓ Wrote ${publicIndexFilename}`);
-  
-  // Also write to out directory
-  try {
-    const outIndexFilename = join(outDir, 'sitemap.xml');
-    writeFileSync(outIndexFilename, indexXml, 'utf-8');
-    console.log(`  ✓ Wrote ${outIndexFilename}`);
-  } catch (error) {
-    console.log(`  ⚠ Could not write to out directory (may not exist yet)`);
-  }
+  const indexXml = generateSitemapIndex();
+  const indexFilename = join(outDir, 'sitemap-index.xml');
+  writeFileSync(indexFilename, indexXml, 'utf-8');
+  console.log(`  ✓ Wrote ${indexFilename}`);
 
   console.log('\n✅ Sitemap generation complete!');
   console.log(`\nGenerated files:`);
-  console.log(`  - ${publicIndexFilename} (index)`);
-  locales.forEach((locale) => {
-    console.log(`  - ${join(publicDir, `sitemap-${locale}.xml`)}`);
+  console.log(`  - ${indexFilename} (index)`);
+  LOCALES.forEach((locale) => {
+    console.log(`  - ${join(sitemapDir, `${locale}.xml`)}`);
   });
 }
 
@@ -273,4 +275,3 @@ main().catch((error) => {
   console.error('Fatal error:', error);
   process.exit(1);
 });
-
