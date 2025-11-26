@@ -20,3 +20,4 @@ ALTER TABLE IF EXISTS public.customer_inquiries
 
 
 
+

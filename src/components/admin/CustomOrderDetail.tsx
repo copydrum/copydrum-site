@@ -591,13 +591,13 @@ export default function CustomOrderDetail({ orderId, onClose, onUpdated }: Custo
               )}
             </div>
             <div className="border-t border-gray-200 bg-white p-4">
-              <form onSubmit={handleSendMessage} className="flex gap-2">
-                <input
-                  type="text"
+              <form onSubmit={handleSendMessage} className="flex flex-col gap-2">
+                <textarea
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                   placeholder="메시지를 입력하세요..."
-                  className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  rows={4}
+                  className="min-h-[100px] flex-1 resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
                 <button
                   type="submit"
