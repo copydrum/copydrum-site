@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /
+
+# Sitemaps for all locales
+Sitemap: https://copydrum.com/sitemap-ko.xml
+Sitemap: https://en.copydrum.com/sitemap-en.xml
+Sitemap: https://jp.copydrum.com/sitemap-ja.xml
+Sitemap: https://de.copydrum.com/sitemap-de.xml
+Sitemap: https://es.copydrum.com/sitemap-es.xml
+Sitemap: https://fr.copydrum.com/sitemap-fr.xml
+Sitemap: https://hi.copydrum.com/sitemap-hi.xml
+Sitemap: https://id.copydrum.com/sitemap-id.xml
+Sitemap: https://it.copydrum.com/sitemap-it.xml
+Sitemap: https://pt.copydrum.com/sitemap-pt.xml
+Sitemap: https://ru.copydrum.com/sitemap-ru.xml
+Sitemap: https://th.copydrum.com/sitemap-th.xml
+Sitemap: https://tr.copydrum.com/sitemap-tr.xml
+Sitemap: https://uk.copydrum.com/sitemap-uk.xml
+Sitemap: https://vi.copydrum.com/sitemap-vi.xml
+Sitemap: https://zh-cn.copydrum.com/sitemap-zh-CN.xml
+Sitemap: https://zh-tw.copydrum.com/sitemap-zh-TW.xml
+

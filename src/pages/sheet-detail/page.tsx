@@ -18,6 +18,9 @@ import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil }
 import { useSiteLanguage } from '../../hooks/useSiteLanguage';
 import { useBuyNow } from '../../hooks/useBuyNow';
 import { useUserCredits } from '../../hooks/useUserCredits';
+import Seo from '../../components/Seo';
+import { buildDetailSeoStrings } from '../../lib/seo';
+import { languageDomainMap } from '../../config/languageDomainMap';
 
 interface DrumSheet {
   id: string;
@@ -584,8 +587,34 @@ export default function SheetDetailPage() {
     );
   }
 
+  // Build SEO strings
+  const seoStrings = sheet ? buildDetailSeoStrings(sheet, t) : null;
+  
+  // Build canonical URL
+  const baseUrl = languageDomainMap[i18n.language as keyof typeof languageDomainMap] || window.location.origin;
+  const canonicalUrl = sheet ? `${baseUrl}/sheet-detail/${sheet.id}` : baseUrl;
+  
+  // Get thumbnail URL for OG image
+  const ogImageUrl = sheet
+    ? (sheet.preview_image_url || sheet.thumbnail_url || null)
+    : null;
+
   return (
     <div className="min-h-screen bg-white">
+      {/* SEO Meta Tags */}
+      {seoStrings && sheet && (
+        <Seo
+          title={seoStrings.title}
+          description={seoStrings.description}
+          keywords={seoStrings.keywords}
+          ogTitle={seoStrings.title}
+          ogDescription={seoStrings.description}
+          ogImageUrl={ogImageUrl || undefined}
+          canonicalUrl={canonicalUrl}
+          locale={i18n.language}
+        />
+      )}
+      
       {/* Main Header */}
       <MainHeader user={user} />
 

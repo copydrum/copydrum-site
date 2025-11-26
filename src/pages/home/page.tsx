@@ -10,6 +10,8 @@ import Footer from '../../components/common/Footer';
 import { useTranslation } from 'react-i18next';
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import { useSiteLanguage } from '../../hooks/useSiteLanguage';
+import Seo from '../../components/Seo';
+import { languageDomainMap } from '../../config/languageDomainMap';
 
 interface DrumSheet {
   id: string;
@@ -428,8 +430,20 @@ export default function Home() {
     );
   }
 
+  // Build canonical URL
+  const baseUrl = languageDomainMap[i18n.language as keyof typeof languageDomainMap] || (typeof window !== 'undefined' ? window.location.origin : '');
+  const canonicalUrl = baseUrl ? `${baseUrl}/` : '/';
+
   return (
     <div className="min-h-screen bg-white">
+      {/* SEO Meta Tags */}
+      <Seo
+        title={t('seo.homeTitle')}
+        description={t('seo.homeDescription')}
+        canonicalUrl={canonicalUrl}
+        locale={i18n.language}
+      />
+      
       {/* Desktop Header */}
       <div className="hidden md:block">
         <MainHeader user={user} />

@@ -8,5 +8,11 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
+  ],
+  "routes": [
+    { "src": "/sheet-detail/(.*)", "dest": "/sheet-detail/$1", "prerender": true },
+    { "src": "/categories/(.*)", "dest": "/categories/$1", "prerender": true },
+    { "src": "/categories", "dest": "/categories", "prerender": true },
+    { "src": "/", "dest": "/", "prerender": true }
   ]
 }

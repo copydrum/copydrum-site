@@ -20,6 +20,9 @@ import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil }
 import { useSiteLanguage } from '../../hooks/useSiteLanguage';
 import { useBuyNow } from '../../hooks/useBuyNow';
 import { useUserCredits } from '../../hooks/useUserCredits';
+import Seo from '../../components/Seo';
+import { buildCategorySeoStrings } from '../../lib/seo';
+import { languageDomainMap } from '../../config/languageDomainMap';
 
 interface Category {
   id: string;
@@ -624,8 +627,28 @@ const CategoriesPage: React.FC = () => {
     window.open(href, '_blank', 'noopener,noreferrer');
   };
 
+  // Build SEO strings
+  const selectedCategoryObj = categories.find(cat => cat.id === selectedCategory);
+  const categoryName = selectedCategoryObj ? getCategoryName(selectedCategoryObj.name) : '';
+  const categorySeo = categoryName ? buildCategorySeoStrings(categoryName, t) : {
+    title: t('categoriesPage.title') || 'Categories | COPYDRUM',
+    description: t('categoriesPage.description') || 'Browse all drum sheet music categories',
+  };
+  
+  // Build canonical URL
+  const baseUrl = languageDomainMap[i18n.language as keyof typeof languageDomainMap] || (typeof window !== 'undefined' ? window.location.origin : '');
+  const canonicalUrl = baseUrl ? `${baseUrl}/categories${selectedCategory ? `?category=${selectedCategory}` : ''}` : '/categories';
+
   return (
     <div className="min-h-screen bg-white">
+      {/* SEO Meta Tags */}
+      <Seo
+        title={categorySeo.title}
+        description={categorySeo.description}
+        canonicalUrl={canonicalUrl}
+        locale={i18n.language}
+      />
+      
       <div className="hidden md:block">
         <MainHeader user={user} />
       </div>
