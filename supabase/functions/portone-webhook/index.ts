@@ -1,33 +1,3 @@
-// ========================================
-// 임시 테스트용: 무조건 200 응답
-// ========================================
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-serve(async (req) => {
-  // 그냥 뭐가 왔는지만 로그 찍기
-  console.log("[portone-webhook] raw request", {
-    method: req.method,
-    url: req.url,
-    headers: Object.fromEntries(req.headers.entries()),
-  });
-
-  // 바디도 한 번 읽어봄 (필요 없으면 지워도 됨)
-  const bodyText = await req.text();
-  console.log("[portone-webhook] body:", bodyText);
-
-  // ★★ 여기서 무조건 200 OK 반환 ★★
-  return new Response("OK", { status: 200 });
-}, {
-  // ★★ 가장 중요: JWT 검증 끄기 ★★
-  verifyJwt: false,
-});
-
-// ========================================
-// 기존 코드 (주석 처리 - 나중에 복구용)
-// ========================================
-
-/*
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -265,6 +235,10 @@ serve(async (req) => {
 
     // Body를 JSON으로 파싱
     const payload: PortOneWebhookPayload = JSON.parse(bodyText);
+    
+    // 전체 Payload 로깅 추가 (실제 구조 확인용)
+    console.log("[portone-webhook] 전체 Webhook Payload", JSON.stringify(payload, null, 2));
+    
     const { eventType, paymentId, orderId, status } = payload;
 
     console.log("[portone-webhook] Webhook 수신", {
@@ -397,4 +371,3 @@ serve(async (req) => {
     );
   }
 }, { verifyJwt: false });
-*/

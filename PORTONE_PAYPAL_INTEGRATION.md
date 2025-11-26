@@ -26,9 +26,20 @@
 
 #### 백엔드 (Edge Functions)
 - **`supabase/functions/payments-portone-paypal/index.ts`**
-  - 포트원 PayPal 결제 완료 처리 Edge Function
-  - 주문 상태를 `paid`로 업데이트
-  - 포트원 거래 정보(`imp_uid`, `merchant_uid`) 저장
+  - 포트원 PayPal 결제 완료 처리 Edge Function (하위 호환성 유지)
+  - `portone-payment-confirm`을 호출하여 최종 검증
+
+- **`supabase/functions/portone-payment-confirm/index.ts`**
+  - PortOne API로 결제 상태 최종 검증
+  - 주문 상태를 `paid`, `completed`로 업데이트
+  - 포트원 거래 정보 및 PayPal 메타데이터 저장
+  - 캐시 충전 또는 악보 구매 기록 생성
+
+- **`supabase/functions/portone-webhook/index.ts`**
+  - PortOne Webhook 이벤트 수신 및 처리
+  - 시그니처 검증 (보안 강화)
+  - 멱등성 보장 (중복 처리 방지)
+  - 결제 완료 이벤트(`payment.paid`)에서 `portone-payment-confirm` 호출
 
 ### 2. 수정된 파일
 
@@ -87,10 +98,17 @@
 ### 3. 결제 완료 처리 단계
 ```
 리다이렉트 페이지 (/payments/portone-paypal/return)
-  → URL 파라미터에서 결제 결과 확인
-  → Edge Function 호출 (payments-portone-paypal)
-  → 주문 상태 업데이트 (paid)
+  → URL 파라미터에서 결제 결과 확인 (UI 표시만)
   → 주문 내역 페이지로 이동
+
+포트원 Webhook (portone-webhook)
+  → PortOne에서 결제 완료 이벤트 수신
+  → 시그니처 검증 (PORTONE_WEBHOOK_SECRET)
+  → 멱등성 확인 (중복 처리 방지)
+  → portone-payment-confirm Edge Function 호출
+  → PortOne API로 결제 상태 최종 검증
+  → 주문 상태 업데이트 (paid, completed)
+  → 캐시 충전 또는 악보 구매 기록 생성
 ```
 
 ## 환경 변수 설정
@@ -105,6 +123,8 @@ VITE_PORTONE_MERCHANT_CODE=your_merchant_code
 ### 백엔드 (Supabase Secrets)
 - `SUPABASE_URL` (자동 설정)
 - `SUPABASE_SERVICE_ROLE_KEY` (자동 설정)
+- `PORTONE_API_KEY` - PortOne API 키 (결제 상태 조회용)
+- `PORTONE_WEBHOOK_SECRET` - PortOne Webhook 시그니처 검증용 시크릿 (선택사항, 보안 강화 권장)
 
 ## 포트원 설정
 
@@ -170,7 +190,16 @@ supabase/
 ### 콘솔 로그 확인
 - `[portone]` - 포트원 초기화 및 결제 요청
 - `[portone-paypal-return]` - 결제 반환 페이지 처리
-- `[portone-paypal]` - Edge Function 처리
+- `[portone-paypal]` - Edge Function 처리 (하위 호환성)
+- `[portone-webhook]` - Webhook 이벤트 수신 및 처리
+- `[portone-payment-confirm]` - 결제 상태 검증 및 주문 업데이트
+
+### Supabase 로그 확인
+1. Supabase Dashboard → Edge Functions → Logs
+2. 다음 로그 라인을 확인:
+   - `[portone-webhook] Webhook 수신` - Webhook 수신 확인
+   - `[portone-webhook] 결제 확인 및 처리 완료` - 성공 처리
+   - `[portone-payment-confirm] 결제 확인 및 주문 업데이트 성공` - 주문 업데이트 완료
 
 ### 일반적인 문제 해결
 
@@ -183,14 +212,20 @@ supabase/
    - 채널 이름(`copydrum_paypal`) 확인
 
 3. **결제 완료 후 주문 상태가 업데이트되지 않음**
-   - Edge Function 로그 확인
-   - Supabase 연결 확인
+   - PortOne Webhook 설정 확인 (포트원 콘솔에서 Webhook URL 설정)
+   - Edge Function 로그 확인 (Supabase Dashboard)
+   - `PORTONE_WEBHOOK_SECRET` 환경 변수 확인
+   - `PORTONE_API_KEY` 환경 변수 확인
    - 주문 ID 확인
+   - Webhook 이벤트가 수신되었는지 확인 (`[portone-webhook] Webhook 수신` 로그)
+   - 결제 상태가 `PAID`인지 확인 (`[portone-payment-confirm]` 로그)
 
 ## 참고 자료
 
 - [포트원 개발자 문서](https://developers.portone.io/)
 - [포트원 PayPal 연동 가이드](https://developers.portone.io/docs/ko/pg/paypal)
+
+
 
 
 

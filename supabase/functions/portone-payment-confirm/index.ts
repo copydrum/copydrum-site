@@ -192,6 +192,8 @@ serve(async (req) => {
         status: portonePayment.status,
         amount: portonePayment.amount,
         orderId: portonePayment.orderId,
+        channelKey: portonePayment.channelKey,
+        metadata: portonePayment.metadata,
       });
     } catch (apiError) {
       console.error("[portone-payment-confirm] PortOne API 조회 실패", apiError);
@@ -247,16 +249,36 @@ serve(async (req) => {
       );
     }
 
+    // PayPal 채널 확인 (channelKey에 'paypal'이 포함되어 있는지 확인)
+    const isPayPalPayment = portonePayment.channelKey?.toLowerCase().includes('paypal') || 
+                            portonePayment.metadata?.paymentMethod === 'paypal' ||
+                            false;
+
+    console.log("[portone-payment-confirm] 결제 채널 확인", {
+      paymentId,
+      channelKey: portonePayment.channelKey,
+      isPayPalPayment,
+      metadata: portonePayment.metadata,
+    });
+
     // 금액 검증
     const portoneAmount = portonePayment.amount.total;
     const portoneCurrency = portonePayment.amount.currency;
     const orderAmountKRW = order.total_amount;
+
+    console.log("[portone-payment-confirm] 금액 검증 시작", {
+      portoneAmount,
+      portoneCurrency,
+      orderAmountKRW,
+      isPayPalPayment,
+    });
 
     if (!compareAmounts(portoneAmount, portoneCurrency, orderAmountKRW)) {
       console.error("[portone-payment-confirm] 금액 불일치", {
         portoneAmount,
         portoneCurrency,
         orderAmountKRW,
+        isPayPalPayment,
       });
       return buildResponse(
         {
@@ -278,7 +300,12 @@ serve(async (req) => {
 
     // 1. 캐시 충전 처리
     if (order.order_type === "cash") {
-      console.log("[portone-payment-confirm] 캐시 충전 처리 시작");
+      console.log("[portone-payment-confirm] 캐시 충전 처리 시작", {
+        orderId,
+        paymentId,
+        isPayPalPayment,
+        chargeAmount: order.total_amount,
+      });
       const chargeAmount = order.total_amount;
       const bonusCredits = order.metadata?.bonusCredits || 0;
       const totalCredits = chargeAmount + bonusCredits;
@@ -317,7 +344,12 @@ serve(async (req) => {
 
     // 2. 악보 구매 처리
     if (order.order_type === "product" && order.order_items) {
-      console.log("[portone-payment-confirm] 악보 구매 처리 시작");
+      console.log("[portone-payment-confirm] 악보 구매 처리 시작", {
+        orderId,
+        paymentId,
+        isPayPalPayment,
+        itemCount: order.order_items.length,
+      });
       const purchases = order.order_items.map((item: any) => ({
         user_id: order.user_id,
         sheet_id: item.drum_sheet_id,
@@ -342,7 +374,7 @@ serve(async (req) => {
       .from("orders")
       .update({
         payment_status: "paid",
-        payment_provider: "portone",
+        payment_provider: isPayPalPayment ? "paypal" : "portone",
         pg_transaction_id: paymentId,
         paid_at: now,
         status: "completed",
@@ -354,7 +386,9 @@ serve(async (req) => {
           portone_currency: portoneCurrency,
           portone_status: portonePayment.status,
           portone_paid_at: portonePayment.paidAt ? new Date(portonePayment.paidAt).toISOString() : null,
-          payment_method: "paypal",
+          portone_channel_key: portonePayment.channelKey,
+          payment_method: isPayPalPayment ? "paypal" : (order.metadata?.payment_method || "unknown"),
+          is_paypal_payment: isPayPalPayment,
           completed_by: "portone_payment_confirm",
           confirmed_at: now,
         },
@@ -373,6 +407,9 @@ serve(async (req) => {
     console.log("[portone-payment-confirm] 결제 확인 및 주문 업데이트 성공", {
       orderId,
       paymentId,
+      isPayPalPayment,
+      payment_provider: isPayPalPayment ? "paypal" : "portone",
+      status: "paid",
     });
 
     return buildResponse({
@@ -398,4 +435,6 @@ serve(async (req) => {
     );
   }
 });
+
+
 
