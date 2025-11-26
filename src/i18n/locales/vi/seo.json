@@ -1,10 +1,9 @@
 {
-  "detailTitle": "{{title}} – {{artist}} | Drum Sheet Music PDF | COPYDRUM",
-  "detailDescription": "Download the drum sheet music for {{title}} by {{artist}}. High-quality PDF, instant download. {{genre}} drum score{{#if pages}}, {{pages}} pages{{/if}}{{#if bpm}}, {{bpm}} BPM{{/if}}{{#if difficulty}}, {{difficulty}} level{{/if}}.",
-  "detailKeywords": "{{title}}, {{artist}}, drum sheet music, drum score, drum transcription, COPYDRUM",
-  "homeTitle": "COPYDRUM | Drum Sheet Music Store",
-  "homeDescription": "High-quality drum sheet music and drum scores for pop, rock, K-POP, CCM and more.",
-  "categoryTitle": "{{category}} Drum Sheet Music | COPYDRUM",
-  "categoryDescription": "Download drum sheet music for {{category}} songs in PDF format."
+  "detailTitle": "{{title}} – {{artist}} | Bản nhạc trống PDF | COPYDRUM",
+  "detailDescription": "Tải bản nhạc trống cho bài \"{{title}}\" của {{artist}} dưới dạng PDF chất lượng cao. Bản nhạc {{genre}}, {{pages}} trang, {{bpm}} BPM, cấp độ {{difficulty}}.",
+  "detailKeywords": "{{title}}, {{artist}}, bản nhạc trống, drum sheet music, chép trống, COPYDRUM",
+  "homeTitle": "COPYDRUM | Cửa hàng bản nhạc trống",
+  "homeDescription": "Cung cấp bản nhạc trống chất lượng cao cho các thể loại pop, rock, K-POP, CCM và nhiều hơn nữa. Tải PDF ngay lập tức cho các tay trống trên toàn thế giới.",
+  "categoryTitle": "Bản nhạc trống {{category}} | COPYDRUM",
+  "categoryDescription": "Tải bản nhạc trống dạng PDF cho các bài hát thuộc thể loại {{category}}. Phù hợp cho luyện tập và biểu diễn."
 }
-

@@ -1,10 +1,9 @@
 {
-  "detailTitle": "{{title}} – {{artist}} | Drum Sheet Music PDF | COPYDRUM",
-  "detailDescription": "Download the drum sheet music for {{title}} by {{artist}}. High-quality PDF, instant download. {{genre}} drum score{{#if pages}}, {{pages}} pages{{/if}}{{#if bpm}}, {{bpm}} BPM{{/if}}{{#if difficulty}}, {{difficulty}} level{{/if}}.",
-  "detailKeywords": "{{title}}, {{artist}}, drum sheet music, drum score, drum transcription, COPYDRUM",
-  "homeTitle": "COPYDRUM | Drum Sheet Music Store",
-  "homeDescription": "High-quality drum sheet music and drum scores for pop, rock, K-POP, CCM and more.",
-  "categoryTitle": "{{category}} Drum Sheet Music | COPYDRUM",
-  "categoryDescription": "Download drum sheet music for {{category}} songs in PDF format."
+  "detailTitle": "{{title}} – {{artist}} | Partitur drum PDF | COPYDRUM",
+  "detailDescription": "Unduh partitur drum \"{{title}}\" oleh {{artist}} dalam format PDF berkualitas tinggi. Partitur {{genre}}, {{pages}} halaman, {{bpm}} BPM, tingkat {{difficulty}}.",
+  "detailKeywords": "{{title}}, {{artist}}, partitur drum, drum sheet music, transkripsi drum, COPYDRUM",
+  "homeTitle": "COPYDRUM | Toko partitur drum",
+  "homeDescription": "Partitur drum dan drum score berkualitas tinggi untuk pop, rock, K-POP, CCM, dan lainnya. Unduh PDF instan untuk drummer di seluruh dunia.",
+  "categoryTitle": "Partitur drum {{category}} | COPYDRUM",
+  "categoryDescription": "Unduh partitur drum dalam format PDF untuk lagu-lagu {{category}}. Cocok untuk latihan dan penampilan."
 }
-

@@ -1,10 +1,9 @@
 {
-  "detailTitle": "{{title}} – {{artist}} | Drum Sheet Music PDF | COPYDRUM",
-  "detailDescription": "Download the drum sheet music for {{title}} by {{artist}}. High-quality PDF, instant download. {{genre}} drum score{{#if pages}}, {{pages}} pages{{/if}}{{#if bpm}}, {{bpm}} BPM{{/if}}{{#if difficulty}}, {{difficulty}} level{{/if}}.",
-  "detailKeywords": "{{title}}, {{artist}}, drum sheet music, drum score, drum transcription, COPYDRUM",
-  "homeTitle": "COPYDRUM | Drum Sheet Music Store",
-  "homeDescription": "High-quality drum sheet music and drum scores for pop, rock, K-POP, CCM and more.",
-  "categoryTitle": "{{category}} Drum Sheet Music | COPYDRUM",
-  "categoryDescription": "Download drum sheet music for {{category}} songs in PDF format."
+  "detailTitle": "{{title}} – {{artist}} | Davul notası PDF | COPYDRUM",
+  "detailDescription": "{{artist}} tarafından çalınan \"{{title}}\" parçasının davul notasını yüksek kaliteli PDF olarak indir. {{genre}} davul partisyonu, {{pages}} sayfa, {{bpm}} BPM, {{difficulty}} seviye.",
+  "detailKeywords": "{{title}}, {{artist}}, davul notası, drum sheet music, davul transkripsiyonu, COPYDRUM",
+  "homeTitle": "COPYDRUM | Davul notaları mağazası",
+  "homeDescription": "Pop, rock, K-POP, CCM ve daha fazlası için yüksek kaliteli davul notalarını PDF olarak sunuyoruz. Dünyadaki tüm davulcular için anında indirme.",
+  "categoryTitle": "{{category}} davul notaları | COPYDRUM",
+  "categoryDescription": "{{category}} şarkıları için davul notalarını PDF formatında indir. Prova ve sahne performansları için idealdir."
 }
-

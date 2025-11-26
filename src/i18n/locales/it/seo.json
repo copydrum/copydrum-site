@@ -1,10 +1,9 @@
 {
-  "detailTitle": "{{title}} – {{artist}} | Drum Sheet Music PDF | COPYDRUM",
-  "detailDescription": "Download the drum sheet music for {{title}} by {{artist}}. High-quality PDF, instant download. {{genre}} drum score{{#if pages}}, {{pages}} pages{{/if}}{{#if bpm}}, {{bpm}} BPM{{/if}}{{#if difficulty}}, {{difficulty}} level{{/if}}.",
-  "detailKeywords": "{{title}}, {{artist}}, drum sheet music, drum score, drum transcription, COPYDRUM",
-  "homeTitle": "COPYDRUM | Drum Sheet Music Store",
-  "homeDescription": "High-quality drum sheet music and drum scores for pop, rock, K-POP, CCM and more.",
-  "categoryTitle": "{{category}} Drum Sheet Music | COPYDRUM",
-  "categoryDescription": "Download drum sheet music for {{category}} songs in PDF format."
+  "detailTitle": "{{title}} – {{artist}} | Spartiti batteria PDF | COPYDRUM",
+  "detailDescription": "Scarica lo spartito di batteria di \"{{title}}\" di {{artist}} in PDF di alta qualità. Partitura {{genre}}, {{pages}} pagine, {{bpm}} BPM, livello {{difficulty}}.",
+  "detailKeywords": "{{title}}, {{artist}}, spartiti batteria, drum sheet music, trascrizione batteria, COPYDRUM",
+  "homeTitle": "COPYDRUM | Negozio di spartiti per batteria",
+  "homeDescription": "Spartiti per batteria di alta qualità per pop, rock, K-POP, CCM e altro. Download immediato in PDF per batteristi di tutto il mondo.",
+  "categoryTitle": "Spartiti batteria {{category}} | COPYDRUM",
+  "categoryDescription": "Scarica gli spartiti di batteria in PDF per brani {{category}}. Ideali per lo studio e le esibizioni dal vivo."
 }
-

@@ -1,10 +1,9 @@
 {
-  "detailTitle": "{{title}} – {{artist}} | Drum Sheet Music PDF | COPYDRUM",
-  "detailDescription": "Download the drum sheet music for {{title}} by {{artist}}. High-quality PDF, instant download. {{genre}} drum score{{#if pages}}, {{pages}} pages{{/if}}{{#if bpm}}, {{bpm}} BPM{{/if}}{{#if difficulty}}, {{difficulty}} level{{/if}}.",
-  "detailKeywords": "{{title}}, {{artist}}, drum sheet music, drum score, drum transcription, COPYDRUM",
-  "homeTitle": "COPYDRUM | Drum Sheet Music Store",
-  "homeDescription": "High-quality drum sheet music and drum scores for pop, rock, K-POP, CCM and more.",
-  "categoryTitle": "{{category}} Drum Sheet Music | COPYDRUM",
-  "categoryDescription": "Download drum sheet music for {{category}} songs in PDF format."
+  "detailTitle": "{{title}} – {{artist}} | Ноты для ударных PDF | COPYDRUM",
+  "detailDescription": "Скачайте ноты для ударных к «{{title}}» {{artist}} в высококачественном PDF. Партитура в стиле {{genre}}, {{pages}} страниц, {{bpm}} BPM, уровень {{difficulty}}.",
+  "detailKeywords": "{{title}}, {{artist}}, ноты для ударных, drum sheet music, транскрипция ударных, COPYDRUM",
+  "homeTitle": "COPYDRUM | Магазин нот для ударных",
+  "homeDescription": "Качественные ноты для ударных и drum scores для поп, рок, K-POP, CCM и других жанров. Мгновенная загрузка PDF для барабанщиков по всему миру.",
+  "categoryTitle": "Ноты для ударных {{category}} | COPYDRUM",
+  "categoryDescription": "Скачайте в PDF ноты для ударных к композициям категории {{category}}. Подходят для занятий и выступлений."
 }
-

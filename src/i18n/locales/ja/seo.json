@@ -1,10 +1,9 @@
 {
-  "detailTitle": "{{title}} – {{artist}} | Drum Sheet Music PDF | COPYDRUM",
-  "detailDescription": "Download the drum sheet music for {{title}} by {{artist}}. High-quality PDF, instant download. {{genre}} drum score{{#if pages}}, {{pages}} pages{{/if}}{{#if bpm}}, {{bpm}} BPM{{/if}}{{#if difficulty}}, {{difficulty}} level{{/if}}.",
-  "detailKeywords": "{{title}}, {{artist}}, drum sheet music, drum score, drum transcription, COPYDRUM",
-  "homeTitle": "COPYDRUM | Drum Sheet Music Store",
-  "homeDescription": "High-quality drum sheet music and drum scores for pop, rock, K-POP, CCM and more.",
-  "categoryTitle": "{{category}} Drum Sheet Music | COPYDRUM",
-  "categoryDescription": "Download drum sheet music for {{category}} songs in PDF format."
+  "detailTitle": "{{title}} - {{artist}} | ドラム楽譜 PDF | COPYDRUM",
+  "detailDescription": "「{{title}}」({{artist}}) のドラム楽譜をPDFでダウンロード。高品質スコア、即時ダウンロード。{{genre}}、{{pages}}ページ、{{bpm}}BPM、{{difficulty}}レベル。",
+  "detailKeywords": "{{title}}, {{artist}}, ドラム楽譜, ドラムスコア, ドラム譜, COPYDRUM",
+  "homeTitle": "COPYDRUM | ドラム楽譜ストア",
+  "homeDescription": "ポップス、ロック、K-POP、CCMなど、世界中の人気曲の高品質ドラム楽譜をPDFで提供。ドラマー向け即時ダウンロードサービス。",
+  "categoryTitle": "{{category}} ドラム楽譜 | COPYDRUM",
+  "categoryDescription": "{{category}} 曲のドラム楽譜をPDFでダウンロード。練習やライブにすぐ使える即時ダウンロード楽譜です."
 }
-
