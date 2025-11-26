@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/rss.xml",
+      "destination": "/api/rss.xml"
+    },
+    {
       "source": "/:lang(ko|ja|zh-cn|zh-tw|de|fr|es|vi|th|hi|id|pt|ru|it|tr|uk)/:path*",
       "destination": "/index.html"
     },
@@ -36,6 +40,21 @@
           "value": "text/plain; charset=utf-8"
         }
       ]
+    },
+    {
+      "source": "/rss.xml",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/rss+xml; charset=utf-8"
+        }
+      ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/generate-rss",
+      "schedule": "0 0 * * *"
     }
   ]
 }
