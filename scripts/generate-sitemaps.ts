@@ -7,8 +7,20 @@
  * - Category-specific pages
  * - Product detail pages
  * 
+ * IMPORTANT: This script requires Supabase environment variables and should
+ * NOT be run during Vercel build. It must be executed manually or in CI.
+ * 
  * Usage:
- *   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npm run generate:sitemaps
+ *   1. Set environment variables:
+ *      SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npm run sitemap:generate
+ *   
+ *   2. After generation, commit the generated files to the repo:
+ *      git add public/sitemap*.xml
+ *      git commit -m "chore: update sitemaps"
+ *      git push
+ * 
+ * Note: Generated sitemap files in /public/ are committed to the repository
+ * and served as static files by Vercel. No database access is needed during build.
  */
 
 import { createClient } from '@supabase/supabase-js';
