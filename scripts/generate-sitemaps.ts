@@ -21,8 +21,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Language domain mapping - must match src/config/languageDomainMap.ts
+// Using www.copydrum.com for main sitemap index as per requirements
 const languageDomainMap: Record<string, string> = {
-  ko: 'https://copydrum.com',
+  ko: 'https://www.copydrum.com',
   en: 'https://en.copydrum.com',
   ja: 'https://jp.copydrum.com',
   de: 'https://de.copydrum.com',
@@ -202,6 +203,7 @@ async function main() {
 
   // Generate sitemaps for each locale
   const publicDir = join(__dirname, '..', 'public');
+  const outDir = join(__dirname, '..', 'out');
   const locales = Object.keys(languageDomainMap);
 
   console.log('\nGenerating locale sitemaps...');
@@ -211,21 +213,44 @@ async function main() {
 
     console.log(`  Generating sitemap for ${locale} (${baseUrl})...`);
     const sitemapXml = generateLocaleSitemap(locale, baseUrl, sheets || [], categories || []);
-    const filename = join(publicDir, `sitemap-${locale}.xml`);
-    writeFileSync(filename, sitemapXml, 'utf-8');
-    console.log(`    ✓ Wrote ${filename}`);
+    
+    // Write to public directory (for development and next build)
+    const publicFilename = join(publicDir, `sitemap-${locale}.xml`);
+    writeFileSync(publicFilename, sitemapXml, 'utf-8');
+    console.log(`    ✓ Wrote ${publicFilename}`);
+    
+    // Also write to out directory (for Vercel deployment after build)
+    try {
+      const outFilename = join(outDir, `sitemap-${locale}.xml`);
+      writeFileSync(outFilename, sitemapXml, 'utf-8');
+      console.log(`    ✓ Wrote ${outFilename}`);
+    } catch (error) {
+      // out directory might not exist yet, that's okay
+      console.log(`    ⚠ Could not write to out directory (may not exist yet)`);
+    }
   }
 
   // Generate sitemap index
   console.log('\nGenerating sitemap index...');
   const indexXml = generateSitemapIndex(locales);
-  const indexFilename = join(publicDir, 'sitemap.xml');
-  writeFileSync(indexFilename, indexXml, 'utf-8');
-  console.log(`  ✓ Wrote ${indexFilename}`);
+  
+  // Write to public directory
+  const publicIndexFilename = join(publicDir, 'sitemap.xml');
+  writeFileSync(publicIndexFilename, indexXml, 'utf-8');
+  console.log(`  ✓ Wrote ${publicIndexFilename}`);
+  
+  // Also write to out directory
+  try {
+    const outIndexFilename = join(outDir, 'sitemap.xml');
+    writeFileSync(outIndexFilename, indexXml, 'utf-8');
+    console.log(`  ✓ Wrote ${outIndexFilename}`);
+  } catch (error) {
+    console.log(`  ⚠ Could not write to out directory (may not exist yet)`);
+  }
 
   console.log('\n✅ Sitemap generation complete!');
   console.log(`\nGenerated files:`);
-  console.log(`  - ${indexFilename} (index)`);
+  console.log(`  - ${publicIndexFilename} (index)`);
   locales.forEach((locale) => {
     console.log(`  - ${join(publicDir, `sitemap-${locale}.xml`)}`);
   });

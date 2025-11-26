@@ -44,6 +44,7 @@
   "private": true,
   "scripts": {
     "build": "vite build",
+    "postbuild": "npm run generate:sitemaps",
     "dev": "vite",
     "preview": "vite preview",
     "generate:sitemaps": "tsx scripts/generate-sitemaps.ts"

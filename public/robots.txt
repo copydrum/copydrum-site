@@ -1,8 +1,11 @@
 User-agent: *
 Allow: /
 
-# Sitemaps for all locales
-Sitemap: https://copydrum.com/sitemap-ko.xml
+# Main sitemap index
+Sitemap: https://www.copydrum.com/sitemap.xml
+
+# Individual locale sitemaps
+Sitemap: https://www.copydrum.com/sitemap-ko.xml
 Sitemap: https://en.copydrum.com/sitemap-en.xml
 Sitemap: https://jp.copydrum.com/sitemap-ja.xml
 Sitemap: https://de.copydrum.com/sitemap-de.xml
@@ -19,4 +22,3 @@ Sitemap: https://uk.copydrum.com/sitemap-uk.xml
 Sitemap: https://vi.copydrum.com/sitemap-vi.xml
 Sitemap: https://zh-cn.copydrum.com/sitemap-zh-CN.xml
 Sitemap: https://zh-tw.copydrum.com/sitemap-zh-TW.xml
-
