@@ -13,6 +13,8 @@ import {
 } from '../../lib/settings';
 import type { SiteSettingKey, SiteSettingRow, SiteSettings } from '../../lib/settings';
 import CustomOrderDetail from '../../components/admin/CustomOrderDetail';
+import MarketingSettings from '../../components/admin/MarketingSettings';
+import MarketingStatus from '../../components/admin/MarketingStatus';
 import {
   getDashboardAnalytics,
   type DashboardAnalyticsPeriod,
@@ -10848,6 +10850,28 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
     );
   };
 
+  const renderMarketing = () => {
+    return (
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold text-gray-900">마케팅 자동화 관리</h2>
+          <p className="text-gray-500">
+            티스토리, 핀터레스트 등 외부 플랫폼에 악보 미리보기를 자동으로 포스팅합니다.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="lg:col-span-2">
+            <MarketingStatus />
+          </div>
+          <div className="lg:col-span-2">
+            <MarketingSettings onSettingsChange={() => { }} />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderMainContent = () => {
     switch (activeMenu) {
       case 'dashboard':
@@ -10876,6 +10900,8 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
         return renderCopyrightReport();
       case 'settings':
         return renderSettings();
+      case 'marketing':
+        return renderMarketing();
       default:
         return renderDashboard();
     }
@@ -11065,6 +11091,15 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
             <i className="ri-settings-line w-5 h-5"></i>
             <span className="text-sm md:text-base">설정</span>
           </button>
+
+          <button
+            onClick={() => handleMenuClick('marketing')}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${activeMenu === 'marketing' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+              }`}
+          >
+            <i className="ri-share-forward-line w-5 h-5"></i>
+            <span className="text-sm md:text-base">마케팅 자동화</span>
+          </button>
         </nav>
 
         <div className="p-3 md:p-4 border-t border-gray-200">
@@ -11105,7 +11140,8 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                                     activeMenu === 'points' ? '적립금 관리' :
                                       activeMenu === 'copyright-report' ? '저작권 보고' :
                                         activeMenu === 'analytics' ? '분석' :
-                                          activeMenu === 'settings' ? '설정' : '대시보드'}
+                                          activeMenu === 'settings' ? '설정' :
+                                            activeMenu === 'marketing' ? '마케팅 자동화' : '대시보드'}
                 </h2>
               </div>
               <div className="flex items-center">
