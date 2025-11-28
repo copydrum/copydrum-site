@@ -460,10 +460,7 @@ export const requestKakaoPayPayment = async (
       orderName: params.description,
       totalAmount: params.amount, // KRW 정수 금액 그대로 사용
       currency: 'CURRENCY_KRW' as const, // 카카오페이는 원화 결제만 지원
-      payMethod: {
-        pgProvider: 'kakaopay', // 카카오페이 PG 제공자
-        methodType: 'EASY_PAY', // 간편결제 타입 (카카오페이 필수)
-      },
+      payMethod: 'EASY_PAY' as const, // 간편결제 타입 (카카오페이 필수) - 문자열로 전달
       customer: {
         customerId: params.userId ?? undefined,
         email: params.buyerEmail ?? undefined,
@@ -487,7 +484,7 @@ export const requestKakaoPayPayment = async (
       orderName: requestData.orderName,
       totalAmount: requestData.totalAmount,
       currency: requestData.currency,
-      payMethod: requestData.payMethod, // { pgProvider: 'kakaopay', methodType: 'EASY_PAY' } 확인
+      payMethod: requestData.payMethod, // 'EASY_PAY' (문자열) 확인
       windowType: requestData.windowType, // { pc: 'IFRAME', mobile: 'REDIRECTION' } 확인
       locale: requestData.locale, // 'KO_KR' 확인
       redirectUrl: requestData.redirectUrl,
