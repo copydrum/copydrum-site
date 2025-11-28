@@ -65,8 +65,10 @@ async function getPortOnePayment(
 ): Promise<PortOnePaymentResponse> {
   const url = `https://api.portone.io/v2/payments/${paymentId}`;
   
-  // API 키 trim 처리 및 검증
-  const trimmedApiKey = apiKey.trim();
+  // [수정됨] 공백, 줄바꿈, 따옴표 등 불필요한 문자 완벽 제거
+  // 정규식 설명: \s(공백,탭,줄바꿈), "(큰따옴표), '(작은따옴표)를 모두 제거
+  const trimmedApiKey = apiKey.replace(/[\s"']/g, "");
+
   if (!trimmedApiKey) {
     throw new Error("API key is empty after trim");
   }
@@ -74,14 +76,12 @@ async function getPortOnePayment(
   // Authorization 헤더 값 생성
   const authHeader = `PortOne ${trimmedApiKey}`;
   
-  // 디버깅용으로 apiKey 앞부분만 로깅 (전체는 절대 로그에 남기지 말 것)
+  // 디버깅 로그 강화 (키의 정확한 길이와 앞뒤 문자 코드 확인용)
   console.log("[portone-payment-confirm] PortOne API 호출 준비", {
     url,
-    hasApiKey: !!trimmedApiKey,
-    apiKeyLength: trimmedApiKey.length,
-    apiKeyPreview: trimmedApiKey ? trimmedApiKey.slice(0, 6) + "...(hidden)" : null,
-    authorizationHeaderFormat: "PortOne {API_SECRET}",
-    authHeaderPreview: authHeader.substring(0, 20) + "...(hidden)",
+    apiKeyLen: trimmedApiKey.length, // 길이 확인
+    firstChar: trimmedApiKey.charCodeAt(0), // 첫 글자 코드 (이상한 문자인지 확인)
+    authHeaderPreview: `PortOne ${trimmedApiKey.slice(0, 5)}...`,
   });
 
   const response = await fetch(url, {
