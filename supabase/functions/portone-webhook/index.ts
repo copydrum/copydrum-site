@@ -264,13 +264,11 @@ serve(async (req) => {
       raw.merchantUid ||
       null;
 
-    console.log("[portone-webhook] Webhook 수신 (파싱 결과)", {
+    console.log("[portone-webhook] Webhook 수신", {
       eventType,
       paymentId,
       orderId,
       status,
-      rawPaymentId: raw.payment_id || raw.tx_id || raw.paymentId,
-      rawStatus: raw.status || raw.paymentStatus,
     });
 
     // paymentId만 필수로 체크 (orderId, eventType는 선택)
@@ -292,6 +290,23 @@ serve(async (req) => {
       );
     }
 
+    // 결제 완료(PAID)가 아닐 때는 처리하지 않고 로그만 남김
+    if (status !== "PAID") {
+      console.log("[portone-webhook] 결제 완료가 아닌 상태 웹훅, 무시합니다.", {
+        paymentId,
+        orderId,
+        status,
+      });
+      return buildResponse(
+        {
+          success: true,
+          message: `Ignored webhook with status ${status}`,
+        },
+        200,
+        origin
+      );
+    }
+
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // 멱등성 확인: 이미 처리된 webhook인지 확인
@@ -307,101 +322,82 @@ serve(async (req) => {
       }, 200, origin);
     }
 
-    // 결제 완료 이벤트만 처리 (status 대소문자 차이 없이 확인)
-    if (status === "PAID") {
-      // portone-payment-confirm Edge Function 호출하여 최종 검증
-      const confirmUrl = `${supabaseUrl}/functions/v1/portone-payment-confirm`;
-      
-      // body에 paymentId는 필수, orderId는 있을 때만 포함
-      const confirmBody: { paymentId: string; orderId?: string | null } = {
-        paymentId,
-      };
-      if (orderId) {
-        confirmBody.orderId = orderId;
-      }
-      
-      console.log("[portone-webhook] portone-payment-confirm 호출", {
-        paymentId,
-        orderId: orderId || null,
+    // 🔽 여기부터가 실제 결제완료 처리 (portone-payment-confirm 호출) 로직
+    // 결제 완료 이벤트 처리 (status는 이미 PAID로 확인됨)
+    // portone-payment-confirm Edge Function 호출하여 최종 검증
+    const confirmUrl = `${supabaseUrl}/functions/v1/portone-payment-confirm`;
+    
+    // body에 paymentId는 필수, orderId는 있을 때만 포함
+    const confirmBody: { paymentId: string; orderId?: string | null } = {
+      paymentId,
+    };
+    if (orderId) {
+      confirmBody.orderId = orderId;
+    }
+    
+    console.log("[portone-webhook] portone-payment-confirm 호출", {
+      paymentId,
+      orderId: orderId || null,
+    });
+    
+    try {
+      const confirmResponse = await fetch(confirmUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${serviceRoleKey}`,
+          "apikey": serviceRoleKey,
+        },
+        body: JSON.stringify(confirmBody),
       });
-      
-      try {
-        const confirmResponse = await fetch(confirmUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${serviceRoleKey}`,
-            "apikey": serviceRoleKey,
-          },
-          body: JSON.stringify(confirmBody),
-        });
 
-        const confirmResult = await confirmResponse.json();
+      const confirmResult = await confirmResponse.json();
 
-        if (!confirmResponse.ok || !confirmResult.success) {
-          console.error("[portone-webhook] 결제 확인 실패", confirmResult);
-          // 웹훅은 항상 200 응답을 반환하여 재시도를 방지
-          return buildResponse(
-            {
-              success: false,
-              error: {
-                message: "Payment confirmation failed",
-                details: confirmResult.error,
-              },
-            },
-            200,
-            origin
-          );
-        }
-
-        // Webhook 처리 기록 저장 (orderId가 있을 때만)
-        if (orderId) {
-          await markWebhookProcessed(supabase, orderId, paymentId, eventType);
-        }
-
-        console.log("[portone-webhook] 결제 확인 및 처리 완료", {
-          paymentId,
-          orderId,
-        });
-
-        return buildResponse({
-          success: true,
-          message: "Payment confirmed and order updated",
-          data: confirmResult.data,
-        }, 200, origin);
-      } catch (confirmError) {
-        console.error("[portone-webhook] 결제 확인 중 오류", confirmError);
+      if (!confirmResponse.ok || !confirmResult.success) {
+        console.error("[portone-webhook] 결제 확인 실패", confirmResult);
         // 웹훅은 항상 200 응답을 반환하여 재시도를 방지
         return buildResponse(
           {
             success: false,
             error: {
-              message: "Failed to confirm payment",
-              details: confirmError instanceof Error ? confirmError.message : String(confirmError),
+              message: "Payment confirmation failed",
+              details: confirmResult.error,
             },
           },
           200,
           origin
         );
       }
-    } else {
-      // 결제 완료가 아닌 이벤트는 로그만 기록
-      console.log("[portone-webhook] 결제 완료가 아닌 이벤트", {
-        eventType,
-        status,
-        paymentId,
-        orderId,
-      });
 
-      // Webhook 수신 기록만 저장 (처리하지 않음, orderId가 있을 때만)
+      // Webhook 처리 기록 저장 (orderId가 있을 때만)
       if (orderId) {
         await markWebhookProcessed(supabase, orderId, paymentId, eventType);
       }
 
+      console.log("[portone-webhook] 결제 확인 및 처리 완료", {
+        paymentId,
+        orderId,
+      });
+
       return buildResponse({
         success: true,
-        message: "Webhook received but not processed (not a paid event)",
+        message: "Payment confirmed and order updated",
+        data: confirmResult.data,
       }, 200, origin);
+    } catch (confirmError) {
+      console.error("[portone-webhook] 결제 확인 중 오류", confirmError);
+      // 웹훅은 항상 200 응답을 반환하여 재시도를 방지
+      return buildResponse(
+        {
+          success: false,
+          error: {
+            message: "Failed to confirm payment",
+            details: confirmError instanceof Error ? confirmError.message : String(confirmError),
+          },
+        },
+        200,
+        origin
+      );
     }
   } catch (error) {
     console.error("[portone-webhook] 오류", error);
@@ -418,3 +414,4 @@ serve(async (req) => {
     );
   }
 }, { verifyJwt: false });
+
