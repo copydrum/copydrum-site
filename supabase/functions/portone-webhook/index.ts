@@ -233,36 +233,61 @@ serve(async (req) => {
     // PORTONE_WEBHOOK_SECRET이 없으면 시그니처 검증을 건너뜀 (보안 강화 권장)
 
     // Body를 JSON으로 파싱
-    const payload: PortOneWebhookPayload = JSON.parse(bodyText);
+    const raw = JSON.parse(bodyText);
     
     // 전체 Payload 로깅 추가 (실제 구조 확인용)
-    console.log("[portone-webhook] 전체 Webhook Payload", JSON.stringify(payload, null, 2));
+    console.log("[portone-webhook] 전체 Webhook Payload", JSON.stringify(raw, null, 2));
     
-    const { eventType, paymentId, orderId, status } = payload;
+    // PortOne V2 Webhook 형식에 맞게 필드 파싱
+    // V2에서는 payment_id, tx_id, paymentId 등 다양한 필드명을 사용할 수 있음
+    const paymentId =
+      raw.paymentId ||
+      raw.payment_id ||
+      raw.tx_id ||
+      raw.id ||
+      null;
 
-    console.log("[portone-webhook] Webhook 수신", {
+    const statusRaw = raw.status || raw.paymentStatus || '';
+    const status = statusRaw.toUpperCase(); // "PAID" 비교용 (대소문자 통일)
+
+    // eventType, orderId는 V2에서는 없을 수 있으므로 필수로 요구하지 않음
+    const eventType =
+      raw.eventType ||
+      raw.event_type ||
+      raw.type ||
+      'payment.paid'; // 기본값
+
+    const orderId =
+      raw.orderId ||
+      raw.order_id ||
+      raw.merchant_uid ||
+      raw.merchantUid ||
+      null;
+
+    console.log("[portone-webhook] Webhook 수신 (파싱 결과)", {
       eventType,
       paymentId,
       orderId,
       status,
+      rawPaymentId: raw.payment_id || raw.tx_id || raw.paymentId,
+      rawStatus: raw.status || raw.paymentStatus,
     });
 
-    if (!paymentId || !orderId || !eventType) {
-      console.warn("[portone-webhook] 필수 필드 부족", {
-        eventType,
-        paymentId,
-        orderId,
-        payload,
+    // paymentId만 필수로 체크 (orderId, eventType는 선택)
+    if (!paymentId) {
+      console.warn("[portone-webhook] paymentId 없음", {
+        raw,
+        parsed: { eventType, paymentId, orderId, status },
       });
       // 포트원에는 200을 주고, 내부에서만 문제를 로그로 확인
       return buildResponse(
         {
           success: false,
           error: {
-            message: "Missing paymentId/orderId/eventType",
+            message: "paymentId is required",
           },
         },
-        200, // ★ 여기 400 → 200 으로 변경
+        200,
         origin
       );
     }
@@ -282,10 +307,23 @@ serve(async (req) => {
       }, 200, origin);
     }
 
-    // 결제 완료 이벤트만 처리
-    if (eventType === "payment.paid" && status === "PAID") {
+    // 결제 완료 이벤트만 처리 (status 대소문자 차이 없이 확인)
+    if (status === "PAID") {
       // portone-payment-confirm Edge Function 호출하여 최종 검증
       const confirmUrl = `${supabaseUrl}/functions/v1/portone-payment-confirm`;
+      
+      // body에 paymentId는 필수, orderId는 있을 때만 포함
+      const confirmBody: { paymentId: string; orderId?: string | null } = {
+        paymentId,
+      };
+      if (orderId) {
+        confirmBody.orderId = orderId;
+      }
+      
+      console.log("[portone-webhook] portone-payment-confirm 호출", {
+        paymentId,
+        orderId: orderId || null,
+      });
       
       try {
         const confirmResponse = await fetch(confirmUrl, {
@@ -295,10 +333,7 @@ serve(async (req) => {
             "Authorization": `Bearer ${serviceRoleKey}`,
             "apikey": serviceRoleKey,
           },
-          body: JSON.stringify({
-            paymentId,
-            orderId,
-          }),
+          body: JSON.stringify(confirmBody),
         });
 
         const confirmResult = await confirmResponse.json();
@@ -319,8 +354,10 @@ serve(async (req) => {
           );
         }
 
-        // Webhook 처리 기록 저장
-        await markWebhookProcessed(supabase, orderId, paymentId, eventType);
+        // Webhook 처리 기록 저장 (orderId가 있을 때만)
+        if (orderId) {
+          await markWebhookProcessed(supabase, orderId, paymentId, eventType);
+        }
 
         console.log("[portone-webhook] 결제 확인 및 처리 완료", {
           paymentId,
@@ -352,10 +389,14 @@ serve(async (req) => {
       console.log("[portone-webhook] 결제 완료가 아닌 이벤트", {
         eventType,
         status,
+        paymentId,
+        orderId,
       });
 
-      // Webhook 수신 기록만 저장 (처리하지 않음)
-      await markWebhookProcessed(supabase, orderId, paymentId, eventType);
+      // Webhook 수신 기록만 저장 (처리하지 않음, orderId가 있을 때만)
+      if (orderId) {
+        await markWebhookProcessed(supabase, orderId, paymentId, eventType);
+      }
 
       return buildResponse({
         success: true,

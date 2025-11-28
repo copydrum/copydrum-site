@@ -23,8 +23,8 @@ const buildResponse = <T>(payload: T, status = 200, origin?: string) =>
   });
 
 interface PortOnePaymentConfirmPayload {
-  paymentId: string; // PortOne payment ID (imp_uid)
-  orderId: string; // 주문 ID (merchant_uid)
+  paymentId: string; // PortOne payment ID (imp_uid, transaction_id)
+  orderId?: string | null; // 주문 ID (merchant_uid) - 선택사항
 }
 
 interface PortOnePaymentResponse {
@@ -145,12 +145,13 @@ serve(async (req) => {
 
     console.log("[portone-payment-confirm] 결제 확인 요청", {
       paymentId,
-      orderId,
+      orderId: orderId || null,
     });
 
-    if (!paymentId || !orderId) {
+    // paymentId는 필수
+    if (!paymentId) {
       return buildResponse(
-        { success: false, error: { message: "paymentId and orderId are required" } },
+        { success: false, error: { message: "paymentId is required" } },
         400,
         origin
       );
@@ -158,21 +159,55 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // 주문 확인
-    const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .select("*, order_items(*, drum_sheets(*))")
-      .eq("id", orderId)
-      .single();
+    // 주문 확인: orderId가 있으면 id로, 없으면 transaction_id로 조회
+    let order;
+    let orderError;
+    
+    if (orderId) {
+      // orderId가 있을 때: id로 조회
+      console.log("[portone-payment-confirm] orderId로 주문 조회", { orderId });
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*, order_items(*, drum_sheets(*))")
+        .eq("id", orderId)
+        .single();
+      order = data;
+      orderError = error;
+    } else {
+      // orderId가 없을 때: transaction_id로 조회 (가장 최근 주문)
+      console.log("[portone-payment-confirm] transaction_id로 주문 조회", { paymentId });
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*, order_items(*, drum_sheets(*))")
+        .eq("transaction_id", paymentId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      order = data;
+      orderError = error;
+    }
 
     if (orderError || !order) {
-      console.error("[portone-payment-confirm] 주문을 찾을 수 없음", { orderId, orderError });
+      console.error("[portone-payment-confirm] 주문을 찾을 수 없음", {
+        orderId: orderId || null,
+        paymentId,
+        orderError,
+        searchMethod: orderId ? "by_id" : "by_transaction_id",
+      });
       return buildResponse(
         { success: false, error: { message: "Order not found" } },
         404,
         origin
       );
     }
+
+    console.log("[portone-payment-confirm] 주문 조회 성공", {
+      orderId: order.id,
+      transaction_id: order.transaction_id,
+      payment_status: order.payment_status,
+      status: order.status,
+      searchMethod: orderId ? "by_id" : "by_transaction_id",
+    });
 
     // 이미 결제 완료된 경우
     if (order.payment_status === "paid") {
@@ -189,14 +224,19 @@ serve(async (req) => {
       portonePayment = await getPortOnePayment(paymentId, portoneApiKey);
       console.log("[portone-payment-confirm] PortOne 결제 조회 성공", {
         paymentId,
+        portonePaymentId: portonePayment.id,
         status: portonePayment.status,
         amount: portonePayment.amount,
-        orderId: portonePayment.orderId,
+        portoneOrderId: portonePayment.orderId,
         channelKey: portonePayment.channelKey,
         metadata: portonePayment.metadata,
+        tx_id: portonePayment.id, // PortOne에서 반환하는 실제 payment ID
       });
     } catch (apiError) {
-      console.error("[portone-payment-confirm] PortOne API 조회 실패", apiError);
+      console.error("[portone-payment-confirm] PortOne API 조회 실패", {
+        paymentId,
+        error: apiError,
+      });
       return buildResponse(
         {
           success: false,
@@ -229,8 +269,8 @@ serve(async (req) => {
       );
     }
 
-    // merchant_uid(orderId) 일치 확인
-    if (portonePayment.orderId !== orderId) {
+    // merchant_uid(orderId) 일치 확인 (orderId가 있을 때만)
+    if (orderId && portonePayment.orderId && portonePayment.orderId !== orderId) {
       console.error("[portone-payment-confirm] orderId 불일치", {
         portoneOrderId: portonePayment.orderId,
         expectedOrderId: orderId,
@@ -247,6 +287,23 @@ serve(async (req) => {
         400,
         origin
       );
+    }
+    
+    // orderId가 없고 PortOne에서 orderId를 받은 경우, 해당 주문과 매칭 확인
+    if (!orderId && portonePayment.orderId) {
+      console.log("[portone-payment-confirm] PortOne에서 받은 orderId로 주문 매칭 확인", {
+        portoneOrderId: portonePayment.orderId,
+        foundOrderId: order.id,
+      });
+      
+      // PortOne의 orderId와 찾은 주문의 id가 다를 수 있으므로
+      // transaction_id로 이미 찾았으므로 경고만 로그
+      if (portonePayment.orderId !== order.id) {
+        console.warn("[portone-payment-confirm] PortOne orderId와 찾은 주문 ID 불일치 (계속 진행)", {
+          portoneOrderId: portonePayment.orderId,
+          foundOrderId: order.id,
+        });
+      }
     }
 
     // PayPal 채널 확인 (channelKey에 'paypal'이 포함되어 있는지 확인)
@@ -377,30 +434,47 @@ serve(async (req) => {
     }
 
     // 3. 주문 상태 업데이트
+    // payment_provider 결정: PayPal > KakaoPay > PortOne 순서
+    let paymentProvider = "portone";
+    if (isPayPalPayment) {
+      paymentProvider = "paypal";
+    } else if (isKakaoPayPayment) {
+      paymentProvider = "kakaopay";
+    }
+    
+    // payment_method 결정
+    let paymentMethod = order.metadata?.payment_method || order.payment_method || "unknown";
+    if (isPayPalPayment) {
+      paymentMethod = "paypal";
+    } else if (isKakaoPayPayment) {
+      paymentMethod = "kakaopay";
+    }
+
     const { error: updateError } = await supabase
       .from("orders")
       .update({
         payment_status: "paid",
-        payment_provider: isPayPalPayment ? "paypal" : "portone",
+        payment_provider: paymentProvider,
         transaction_id: paymentId,
         paid_at: now,
         status: "completed",
         metadata: {
           ...(order.metadata || {}),
           portone_payment_id: paymentId,
-          portone_order_id: portonePayment.orderId,
+          portone_order_id: portonePayment.orderId || order.id,
           portone_amount: portoneAmount,
           portone_currency: portoneCurrency,
           portone_status: portonePayment.status,
           portone_paid_at: portonePayment.paidAt ? new Date(portonePayment.paidAt).toISOString() : null,
           portone_channel_key: portonePayment.channelKey,
-          payment_method: isPayPalPayment ? "paypal" : (order.metadata?.payment_method || "unknown"),
+          payment_method: paymentMethod,
           is_paypal_payment: isPayPalPayment,
+          is_kakaopay_payment: isKakaoPayPayment,
           completed_by: "portone_payment_confirm",
           confirmed_at: now,
         },
       })
-      .eq("id", orderId);
+      .eq("id", order.id);
 
     if (updateError) {
       console.error("[portone-payment-confirm] 주문 업데이트 오류", updateError);
@@ -412,10 +486,12 @@ serve(async (req) => {
     }
 
     console.log("[portone-payment-confirm] 결제 확인 및 주문 업데이트 성공", {
-      orderId,
+      orderId: order.id,
       paymentId,
+      transaction_id: order.transaction_id,
       isPayPalPayment,
-      payment_provider: isPayPalPayment ? "paypal" : "portone",
+      isKakaoPayPayment,
+      payment_provider: isPayPalPayment ? "paypal" : (isKakaoPayPayment ? "kakaopay" : "portone"),
       status: "paid",
     });
 
