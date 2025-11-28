@@ -375,7 +375,7 @@ serve(async (req) => {
       .update({
         payment_status: "paid",
         payment_provider: isPayPalPayment ? "paypal" : "portone",
-        pg_transaction_id: paymentId,
+        transaction_id: paymentId,
         paid_at: now,
         status: "completed",
         metadata: {

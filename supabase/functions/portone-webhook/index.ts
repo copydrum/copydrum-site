@@ -118,7 +118,7 @@ async function isWebhookProcessed(
   const { data: orders } = await supabase
     .from("orders")
     .select("metadata")
-    .eq("pg_transaction_id", paymentId)
+    .eq("transaction_id", paymentId)
     .limit(1);
 
   if (!orders || orders.length === 0) {
@@ -229,9 +229,8 @@ serve(async (req) => {
           origin
         );
       }
-    } else {
-      console.warn("[portone-webhook] PORTONE_WEBHOOK_SECRET이 설정되지 않아 시그니처 검증을 건너뜁니다.");
     }
+    // PORTONE_WEBHOOK_SECRET이 없으면 시그니처 검증을 건너뜀 (보안 강화 권장)
 
     // Body를 JSON으로 파싱
     const payload: PortOneWebhookPayload = JSON.parse(bodyText);
@@ -249,14 +248,21 @@ serve(async (req) => {
     });
 
     if (!paymentId || !orderId || !eventType) {
+      console.warn("[portone-webhook] 필수 필드 부족", {
+        eventType,
+        paymentId,
+        orderId,
+        payload,
+      });
+      // 포트원에는 200을 주고, 내부에서만 문제를 로그로 확인
       return buildResponse(
         {
           success: false,
           error: {
-            message: "paymentId, orderId, and eventType are required",
+            message: "Missing paymentId/orderId/eventType",
           },
         },
-        400,
+        200, // ★ 여기 400 → 200 으로 변경
         origin
       );
     }
