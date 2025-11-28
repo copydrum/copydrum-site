@@ -239,26 +239,41 @@ serve(async (req) => {
     console.log("[portone-webhook] 전체 Webhook Payload", JSON.stringify(raw, null, 2));
     
     // PortOne V2 Webhook 형식에 맞게 필드 파싱
-    // V2에서는 payment_id, tx_id, paymentId 등 다양한 필드명을 사용할 수 있음
+    // V2 최신 스펙(2024-04-25 기준)에서는 raw.data 안에 필드가 있을 수 있음
+    // 기존 형식(raw.paymentId)과 최신 형식(raw.data.paymentId) 모두 지원
+    const data = raw.data || {};
+    
     const paymentId =
+      data.paymentId ||
       raw.paymentId ||
+      data.payment_id ||
       raw.payment_id ||
+      data.txId ||
       raw.tx_id ||
+      data.id ||
       raw.id ||
       null;
 
-    const statusRaw = raw.status || raw.paymentStatus || '';
-    const status = statusRaw.toUpperCase(); // "PAID" 비교용 (대소문자 통일)
+    const statusRaw =
+      data.status ||
+      raw.status ||
+      data.paymentStatus ||
+      raw.paymentStatus ||
+      '';
+    const status = (statusRaw || '').toUpperCase(); // "PAID" 비교용 (대소문자 통일)
 
     // eventType, orderId는 V2에서는 없을 수 있으므로 필수로 요구하지 않음
     const eventType =
       raw.eventType ||
       raw.event_type ||
       raw.type ||
+      data.type ||
       'payment.paid'; // 기본값
 
     const orderId =
+      data.orderId ||
       raw.orderId ||
+      data.order_id ||
       raw.order_id ||
       raw.merchant_uid ||
       raw.merchantUid ||

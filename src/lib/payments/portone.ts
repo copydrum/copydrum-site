@@ -346,9 +346,40 @@ export const requestPayPalPayment = async (
       onPaymentSuccess: async (paymentResult: any) => {
         console.log('[portone-paypal] onPaymentSuccess', paymentResult);
 
-        // 프론트엔드에서는 UI 처리만 수행
-        // 결제 상태 업데이트는 서버(Webhook 또는 서버 검증)에서 처리
-        // paymentId는 리다이렉트 URL로 전달되어 서버에서 검증됨
+        // 결제 성공 시 orders.transaction_id 업데이트
+        // PortOne paymentId를 orders.transaction_id에 저장하여 웹훅에서 주문을 찾을 수 있도록 함
+        // PayPal의 경우 paymentResult에서 paymentId 또는 txId 추출
+        const portonePaymentId = paymentResult.paymentId || 
+                                  paymentResult.txId || 
+                                  paymentResult.id || 
+                                  requestData.paymentId; // fallback to requestData의 paymentId
+        
+        if (portonePaymentId && params.orderId) {
+          try {
+            console.log('[portone-paypal] orders.transaction_id 업데이트 시도', {
+              orderId: params.orderId,
+              paymentId: portonePaymentId,
+            });
+            
+            const { error: updateError } = await supabase
+              .from('orders')
+              .update({ transaction_id: portonePaymentId })
+              .eq('id', params.orderId);
+            
+            if (updateError) {
+              console.warn('[portone-paypal] orders.transaction_id 업데이트 실패 (계속 진행):', updateError);
+              // transaction_id 업데이트 실패해도 결제는 계속 진행 (웹훅에서 처리 가능)
+            } else {
+              console.log('[portone-paypal] orders.transaction_id 업데이트 성공', {
+                orderId: params.orderId,
+                paymentId: portonePaymentId,
+              });
+            }
+          } catch (error) {
+            console.error('[portone-paypal] orders.transaction_id 업데이트 중 오류:', error);
+            // 오류가 발생해도 결제는 계속 진행
+          }
+        }
         
         // 사용자 정의 성공 콜백 호출
         if (params.onSuccess) {
@@ -516,8 +547,40 @@ export const requestKakaoPayPayment = async (
       onPaymentSuccess: async (paymentResult: any) => {
         console.log('[portone-kakaopay] onPaymentSuccess', paymentResult);
 
-        // 프론트엔드에서는 UI 처리만 수행
-        // 결제 상태 업데이트는 서버(Webhook 또는 서버 검증)에서 처리
+        // 결제 성공 시 orders.transaction_id 업데이트
+        // PortOne paymentId를 orders.transaction_id에 저장하여 웹훅에서 주문을 찾을 수 있도록 함
+        // paymentResult에서 paymentId 또는 txId 추출
+        const portonePaymentId = paymentResult.paymentId || 
+                                  paymentResult.txId || 
+                                  paymentResult.id || 
+                                  newPaymentId; // fallback to requestData의 paymentId
+        
+        if (portonePaymentId && params.orderId) {
+          try {
+            console.log('[portone-kakaopay] orders.transaction_id 업데이트 시도', {
+              orderId: params.orderId,
+              paymentId: portonePaymentId,
+            });
+            
+            const { error: updateError } = await supabase
+              .from('orders')
+              .update({ transaction_id: portonePaymentId })
+              .eq('id', params.orderId);
+            
+            if (updateError) {
+              console.warn('[portone-kakaopay] orders.transaction_id 업데이트 실패 (계속 진행):', updateError);
+              // transaction_id 업데이트 실패해도 결제는 계속 진행 (웹훅에서 처리 가능)
+            } else {
+              console.log('[portone-kakaopay] orders.transaction_id 업데이트 성공', {
+                orderId: params.orderId,
+                paymentId: portonePaymentId,
+              });
+            }
+          } catch (error) {
+            console.error('[portone-kakaopay] orders.transaction_id 업데이트 중 오류:', error);
+            // 오류가 발생해도 결제는 계속 진행
+          }
+        }
         
         // 사용자 정의 성공 콜백 호출
         if (params.onSuccess) {

@@ -57,6 +57,8 @@ const KRW_PER_UNIT: Record<string, number> = {
 };
 
 // PortOne API로 결제 상태 조회
+// PortOne V2 REST API는 "PortOne {API_SECRET}" 형식의 Authorization 헤더를 사용
+// PORTONE_API_KEY 환경변수는 PortOne V2 API Secret 값이어야 함
 async function getPortOnePayment(
   paymentId: string,
   apiKey: string
@@ -64,7 +66,9 @@ async function getPortOnePayment(
   const response = await fetch(`https://api.portone.io/v2/payments/${paymentId}`, {
     method: "GET",
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
+      // PortOne V2 API 인증 헤더 형식: "PortOne {V2_API_SECRET}"
+      // 기존 Bearer 형식이 아닌 PortOne 접두사를 사용
+      "Authorization": `PortOne ${apiKey}`,
       "Content-Type": "application/json",
     },
   });
