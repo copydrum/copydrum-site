@@ -5,6 +5,7 @@ import { getActiveCurrency } from './getActiveCurrency';
 import { DEFAULT_USD_RATE } from '../priceFormatter';
 import { getLocaleFromHost } from '../../i18n/getLocaleFromHost';
 import { supabase } from '../../lib/supabase';
+import { v4 as uuidv4 } from 'uuid';
 
 // PortOne currency type
 type PortOneCurrency = 'CURRENCY_KRW' | 'CURRENCY_USD' | 'CURRENCY_JPY';
@@ -399,6 +400,7 @@ export interface RequestKakaoPayPaymentResult {
   paid_amount?: number;
   error_code?: string;
   error_msg?: string;
+  paymentId?: string; // PortOne paymentId (transaction_id로 사용)
 }
 
 // 카카오페이 결제 요청 함수
@@ -450,13 +452,18 @@ export const requestKakaoPayPayment = async (
     // 리턴 URL 설정 (기존 PortOne PayPal return URL 재사용)
     const returnUrl = params.returnUrl || getPortOneReturnUrl();
 
+    // 카카오페이 결제 시 paymentId는 항상 새로운 UUID로 생성
+    // orderId는 내부 주문 식별용, paymentId는 PG 결제 식별용으로 분리
+    // 이렇게 하면 같은 주문으로 재결제 시도 시에도 중복 오류가 발생하지 않음
+    const newPaymentId = `pay_${uuidv4()}`;
+
     // PortOne V2 문서에 따르면 카카오페이는 requestPayment를 사용해야 함
     // loadPaymentUI는 UI 타입이 필요한데, 카카오페이는 일반결제를 지원하지 않음
     // 참고: https://developers.portone.io/opi/ko/integration/pg/v2/kakaopay?v=v2
     const requestData: any = {
       storeId,
       channelKey,
-      paymentId: params.orderId,
+      paymentId: newPaymentId, // 항상 새로운 UUID 사용 (orderId와 분리)
       orderName: params.description,
       totalAmount: params.amount, // KRW 정수 금액 그대로 사용
       currency: 'CURRENCY_KRW' as const, // 카카오페이는 원화 결제만 지원
@@ -476,11 +483,24 @@ export const requestKakaoPayPayment = async (
       locale: 'KO_KR', // 카카오페이는 KO_KR만 지원
     };
 
+    // 주문에 transaction_id(paymentId) 저장
+    // orderId는 내부 주문 식별용, transaction_id는 PG 결제 식별용
+    const { error: updateError } = await supabase
+      .from('orders')
+      .update({ transaction_id: newPaymentId })
+      .eq('id', params.orderId);
+
+    if (updateError) {
+      console.warn('[portone-kakaopay] 주문 transaction_id 업데이트 실패 (계속 진행):', updateError);
+      // transaction_id 업데이트 실패해도 결제는 계속 진행
+    }
+
     // 디버그 로그: requestData의 주요 필드 확인
     console.log('[portone-kakaopay] requestPayment requestData', {
+      orderId: params.orderId, // 내부 주문 ID
+      paymentId: newPaymentId, // PG 결제 식별 ID (transaction_id로 저장됨)
       storeId: requestData.storeId,
       channelKey: requestData.channelKey ? requestData.channelKey.substring(0, 20) + '...' : undefined,
-      paymentId: requestData.paymentId,
       orderName: requestData.orderName,
       totalAmount: requestData.totalAmount,
       currency: requestData.currency,
@@ -514,6 +534,7 @@ export const requestKakaoPayPayment = async (
     return {
       success: true,
       merchant_uid: params.orderId,
+      paymentId: newPaymentId, // PG 결제 식별 ID 반환 (transaction_id)
       error_msg: 'KakaoPay 결제창이 열렸습니다.',
     };
   } catch (error) {
