@@ -158,6 +158,7 @@ export const startSheetPurchase = async ({
         userId,
         amount,
         orderId,
+        orderNumber, // order_number도 전달
         buyerEmail: buyerEmail ?? undefined,
         buyerName: buyerName ?? undefined,
         buyerTel: buyerTel ?? undefined,

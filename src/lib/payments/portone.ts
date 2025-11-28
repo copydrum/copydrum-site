@@ -449,6 +449,7 @@ export interface RequestKakaoPayPaymentParams {
   userId: string; // 사용자 ID (필수)
   amount: number; // KRW 금액 (이미 KRW 정수 금액, 변환 불필요)
   orderId: string; // 주문 ID (merchant_uid로 사용)
+  orderNumber?: string | null; // 주문번호 (metadata에 추가)
   buyerEmail?: string;
   buyerName?: string;
   buyerTel?: string;
@@ -545,6 +546,7 @@ export const requestKakaoPayPayment = async (
       // ✅ 나중에 Webhook / REST 조회에서 다시 확인할 수 있도록 metadata에도 기록
       metadata: {
         supabaseOrderId: params.orderId, // Supabase orders.id
+        supabaseOrderNumber: params.orderNumber || null, // Supabase orders.order_number
         // 필요시 추가 메타데이터도 포함 가능
       },
       // 카카오페이 특화 설정

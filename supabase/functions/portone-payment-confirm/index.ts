@@ -65,19 +65,30 @@ async function getPortOnePayment(
 ): Promise<PortOnePaymentResponse> {
   const url = `https://api.portone.io/v2/payments/${paymentId}`;
   
+  // API 키 trim 처리 및 검증
+  const trimmedApiKey = apiKey.trim();
+  if (!trimmedApiKey) {
+    throw new Error("API key is empty after trim");
+  }
+  
+  // Authorization 헤더 값 생성
+  const authHeader = `PortOne ${trimmedApiKey}`;
+  
   // 디버깅용으로 apiKey 앞부분만 로깅 (전체는 절대 로그에 남기지 말 것)
   console.log("[portone-payment-confirm] PortOne API 호출 준비", {
     url,
-    hasApiKey: !!apiKey,
-    apiKeyPreview: apiKey ? apiKey.slice(0, 6) + "...(hidden)" : null,
+    hasApiKey: !!trimmedApiKey,
+    apiKeyLength: trimmedApiKey.length,
+    apiKeyPreview: trimmedApiKey ? trimmedApiKey.slice(0, 6) + "...(hidden)" : null,
     authorizationHeaderFormat: "PortOne {API_SECRET}",
+    authHeaderPreview: authHeader.substring(0, 20) + "...(hidden)",
   });
 
   const response = await fetch(url, {
     method: "GET",
     headers: {
-      // ✅ PortOne V2 문서 기준
-      "Authorization": `PortOne ${apiKey}`,
+      // ✅ PortOne V2 문서 기준: "PortOne {API_SECRET}" 형식
+      "Authorization": authHeader,
       "Content-Type": "application/json",
     },
   });
@@ -167,10 +178,17 @@ serve(async (req) => {
   try {
     const supabaseUrl = requireEnv("SUPABASE_URL");
     const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
-    const portoneApiKey = requireEnv("PORTONE_API_KEY");
+    const portoneApiKeyRaw = requireEnv("PORTONE_API_KEY");
+    
+    // API 키 trim 처리 및 검증
+    const portoneApiKey = portoneApiKeyRaw.trim();
+    if (!portoneApiKey) {
+      throw new Error("PORTONE_API_KEY is empty after trim");
+    }
     
     console.log("[portone-payment-confirm] PORTONE_API_KEY 로드", {
       hasApiKey: !!portoneApiKey,
+      apiKeyLength: portoneApiKey.length,
       apiKeyPreview: portoneApiKey ? portoneApiKey.slice(0, 6) + "...(hidden)" : null,
       note: "PortOne V2 API Secret 값이어야 함",
     });
@@ -244,11 +262,23 @@ serve(async (req) => {
       const metaSupabaseId =
         (meta?.supabaseOrderId as string | undefined) ||
         (meta?.supabase_order_id as string | undefined);
+      const metaSupabaseOrderNumber =
+        (meta?.supabaseOrderNumber as string | undefined) ||
+        (meta?.supabase_order_number as string | undefined);
+      
       if (metaSupabaseId) {
         candidateOrderIds.add(String(metaSupabaseId));
         console.log("[portone-payment-confirm] metadata에서 supabaseOrderId 발견", {
           paymentId,
           supabaseOrderId: metaSupabaseId,
+        });
+      }
+      
+      // order_number도 후보에 추가 (나중에 order_number로도 검색)
+      if (metaSupabaseOrderNumber) {
+        console.log("[portone-payment-confirm] metadata에서 supabaseOrderNumber 발견", {
+          paymentId,
+          supabaseOrderNumber: metaSupabaseOrderNumber,
         });
       }
     }
@@ -270,8 +300,12 @@ serve(async (req) => {
     let order;
     let orderError;
     
+    // 주문 찾기 전략: 여러 방법을 순차적으로 시도
+    const searchMethodsAttempted: string[] = [];
+    
     // 1차: id 기반 조회 (candidateOrderIds 사용)
     if (candidateOrderIds.size > 0) {
+      searchMethodsAttempted.push("by_id_candidates");
       console.log("[portone-payment-confirm] id 기반 주문 조회 시도", {
         candidateOrderIds: Array.from(candidateOrderIds),
       });
@@ -295,9 +329,44 @@ serve(async (req) => {
       });
     }
     
-    // 2차: 그래도 못 찾으면 transaction_id 기반 조회
+    // 2차: order_number 기반 조회 (PortOne orderId가 order_number일 수 있음)
+    if (!order && !orderError && portonePaymentForOrderId?.orderId) {
+      searchMethodsAttempted.push("by_order_number");
+      const portoneOrderId = String(portonePaymentForOrderId.orderId);
+      console.log("[portone-payment-confirm] order_number 기반 주문 조회 시도", {
+        paymentId,
+        orderNumber: portoneOrderId,
+      });
+      
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*, order_items(*, drum_sheets(*))")
+        .eq("order_number", portoneOrderId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (data && !error) {
+        order = data;
+        orderError = null;
+        console.log("[portone-payment-confirm] order_number 기반 조회 성공", {
+          paymentId,
+          orderNumber: portoneOrderId,
+          foundOrderId: order.id,
+        });
+      } else {
+        console.log("[portone-payment-confirm] order_number 기반 조회 실패", {
+          paymentId,
+          orderNumber: portoneOrderId,
+          error: error ?? null,
+        });
+      }
+    }
+    
+    // 3차: transaction_id 기반 조회
     if (!order && !orderError) {
-      console.log("[portone-payment-confirm] id 기반 조회 실패, transaction_id로 재시도", {
+      searchMethodsAttempted.push("by_transaction_id");
+      console.log("[portone-payment-confirm] transaction_id 기반 주문 조회 시도", {
         paymentId,
       });
       
@@ -319,6 +388,60 @@ serve(async (req) => {
         transactionIdUsed: paymentId,
       });
     }
+    
+    // 4차: PortOne API 호출 실패 시 대체 방법 - 금액 기반 검색 (최근 pending 주문)
+    if (!order && !orderError && portonePaymentForOrderId) {
+      searchMethodsAttempted.push("by_amount_and_status");
+      const portoneAmount = portonePaymentForOrderId.amount?.total;
+      if (portoneAmount) {
+        console.log("[portone-payment-confirm] 금액 기반 주문 조회 시도 (대체 방법)", {
+          paymentId,
+          portoneAmount,
+          portoneCurrency: portonePaymentForOrderId.amount?.currency,
+        });
+        
+        // KRW로 변환
+        let searchAmountKRW = portoneAmount;
+        const currency = portonePaymentForOrderId.amount?.currency || "CURRENCY_KRW";
+        if (currency === "CURRENCY_USD" || currency === "USD") {
+          searchAmountKRW = (portoneAmount / 100) * 1300; // 센트 -> USD -> KRW
+        } else if (currency === "CURRENCY_JPY" || currency === "JPY") {
+          searchAmountKRW = portoneAmount * 10; // JPY -> KRW
+        }
+        
+        // 최근 1시간 내 생성된 pending 주문 중 금액이 일치하는 주문 찾기
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        const { data, error } = await supabase
+          .from("orders")
+          .select("*, order_items(*, drum_sheets(*))")
+          .eq("payment_status", "pending")
+          .is("transaction_id", null)
+          .gte("total_amount", Math.floor(searchAmountKRW * 0.99)) // 1% 오차 허용
+          .lte("total_amount", Math.ceil(searchAmountKRW * 1.01))
+          .gte("created_at", oneHourAgo)
+          .order("created_at", { ascending: false })
+          .limit(5);
+        
+        if (data && data.length > 0 && !error) {
+          // 가장 최근 주문 선택
+          order = data[0];
+          orderError = null;
+          console.log("[portone-payment-confirm] 금액 기반 조회 성공 (대체 방법)", {
+            paymentId,
+            foundOrderId: order.id,
+            orderAmount: order.total_amount,
+            portoneAmount: searchAmountKRW,
+            matchedOrders: data.length,
+          });
+        } else {
+          console.log("[portone-payment-confirm] 금액 기반 조회 실패 (대체 방법)", {
+            paymentId,
+            error: error ?? null,
+            foundCount: data?.length ?? 0,
+          });
+        }
+      }
+    }
 
     if (orderError || !order) {
       console.error("[portone-payment-confirm] 주문을 찾을 수 없음 (모든 방법 시도 후)", {
@@ -326,10 +449,10 @@ serve(async (req) => {
         candidateOrderIds: Array.from(candidateOrderIds),
         paymentId,
         orderError,
-        searchMethodsAttempted: [
-          candidateOrderIds.size > 0 ? "by_id_candidates" : null,
-          "by_transaction_id",
-        ].filter(Boolean),
+        searchMethodsAttempted,
+        portonePaymentAvailable: !!portonePaymentForOrderId,
+        portoneOrderId: portonePaymentForOrderId?.orderId || null,
+        portoneMetadata: portonePaymentForOrderId?.metadata || null,
         note: "모든 조회 방법을 시도했지만 주문을 찾지 못함",
       });
       
