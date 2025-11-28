@@ -116,13 +116,20 @@ export default function PointChargeModal({
         },
       ];
     }
-    // 한국 사이트: 무통장 입금만 표시
+    // 한국 사이트: 무통장 입금 + 카카오페이
     return [
       {
         id: 'bank',
         name: t('sidebar.bankTransfer'),
         icon: 'ri-bank-line',
         color: 'text-green-600',
+        disabled: false,
+      },
+      {
+        id: 'kakaopay',
+        name: t('payment.kakaopay') || '카카오페이',
+        icon: 'ri-kakao-talk-line',
+        color: 'text-yellow-500',
         disabled: false,
       },
     ];
@@ -163,6 +170,30 @@ export default function PointChargeModal({
 
     if (selectedPayment === 'paypal') {
       setShowPayPalModal(true);
+      return;
+    }
+
+    if (selectedPayment === 'kakaopay') {
+      setChargeProcessing(true);
+      try {
+        const description = `${selectedOption.label || formatCurrency(selectedOption.amount)}`;
+        const result = await startCashCharge({
+          userId: user.id,
+          amount: selectedOption.amount,
+          bonusAmount: selectedOption.bonus ?? 0,
+          paymentMethod: 'kakaopay',
+          description,
+          buyerName: user.email ?? null,
+          buyerEmail: user.email ?? null,
+        });
+
+        // 카카오페이는 결제창이 열리므로 여기서는 로그만 남김
+        console.log('[PointChargeModal] KakaoPay 결제 시작', result);
+      } catch (error) {
+        console.error('카카오페이 충전 오류:', error);
+        alert(error instanceof Error ? error.message : '카카오페이 충전 중 오류가 발생했습니다.');
+        setChargeProcessing(false);
+      }
       return;
     }
 

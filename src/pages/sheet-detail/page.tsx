@@ -398,6 +398,54 @@ export default function SheetDetailPage() {
         return;
       }
 
+      if (method === 'kakaopay') {
+        setPurchasing(true);
+        setPaymentProcessing(true);
+
+        try {
+          // 주문 생성 및 카카오페이 결제 시작
+          const orderResult = await startSheetPurchase({
+            userId: user.id,
+            items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
+            amount: price,
+            paymentMethod: 'kakaopay',
+            description: t('sheetDetail.purchaseDescription', { title: sheet.title }),
+            buyerName: user.email ?? null,
+            buyerEmail: user.email ?? null,
+          });
+
+          const { requestKakaoPayPayment } = await import('../../lib/payments/portone');
+          const paymentResult = await requestKakaoPayPayment({
+            userId: user.id,
+            amount: price,
+            orderId: orderResult.orderId,
+            buyerEmail: user.email ?? undefined,
+            buyerName: user.email ?? undefined,
+            description: t('sheetDetail.purchaseDescription', { title: sheet.title }),
+            onSuccess: (response) => {
+              console.log('[sheet-detail] KakaoPay 결제 성공', response);
+            },
+            onError: (error) => {
+              console.error('[sheet-detail] KakaoPay 결제 실패', error);
+              alert(t('sheetDetail.purchaseError'));
+              setPurchasing(false);
+              setPaymentProcessing(false);
+            },
+          });
+
+          if (!paymentResult.success) {
+            throw new Error(paymentResult.error_msg || 'KakaoPay 결제가 실패했습니다.');
+          }
+        } catch (error) {
+          console.error('KakaoPay 결제 오류:', error);
+          alert(error instanceof Error ? error.message : t('sheetDetail.purchaseError'));
+        } finally {
+          setPurchasing(false);
+          setPaymentProcessing(false);
+        }
+        return;
+      }
+
       if (method === 'card') {
         await completeOnlinePurchase('card');
       }

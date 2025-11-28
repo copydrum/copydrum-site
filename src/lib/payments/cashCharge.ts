@@ -5,11 +5,11 @@ import {
   submitInicisPaymentForm,
   getInicisReturnUrl,
 } from './inicis';
-import { requestPayPalPayment } from './portone';
+import { requestPayPalPayment, requestKakaoPayPayment } from './portone';
 import type { PaymentIntentResponse, PaymentStatus, VirtualAccountInfo } from './types';
 import { updateOrderPaymentStatus } from './paymentService';
 
-type SupportedChargeMethod = 'card' | 'bank_transfer' | 'paypal';
+type SupportedChargeMethod = 'card' | 'bank_transfer' | 'paypal' | 'kakaopay';
 
 interface StartCashChargeParams {
   userId: string;
@@ -129,6 +129,45 @@ export const startCashCharge = async ({
       }
     } catch (error) {
       console.error('[cashCharge] PayPal 결제 오류', error);
+      throw error;
+    }
+  }
+
+  if (paymentMethod === 'kakaopay') {
+    // PortOne V2 SDK를 통한 카카오페이 결제 처리
+    try {
+      const result = await requestKakaoPayPayment({
+        userId,
+        amount,
+        orderId,
+        buyerEmail: buyerEmail ?? undefined,
+        buyerName: buyerName ?? undefined,
+        buyerTel: buyerTel ?? undefined,
+        description,
+        returnUrl: returnUrl,
+        onSuccess: (response) => {
+          console.log('[cashCharge] KakaoPay 결제 성공 콜백', response);
+        },
+        onError: (error) => {
+          console.error('[cashCharge] KakaoPay 결제 실패 콜백', error);
+        },
+      });
+
+      if (result.success) {
+        // 카카오페이 결제창이 열림
+        // 실제 결제 완료는 Webhook 또는 return 페이지에서 처리
+        return {
+          orderId,
+          orderNumber,
+          amount,
+          paymentMethod,
+        };
+      } else {
+        // 결제 실패
+        throw new Error(result.error_msg || 'KakaoPay 결제가 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('[cashCharge] KakaoPay 결제 오류', error);
       throw error;
     }
   }

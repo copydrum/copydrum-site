@@ -254,10 +254,17 @@ serve(async (req) => {
                             portonePayment.metadata?.paymentMethod === 'paypal' ||
                             false;
 
+    // 카카오페이 채널 확인 (channelKey에 'kakaopay'가 포함되어 있는지 확인)
+    const isKakaoPayPayment = portonePayment.channelKey?.toLowerCase().includes('kakaopay') ||
+                               portonePayment.loggedProvider?.toLowerCase() === 'kakaopay' ||
+                               false;
+
     console.log("[portone-payment-confirm] 결제 채널 확인", {
       paymentId,
       channelKey: portonePayment.channelKey,
+      loggedProvider: portonePayment.loggedProvider,
       isPayPalPayment,
+      isKakaoPayPayment,
       metadata: portonePayment.metadata,
     });
 

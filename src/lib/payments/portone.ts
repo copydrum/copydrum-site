@@ -1,6 +1,6 @@
 import { getSiteCurrency, convertFromKrw } from '../../lib/currency';
 import * as PortOne from '@portone/browser-sdk/v2';
-import { isGlobalSiteHost, isJapaneseSiteHost, isEnglishSiteHost } from '../../config/hostType';
+import { isGlobalSiteHost, isJapaneseSiteHost, isEnglishSiteHost, isKoreanSiteHost } from '../../config/hostType';
 import { getActiveCurrency } from './getActiveCurrency';
 import { DEFAULT_USD_RATE } from '../priceFormatter';
 import { getLocaleFromHost } from '../../i18n/getLocaleFromHost';
@@ -374,6 +374,147 @@ export const requestPayPalPayment = async (
     return {
       success: false,
       error_msg: error instanceof Error ? error.message : 'PayPal 결제 요청 중 오류가 발생했습니다.',
+    };
+  }
+};
+
+// 카카오페이 결제 요청
+export interface RequestKakaoPayPaymentParams {
+  userId: string; // 사용자 ID (필수)
+  amount: number; // KRW 금액 (이미 KRW 정수 금액, 변환 불필요)
+  orderId: string; // 주문 ID (merchant_uid로 사용)
+  buyerEmail?: string;
+  buyerName?: string;
+  buyerTel?: string;
+  description: string; // 상품명
+  returnUrl?: string; // 결제 완료 후 리다이렉트 URL
+  onSuccess?: (response: any) => void; // 결제 성공 콜백
+  onError?: (error: any) => void; // 결제 실패 콜백
+}
+
+export interface RequestKakaoPayPaymentResult {
+  success: boolean;
+  imp_uid?: string;
+  merchant_uid?: string;
+  paid_amount?: number;
+  error_code?: string;
+  error_msg?: string;
+}
+
+// 카카오페이 결제 요청 함수
+export const requestKakaoPayPayment = async (
+  params: RequestKakaoPayPaymentParams,
+): Promise<RequestKakaoPayPaymentResult> => {
+  // 한국어 사이트에서만 동작
+  if (typeof window === 'undefined') {
+    return {
+      success: false,
+      error_msg: 'KakaoPay는 브라우저 환경에서만 사용할 수 있습니다.',
+    };
+  }
+
+  const hostname = window.location.hostname;
+  const isKoreanSite = isKoreanSiteHost(hostname);
+
+  if (!isKoreanSite) {
+    console.warn('[portone-kakaopay] 한국어 사이트가 아닙니다.', { hostname });
+    return {
+      success: false,
+      error_msg: 'KakaoPay is only available on the Korean site.',
+    };
+  }
+
+  console.log('[portone-kakaopay] KakaoPay 결제 요청 시작', {
+    orderId: params.orderId,
+    amount: params.amount,
+    customer: {
+      userId: params.userId,
+      email: params.buyerEmail,
+      name: params.buyerName,
+      tel: params.buyerTel,
+    },
+  });
+
+  const storeId = import.meta.env.VITE_PORTONE_STORE_ID || 'store-21731740-b1df-492c-832a-8f38448d0ebd';
+  const channelKey = import.meta.env.VITE_PORTONE_CHANNEL_KEY_KAKAOPAY || 'channel-key-bdbeb668-e452-413b-a039-150013d1f3ae';
+
+  if (!storeId || !channelKey) {
+    console.error('[portone-kakaopay] 환경변수 설정 오류', { storeId, channelKey });
+    return {
+      success: false,
+      error_msg: 'KakaoPay 결제 설정이 올바르지 않습니다.',
+    };
+  }
+
+  try {
+    // 리턴 URL 설정 (기존 PortOne PayPal return URL 재사용)
+    const returnUrl = params.returnUrl || getPortOneReturnUrl();
+
+    // Request data 구성
+    const requestData: any = {
+      uiType: 'CHECKOUT' as const, // PortOne V2 체크아웃 방식
+      storeId,
+      channelKey,
+      paymentId: params.orderId,
+      orderName: params.description,
+      totalAmount: params.amount, // KRW 정수 금액 그대로 사용
+      currency: 'CURRENCY_KRW' as const,
+      paymentMethod: {
+        pgProvider: 'kakaopay',
+        methodType: 'EASY_PAY',
+      },
+      customer: {
+        customerId: params.userId ?? undefined,
+        email: params.buyerEmail ?? undefined,
+        fullName: params.buyerName ?? undefined,
+        phoneNumber: params.buyerTel ?? undefined,
+      },
+      redirectUrl: returnUrl,
+    };
+
+    console.log('[portone-kakaopay] loadPaymentUI requestData', {
+      uiType: requestData.uiType,
+      storeId: requestData.storeId,
+      channelKey: requestData.channelKey ? requestData.channelKey.substring(0, 20) + '...' : undefined,
+      paymentId: requestData.paymentId,
+      orderName: requestData.orderName,
+      totalAmount: requestData.totalAmount,
+      currency: requestData.currency,
+      paymentMethod: requestData.paymentMethod,
+      redirectUrl: requestData.redirectUrl,
+    });
+
+    // 포트원 V2 SDK로 카카오페이 결제 UI 로드
+    await PortOne.loadPaymentUI(requestData, {
+      onPaymentSuccess: async (paymentResult: any) => {
+        console.log('[portone-kakaopay] onPaymentSuccess', paymentResult);
+
+        // 프론트엔드에서는 UI 처리만 수행
+        // 결제 상태 업데이트는 서버(Webhook 또는 서버 검증)에서 처리
+        
+        // 사용자 정의 성공 콜백 호출
+        if (params.onSuccess) {
+          params.onSuccess(paymentResult);
+        }
+      },
+      onPaymentFail: (error: any) => {
+        console.error('[portone-kakaopay] onPaymentFail', error);
+        if (params.onError) {
+          params.onError(error);
+        }
+      },
+    });
+
+    return {
+      success: true,
+      merchant_uid: params.orderId,
+      error_msg: 'KakaoPay 결제창이 열렸습니다.',
+    };
+  } catch (error) {
+    console.error('[portone-kakaopay] KakaoPay 결제 요청 오류', error);
+    return {
+      success: false,
+      error_msg: error instanceof Error ? error.message : 'KakaoPay 결제 요청 중 오류가 발생했습니다.',
     };
   }
 };

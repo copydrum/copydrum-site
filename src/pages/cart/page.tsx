@@ -235,7 +235,7 @@ export default function CartPage() {
   };
 
   const completeOnlinePurchase = async (
-    method: 'card' | 'bank_transfer' | 'paypal',
+    method: 'card' | 'bank_transfer' | 'paypal' | 'kakaopay',
     options?: { depositorName?: string },
   ) => {
     if (!user || !pendingPurchase) return;
@@ -267,6 +267,9 @@ export default function CartPage() {
     } else if (method === 'paypal') {
       setBankTransferInfo(null);
       // PayPal은 리다이렉트되므로 알림 불필요
+    } else if (method === 'kakaopay') {
+      setBankTransferInfo(null);
+      // 카카오페이는 결제창이 열리므로 알림 불필요
     } else {
       setBankTransferInfo(null);
       alert(t('cartPage.paymentWindowOpen'));
@@ -320,6 +323,21 @@ export default function CartPage() {
         setProcessing(false);
         setPaymentProcessing(false);
         // pendingPurchase는 PayPal 결제 완료 후에만 null로 설정
+        return;
+      }
+
+      if (method === 'kakaopay') {
+        // 카카오페이 결제 처리
+        try {
+          await completeOnlinePurchase('kakaopay');
+          // 카카오페이는 결제창이 열리므로 여기서는 처리만 하고 pendingPurchase는 Webhook에서 처리 후 정리
+        } catch (error) {
+          console.error('[cart] KakaoPay 결제 오류:', error);
+          alert(error instanceof Error ? error.message : t('cartPage.paymentError'));
+        } finally {
+          setProcessing(false);
+          setPaymentProcessing(false);
+        }
         return;
       }
 

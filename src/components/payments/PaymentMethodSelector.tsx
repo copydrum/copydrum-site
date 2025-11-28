@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import { isKoreanSiteHost } from '../../config/hostType';
 
-type PaymentMethod = 'cash' | 'card' | 'bank' | 'paypal';
+type PaymentMethod = 'cash' | 'card' | 'bank' | 'paypal' | 'kakaopay';
 
 type PaymentContext = 'buyNow' | 'cashCharge';
 
@@ -59,7 +59,7 @@ function getAvailablePaymentMethods(
     ];
   }
 
-  // 한국어 사이트: 무통장입금 + 포인트 결제 (포인트가 있을 때만)
+  // 한국어 사이트: 무통장입금 + 카카오페이 + 포인트 결제 (포인트가 있을 때만)
   if (siteType === 'ko') {
     const methods: PaymentMethodOption[] = [
       {
@@ -68,6 +68,14 @@ function getAvailablePaymentMethods(
         description: t('payment.bankDescription'),
         icon: 'ri-bank-line',
         color: 'text-green-600',
+        disabled: false,
+      },
+      {
+        id: 'kakaopay',
+        name: t('payment.kakaopay') || '카카오페이',
+        description: t('payment.kakaopayDescription') || '간편하게 카카오페이로 결제',
+        icon: 'ri-kakao-talk-line',
+        color: 'text-yellow-500',
         disabled: false,
       },
     ];
