@@ -310,7 +310,9 @@ export const requestPayPalPayment = async (
       uiType: 'PAYPAL_SPB' as const,
       storeId,
       channelKey,
-      paymentId: params.orderId,
+      paymentId: params.orderId, // PayPal의 경우 orderId를 paymentId로 사용
+      // ✅ Supabase 주문과 연결하기 위한 orderId 설정 (웹훅에서 주문 찾기용)
+      orderId: params.orderId, // Supabase orders.id를 PortOne에 전달
       orderName: params.description,
       totalAmount: finalAmount,
       currency: portOneCurrency,
@@ -321,6 +323,11 @@ export const requestPayPalPayment = async (
         phoneNumber: params.buyerTel ?? undefined,
       },
       redirectUrl: returnUrl,
+      // ✅ 나중에 Webhook / REST 조회에서 다시 확인할 수 있도록 metadata에도 기록
+      metadata: {
+        supabaseOrderId: params.orderId, // Supabase orders.id
+        // 필요시 추가 메타데이터도 포함 가능
+      },
     };
 
     // element 파라미터는 선택사항이지만, 명시적으로 지정하면 더 안전함
@@ -522,7 +529,8 @@ export const requestKakaoPayPayment = async (
       storeId,
       channelKey,
       paymentId: newPaymentId, // 항상 새로운 UUID 사용 (orderId와 분리)
-      orderId: params.orderId, // 내부 주문 ID를 PortOne에 전달 (웹훅에서 주문 찾기용)
+      // ✅ Supabase 주문과 연결하기 위한 orderId 설정 (웹훅에서 주문 찾기용)
+      orderId: params.orderId, // Supabase orders.id를 PortOne에 전달
       orderName: params.description,
       totalAmount: params.amount, // KRW 정수 금액 그대로 사용
       currency: 'CURRENCY_KRW' as const, // 카카오페이는 원화 결제만 지원
@@ -534,6 +542,11 @@ export const requestKakaoPayPayment = async (
         phoneNumber: params.buyerTel ?? undefined,
       },
       redirectUrl: returnUrl,
+      // ✅ 나중에 Webhook / REST 조회에서 다시 확인할 수 있도록 metadata에도 기록
+      metadata: {
+        supabaseOrderId: params.orderId, // Supabase orders.id
+        // 필요시 추가 메타데이터도 포함 가능
+      },
       // 카카오페이 특화 설정
       windowType: {
         pc: 'IFRAME', // PC는 IFRAME만 지원
