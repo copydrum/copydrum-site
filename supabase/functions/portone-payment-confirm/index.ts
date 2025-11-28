@@ -63,11 +63,20 @@ async function getPortOnePayment(
   paymentId: string,
   apiKey: string
 ): Promise<PortOnePaymentResponse> {
-  const response = await fetch(`https://api.portone.io/v2/payments/${paymentId}`, {
+  const url = `https://api.portone.io/v2/payments/${paymentId}`;
+  
+  // 디버깅용으로 apiKey 앞부분만 로깅 (전체는 절대 로그에 남기지 말 것)
+  console.log("[portone-payment-confirm] PortOne API 호출 준비", {
+    url,
+    hasApiKey: !!apiKey,
+    apiKeyPreview: apiKey ? apiKey.slice(0, 6) + "...(hidden)" : null,
+    authorizationHeaderFormat: "PortOne {API_SECRET}",
+  });
+
+  const response = await fetch(url, {
     method: "GET",
     headers: {
-      // PortOne V2 API 인증 헤더 형식: "PortOne {V2_API_SECRET}"
-      // 기존 Bearer 형식이 아닌 PortOne 접두사를 사용
+      // ✅ PortOne V2 문서 기준
       "Authorization": `PortOne ${apiKey}`,
       "Content-Type": "application/json",
     },
@@ -75,12 +84,28 @@ async function getPortOnePayment(
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error("[portone-payment-confirm] PortOne API 응답 에러", {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorText,
+      url,
+      hasApiKey: !!apiKey,
+      apiKeyPreview: apiKey ? apiKey.slice(0, 6) + "...(hidden)" : null,
+    });
     throw new Error(
       `PortOne API error: ${response.status} ${response.statusText} - ${errorText}`
     );
   }
 
-  return await response.json();
+  const result = await response.json();
+  console.log("[portone-payment-confirm] PortOne API 호출 성공", {
+    paymentId,
+    status: result.status,
+    orderId: result.orderId || null,
+    hasMetadata: !!result.metadata,
+  });
+  
+  return result;
 }
 
 // 통화별 금액 비교 (단위 변환 고려)
@@ -143,6 +168,12 @@ serve(async (req) => {
     const supabaseUrl = requireEnv("SUPABASE_URL");
     const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
     const portoneApiKey = requireEnv("PORTONE_API_KEY");
+    
+    console.log("[portone-payment-confirm] PORTONE_API_KEY 로드", {
+      hasApiKey: !!portoneApiKey,
+      apiKeyPreview: portoneApiKey ? portoneApiKey.slice(0, 6) + "...(hidden)" : null,
+      note: "PortOne V2 API Secret 값이어야 함",
+    });
 
     const payload: PortOnePaymentConfirmPayload = await req.json();
     const { paymentId, orderId } = payload;
@@ -171,21 +202,27 @@ serve(async (req) => {
       console.log("[portone-payment-confirm] orderId가 없음, PortOne API에서 조회 시도", { paymentId });
       try {
         portonePaymentForOrderId = await getPortOnePayment(paymentId, portoneApiKey);
-        console.log("[portone-payment-confirm] PortOne API 조회 성공", {
+        console.log("[portone-payment-confirm] PortOne API 조회 성공 (orderId 조회용)", {
           paymentId,
           portoneOrderId: portonePaymentForOrderId.orderId || null,
           metadata: portonePaymentForOrderId.metadata || null,
+          metadataKeys: portonePaymentForOrderId.metadata ? Object.keys(portonePaymentForOrderId.metadata) : [],
         });
       } catch (apiError) {
         console.error("[portone-payment-confirm] PortOne API 조회 실패 (orderId 조회용)", {
           paymentId,
           error: apiError,
+          errorMessage: apiError instanceof Error ? apiError.message : String(apiError),
         });
         // API 조회 실패해도 계속 진행 (다른 방법으로 주문 찾기 시도)
       }
     } else {
       // orderId가 이미 있으면 PortOne API는 나중에 결제 상태 검증용으로 호출
       // 여기서는 주문 찾기만 먼저 수행
+      console.log("[portone-payment-confirm] orderId가 이미 있음, 주문 찾기부터 수행", {
+        paymentId,
+        orderId,
+      });
     }
 
     // PortOne에서 orderId / metadata를 이용해 Supabase 주문 ID 후보들을 수집
@@ -216,8 +253,9 @@ serve(async (req) => {
       }
     }
 
-    console.log("[portone-payment-confirm] 주문 ID 후보 수집", {
+    console.log("[portone-payment-confirm] orderId와 candidateOrderIds 상태", {
       paymentId,
+      originalOrderId: orderId || null,
       candidateOrderIds: Array.from(candidateOrderIds),
       source: {
         fromWebhook: orderId || null,
@@ -225,6 +263,7 @@ serve(async (req) => {
         fromMetadata: portonePaymentForOrderId?.metadata ? 
           (portonePaymentForOrderId.metadata as Record<string, unknown>)?.supabaseOrderId || null : null,
       },
+      portonePaymentAvailable: !!portonePaymentForOrderId,
     });
 
     // 주문 확인: 여러 방법으로 시도
@@ -248,7 +287,8 @@ serve(async (req) => {
       order = data;
       orderError = error;
       
-      console.log("[portone-payment-confirm] id 기반 주문 조회 결과", {
+      console.log("[portone-payment-confirm] id 기반 조회 결과", {
+        paymentId,
         candidateOrderIds: Array.from(candidateOrderIds),
         foundOrderId: order?.id ?? null,
         error: orderError ?? null,
@@ -276,6 +316,7 @@ serve(async (req) => {
         paymentId,
         foundOrderId: order?.id ?? null,
         error: orderError ?? null,
+        transactionIdUsed: paymentId,
       });
     }
 
