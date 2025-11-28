@@ -305,35 +305,26 @@ serve(async (req) => {
       );
     }
 
-    // 결제 완료(PAID)가 아닐 때는 처리하지 않고 로그만 남김
-    // 단, 카카오페이의 경우 "READY" 상태에서도 결제가 완료될 수 있으므로
-    // "READY" 상태인 경우 portone-payment-confirm으로 최종 검증
+    // 결제 상태 로그만 남기고, 어떤 상태든 portone-payment-confirm에서 최종 검증하도록 한다.
+    // PortOne V2 문서 권장사항: 웹훅 메시지를 그대로 신뢰하지 말고, API로 상태를 재조회해서 그 결과만 신뢰
+    // 따라서 웹훅의 status가 PAID가 아니더라도, 결제 관련 webhook이면 항상 portone-payment-confirm을 호출
+    // 실제 결제 상태 검증은 portone-payment-confirm에서 PortOne REST API를 통해 수행됨
     if (status !== "PAID") {
-      // "READY" 상태인 경우 portone-payment-confirm으로 최종 검증
-      // (카카오페이는 결제 완료 후 여러 웹훅이 올 수 있고, 첫 번째는 "READY" 상태일 수 있음)
-      if (status === "READY") {
-        console.log("[portone-webhook] READY 상태 웹훅, portone-payment-confirm으로 최종 검증", {
-          paymentId,
-          orderId,
-          status,
-        });
-        // 아래에서 portone-payment-confirm 호출하도록 계속 진행
-      } else {
-        // "FAILED", "CANCELLED" 등 기타 상태는 무시
-        console.log("[portone-webhook] 결제 완료가 아닌 상태 웹훅, 무시합니다.", {
-          paymentId,
-          orderId,
-          status,
-        });
-        return buildResponse(
-          {
-            success: true,
-            message: `Ignored webhook with status ${status}`,
-          },
-          200,
-          origin
-        );
-      }
+      console.log("[portone-webhook] 결제 상태가 PAID가 아님 (웹훅 기준)", {
+        paymentId,
+        orderId,
+        status,
+        eventType,
+        note: "웹훅 status는 참고용이며, 실제 검증은 portone-payment-confirm에서 PortOne API로 수행",
+      });
+      // 여기서 조기 return 하지 말고, 그대로 아래 로직(portone-payment-confirm 호출)으로 진행
+    } else {
+      console.log("[portone-webhook] 결제 상태가 PAID (웹훅 기준)", {
+        paymentId,
+        orderId,
+        status,
+        eventType,
+      });
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
