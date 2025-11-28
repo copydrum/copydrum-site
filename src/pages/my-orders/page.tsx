@@ -149,12 +149,15 @@ const MyOrdersPage = () => {
   const [selectedPurchaseIds, setSelectedPurchaseIds] = useState<Record<string, string[]>>({});
   const [bulkDownloading, setBulkDownloading] = useState(false);
   const [downloadingKeys, setDownloadingKeys] = useState<string[]>([]);
+  // 결제 상태 필터: 'paid' (결제 완료) 또는 'pending' (결제 대기)
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<'paid' | 'pending'>('paid');
   const { t } = useTranslation();
 
   // 일반 유저용: 본인 주문만 조회 (필터 필수)
   // RLS 정책과 함께 이중으로 보안 적용
-  const loadOrders = useCallback(async (currentUser: User) => {
-    const { data, error } = await supabase
+  // 기본적으로 payment_status = 'paid' (결제 완료)인 주문만 표시
+  const loadOrders = useCallback(async (currentUser: User, filter: 'paid' | 'pending' = 'paid') => {
+    let query = supabase
       .from('orders')
       .select(
         `
@@ -169,6 +172,7 @@ const MyOrdersPage = () => {
         transaction_id,
         depositor_name,
         virtual_account_info,
+        order_type,
         order_items (
           id,
           drum_sheet_id,
@@ -189,8 +193,20 @@ const MyOrdersPage = () => {
         )
       `
       )
-      .eq('user_id', currentUser.id)  // 일반 유저는 본인 주문만 필터링
-      .order('created_at', { ascending: false });
+      .eq('user_id', currentUser.id); // 일반 유저는 본인 주문만 필터링
+
+    // 결제 상태 필터링
+    if (filter === 'paid') {
+      // 결제 완료: payment_status = 'paid'인 주문만
+      query = query.eq('payment_status', 'paid');
+    } else {
+      // 결제 대기: payment_status가 'paid'가 아닌 경우
+      query = query.or('payment_status.neq.paid,payment_status.is.null');
+    }
+
+    query = query.order('created_at', { ascending: false });
+
+    const { data, error } = await query;
 
     if (error) {
       throw error;
@@ -228,7 +244,13 @@ const MyOrdersPage = () => {
       })),
     }));
 
-    const filteredOrders = normalizedOrders.filter((order) => (order.order_items?.length ?? 0) > 0);
+    // order_items가 있고, order_type이 'product'인 주문만 필터링 (악보 구매만)
+    // order_type이 없어도 order_items가 있으면 악보 구매로 간주
+    const filteredOrders = normalizedOrders.filter(
+      (order) => 
+        (order.order_items?.length ?? 0) > 0 && 
+        (order.order_type === 'product' || !order.order_type) // order_type이 없으면 order_items 존재 여부로 판단
+    );
 
     setOrders(filteredOrders);
     setSelectedPurchaseIds((prev) => {
@@ -254,6 +276,13 @@ const MyOrdersPage = () => {
     });
   }, []);
 
+  // paymentStatusFilter 변경 시 주문 다시 불러오기
+  useEffect(() => {
+    if (user) {
+      loadOrders(user, paymentStatusFilter);
+    }
+  }, [paymentStatusFilter, user, loadOrders]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -271,7 +300,7 @@ const MyOrdersPage = () => {
         setUser(currentUser ?? null);
 
         if (currentUser) {
-          await loadOrders(currentUser);
+          await loadOrders(currentUser, paymentStatusFilter);
         } else {
           setOrders([]);
         }
@@ -302,7 +331,7 @@ const MyOrdersPage = () => {
       if (nextUser) {
         setLoading(true);
         try {
-          await loadOrders(nextUser);
+          await loadOrders(nextUser, paymentStatusFilter);
         } catch (error) {
           console.error('구매 내역 갱신 오류:', error);
           setOrders([]);
@@ -318,7 +347,7 @@ const MyOrdersPage = () => {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [loadOrders]);
+  }, [loadOrders, paymentStatusFilter]);
 
   useEffect(() => {
     setSelectedPurchaseIds((prev) => {
@@ -624,6 +653,38 @@ const MyOrdersPage = () => {
                 </span>
               )}
             </p>
+            
+            {/* 결제 상태 필터 탭 */}
+            <div className="mt-4 flex gap-2 border-b border-gray-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setPaymentStatusFilter('paid');
+                  setLoading(true);
+                }}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  paymentStatusFilter === 'paid'
+                    ? 'border-b-2 border-blue-600 text-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t('myOrders.tabs.downloadable') || '다운로드 가능'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPaymentStatusFilter('pending');
+                  setLoading(true);
+                }}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  paymentStatusFilter === 'pending'
+                    ? 'border-b-2 border-blue-600 text-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t('myOrders.tabs.pending') || '결제 대기'}
+              </button>
+            </div>
           </div>
 
         {orders.length === 0 ? (

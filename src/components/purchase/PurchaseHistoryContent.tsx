@@ -63,7 +63,7 @@ export default function PurchaseHistoryContent({ user }: PurchaseHistoryContentP
 
   const loadOrders = useCallback(async () => {
     try {
-      // 단계적으로 쿼리 디버깅: 먼저 기본 필드만 확인
+      // 결제 완료된 주문만 조회 (payment_status = 'paid')
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select(
@@ -73,6 +73,8 @@ export default function PurchaseHistoryContent({ user }: PurchaseHistoryContentP
           status,
           total_amount,
           payment_method,
+          payment_status,
+          order_type,
           order_items (
             id,
             drum_sheet_id,
@@ -92,6 +94,7 @@ export default function PurchaseHistoryContent({ user }: PurchaseHistoryContentP
         `
         )
         .eq('user_id', user.id)
+        .eq('payment_status', 'paid')  // 결제 완료된 주문만 필터링
         .order('created_at', { ascending: false });
 
       if (ordersError) {
@@ -122,7 +125,13 @@ export default function PurchaseHistoryContent({ user }: PurchaseHistoryContentP
         })),
       }));
 
-      const filteredOrders = normalizedOrders.filter((order) => (order.order_items?.length ?? 0) > 0);
+      // order_items가 있고, order_type이 'product'인 주문만 필터링 (악보 구매만)
+      // order_type이 없어도 order_items가 있으면 악보 구매로 간주
+      const filteredOrders = normalizedOrders.filter(
+        (order) => 
+          (order.order_items?.length ?? 0) > 0 && 
+          (order.order_type === 'product' || !order.order_type)
+      );
 
       const downloadItems: DownloadableItem[] = filteredOrders.flatMap((order) =>
         DOWNLOADABLE_STATUSES.includes((order.status ?? '').toLowerCase())

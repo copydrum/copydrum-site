@@ -354,6 +354,7 @@ export default function MyPage() {
 
   // 일반 유저용: 본인 주문만 조회 (필터 필수)
   // RLS 정책과 함께 이중으로 보안 적용
+  // 기본적으로 payment_status = 'paid' (결제 완료)인 주문만 표시
   const loadOrders = useCallback(async (currentUser: User) => {
     try {
       // order_items 테이블의 실제 컬럼명을 확인하기 위해 먼저 간단한 쿼리 시도
@@ -371,6 +372,7 @@ export default function MyPage() {
           transaction_id,
           depositor_name,
           virtual_account_info,
+          order_type,
           order_items (
             id,
             drum_sheet_id,
@@ -391,6 +393,7 @@ export default function MyPage() {
           )
         `)
         .eq('user_id', currentUser.id)  // 일반 유저는 본인 주문만 필터링
+        .eq('payment_status', 'paid')  // 결제 완료된 주문만 필터링
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -438,7 +441,13 @@ export default function MyPage() {
         }),
       }));
 
-      const filteredOrders = normalizedOrders.filter((order) => (order.order_items?.length ?? 0) > 0);
+      // order_items가 있고, order_type이 'product'인 주문만 필터링 (악보 구매만)
+      // order_type이 없어도 order_items가 있으면 악보 구매로 간주
+      const filteredOrders = normalizedOrders.filter(
+        (order) => 
+          (order.order_items?.length ?? 0) > 0 && 
+          (order.order_type === 'product' || !order.order_type)
+      );
 
       setOrders(filteredOrders);
       const downloadItems: DownloadableItem[] = filteredOrders.flatMap((order) =>
