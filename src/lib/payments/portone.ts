@@ -451,8 +451,10 @@ export const requestKakaoPayPayment = async (
     const returnUrl = params.returnUrl || getPortOneReturnUrl();
 
     // Request data 구성
+    // 카카오페이는 PortOne V2 문서에 따라 GENERAL UI 타입을 사용해야 함
+    // (CHECKOUT은 일반결제를 지원하지 않음)
     const requestData: any = {
-      uiType: 'CHECKOUT' as const, // PortOne V2 체크아웃 방식
+      uiType: 'GENERAL' as const, // 카카오페이는 GENERAL UI 타입 사용 (PortOne V2 문서 기준)
       storeId,
       channelKey,
       paymentId: params.orderId,
@@ -460,8 +462,8 @@ export const requestKakaoPayPayment = async (
       totalAmount: params.amount, // KRW 정수 금액 그대로 사용
       currency: 'CURRENCY_KRW' as const,
       paymentMethod: {
-        pgProvider: 'kakaopay',
-        methodType: 'EASY_PAY',
+        pgProvider: 'kakaopay', // 카카오페이 PG 제공자
+        methodType: 'EASY_PAY', // 간편결제 타입
       },
       customer: {
         customerId: params.userId ?? undefined,
@@ -472,15 +474,16 @@ export const requestKakaoPayPayment = async (
       redirectUrl: returnUrl,
     };
 
+    // 디버그 로그: requestData의 주요 필드 확인 (uiType과 paymentMethod 검증용)
     console.log('[portone-kakaopay] loadPaymentUI requestData', {
-      uiType: requestData.uiType,
+      uiType: requestData.uiType, // 'GENERAL'로 설정되어야 함 (카카오페이 필수)
       storeId: requestData.storeId,
       channelKey: requestData.channelKey ? requestData.channelKey.substring(0, 20) + '...' : undefined,
       paymentId: requestData.paymentId,
       orderName: requestData.orderName,
       totalAmount: requestData.totalAmount,
       currency: requestData.currency,
-      paymentMethod: requestData.paymentMethod,
+      paymentMethod: requestData.paymentMethod, // { pgProvider: 'kakaopay', methodType: 'EASY_PAY' } 확인
       redirectUrl: requestData.redirectUrl,
     });
 
