@@ -159,18 +159,47 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    // orderId가 없으면 PortOne API에서 먼저 가져오기
+    let finalOrderId = orderId;
+    let portonePaymentForOrderId: PortOnePaymentResponse | null = null;
+    
+    if (!finalOrderId) {
+      console.log("[portone-payment-confirm] orderId가 없음, PortOne API에서 조회 시도", { paymentId });
+      try {
+        portonePaymentForOrderId = await getPortOnePayment(paymentId, portoneApiKey);
+        if (portonePaymentForOrderId.orderId) {
+          finalOrderId = portonePaymentForOrderId.orderId;
+          console.log("[portone-payment-confirm] PortOne API에서 orderId 발견", {
+            paymentId,
+            orderId: finalOrderId,
+          });
+        } else {
+          console.warn("[portone-payment-confirm] PortOne API 응답에 orderId가 없음", {
+            paymentId,
+            portonePayment: portonePaymentForOrderId,
+          });
+        }
+      } catch (apiError) {
+        console.error("[portone-payment-confirm] PortOne API 조회 실패 (orderId 조회용)", {
+          paymentId,
+          error: apiError,
+        });
+        // API 조회 실패해도 계속 진행 (transaction_id로 조회 시도)
+      }
+    }
+
     // 주문 확인: orderId가 있으면 id로, 없으면 transaction_id로 조회
     let order;
     let orderError;
     
-    if (orderId) {
+    if (finalOrderId) {
       // orderId가 있을 때: id로 조회
-      console.log("[portone-payment-confirm] orderId로 주문 조회", { orderId });
+      console.log("[portone-payment-confirm] orderId로 주문 조회", { orderId: finalOrderId });
       const { data, error } = await supabase
         .from("orders")
         .select("*, order_items(*, drum_sheets(*))")
-        .eq("id", orderId)
-        .single();
+        .eq("id", finalOrderId)
+        .maybeSingle();
       order = data;
       orderError = error;
     } else {
@@ -182,92 +211,53 @@ serve(async (req) => {
         .eq("transaction_id", paymentId)
         .order("created_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
       order = data;
       orderError = error;
     }
 
     if (orderError || !order) {
-      console.error("[portone-payment-confirm] 주문을 찾을 수 없음 (첫 번째 시도)", {
-        orderId: orderId || null,
+      console.error("[portone-payment-confirm] 주문을 찾을 수 없음", {
+        originalOrderId: orderId || null,
+        finalOrderId: finalOrderId || null,
         paymentId,
         orderError,
-        searchMethod: orderId ? "by_id" : "by_transaction_id",
+        searchMethod: finalOrderId ? "by_id" : "by_transaction_id",
+        note: "모든 조회 방법을 시도했지만 주문을 찾지 못함",
       });
-
-      // orderId가 없고 transaction_id로도 찾지 못한 경우,
-      // PortOne API에서 orderId를 가져와서 다시 시도
-      if (!orderId) {
-        console.log("[portone-payment-confirm] PortOne API에서 orderId 조회 시도", { paymentId });
-        try {
-          const portonePayment = await getPortOnePayment(paymentId, portoneApiKey);
-          const portoneOrderId = portonePayment.orderId;
-          
-          if (portoneOrderId) {
-            console.log("[portone-payment-confirm] PortOne에서 orderId 발견, 재조회 시도", {
-              portoneOrderId,
+      
+      // 추가 디버깅: transaction_id로 저장된 주문이 있는지 확인
+      const { data: allOrdersWithTransactionId, error: checkError } = await supabase
+        .from("orders")
+        .select("id, transaction_id, created_at, payment_status")
+        .eq("transaction_id", paymentId)
+        .limit(5);
+      
+      console.log("[portone-payment-confirm] transaction_id로 조회된 주문 목록", {
+        paymentId,
+        foundOrders: allOrdersWithTransactionId || [],
+        checkError,
+      });
+      
+      return buildResponse(
+        { 
+          success: false, 
+          error: { 
+            message: "Order not found",
+            details: {
               paymentId,
-            });
-            
-            // PortOne의 orderId로 주문 조회
-            const { data: retryOrder, error: retryError } = await supabase
-              .from("orders")
-              .select("*, order_items(*, drum_sheets(*))")
-              .eq("id", portoneOrderId)
-              .single();
-            
-            if (retryOrder && !retryError) {
-              console.log("[portone-payment-confirm] PortOne orderId로 주문 조회 성공", {
-                orderId: retryOrder.id,
-                portoneOrderId,
-              });
-              order = retryOrder;
-              orderError = null;
-            } else {
-              console.error("[portone-payment-confirm] PortOne orderId로도 주문을 찾을 수 없음", {
-                portoneOrderId,
-                retryError,
-              });
-            }
-          } else {
-            console.warn("[portone-payment-confirm] PortOne API 응답에 orderId가 없음", {
-              paymentId,
-              portonePayment,
-            });
-          }
-        } catch (apiError) {
-          console.error("[portone-payment-confirm] PortOne API 조회 실패 (주문 찾기 재시도용)", {
-            paymentId,
-            error: apiError,
-          });
-        }
-      }
-
-      // 여전히 주문을 찾지 못한 경우
-      if (orderError || !order) {
-        console.error("[portone-payment-confirm] 주문을 찾을 수 없음 (최종)", {
-          orderId: orderId || null,
-          paymentId,
-          orderError,
-          searchMethod: orderId ? "by_id" : "by_transaction_id",
-          note: "transaction_id로 조회했지만 주문이 없거나, PortOne API에서 orderId를 가져와도 주문을 찾지 못함",
-        });
-        return buildResponse(
-          { 
-            success: false, 
-            error: { 
-              message: "Order not found",
-              details: {
-                paymentId,
-                orderId: orderId || null,
-                searchMethod: orderId ? "by_id" : "by_transaction_id",
+              originalOrderId: orderId || null,
+              finalOrderId: finalOrderId || null,
+              searchMethod: finalOrderId ? "by_id" : "by_transaction_id",
+              debug: {
+                transactionIdSearchResult: allOrdersWithTransactionId || [],
               }
-            } 
-          },
-          404,
-          origin
-        );
-      }
+            }
+          } 
+        },
+        404,
+        origin
+      );
     }
 
     console.log("[portone-payment-confirm] 주문 조회 성공", {
@@ -287,11 +277,12 @@ serve(async (req) => {
       }, 200, origin);
     }
 
-    // PortOne API로 결제 상태 조회
+    // PortOne API로 결제 상태 조회 (이미 호출한 경우 재사용)
     let portonePayment: PortOnePaymentResponse;
-    try {
-      portonePayment = await getPortOnePayment(paymentId, portoneApiKey);
-      console.log("[portone-payment-confirm] PortOne 결제 조회 성공", {
+    if (portonePaymentForOrderId) {
+      // 이미 호출한 결과 재사용
+      portonePayment = portonePaymentForOrderId;
+      console.log("[portone-payment-confirm] PortOne 결제 조회 결과 재사용", {
         paymentId,
         portonePaymentId: portonePayment.id,
         status: portonePayment.status,
@@ -301,22 +292,37 @@ serve(async (req) => {
         metadata: portonePayment.metadata,
         tx_id: portonePayment.id, // PortOne에서 반환하는 실제 payment ID
       });
-    } catch (apiError) {
-      console.error("[portone-payment-confirm] PortOne API 조회 실패", {
-        paymentId,
-        error: apiError,
-      });
-      return buildResponse(
-        {
-          success: false,
-          error: {
-            message: "Failed to fetch payment status from PortOne",
-            details: apiError instanceof Error ? apiError.message : String(apiError),
+    } else {
+      // 처음 호출
+      try {
+        portonePayment = await getPortOnePayment(paymentId, portoneApiKey);
+        console.log("[portone-payment-confirm] PortOne 결제 조회 성공", {
+          paymentId,
+          portonePaymentId: portonePayment.id,
+          status: portonePayment.status,
+          amount: portonePayment.amount,
+          portoneOrderId: portonePayment.orderId,
+          channelKey: portonePayment.channelKey,
+          metadata: portonePayment.metadata,
+          tx_id: portonePayment.id, // PortOne에서 반환하는 실제 payment ID
+        });
+      } catch (apiError) {
+        console.error("[portone-payment-confirm] PortOne API 조회 실패", {
+          paymentId,
+          error: apiError,
+        });
+        return buildResponse(
+          {
+            success: false,
+            error: {
+              message: "Failed to fetch payment status from PortOne",
+              details: apiError instanceof Error ? apiError.message : String(apiError),
+            },
           },
-        },
-        500,
-        origin
-      );
+          500,
+          origin
+        );
+      }
     }
 
     // 결제 상태 검증
