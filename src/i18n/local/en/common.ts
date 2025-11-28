@@ -86,6 +86,8 @@ export default {
   'payment.goToCashCharge': 'Go to Cash Charge Page',
   'payment.pointPrice': 'Pay with Points: {{price}}P',
   'payment.kakao': 'Kakao Pay',
+  'payment.kakaopay': 'KakaoPay',
+  'payment.kakaopayDescription': 'Pay easily with KakaoPay.',
   'payment.paypal': 'PayPal',
   'payment.paypalDescription': 'Pay securely with PayPal. Fast and easy payment.',
   'payment.processing': 'Processing payment...',

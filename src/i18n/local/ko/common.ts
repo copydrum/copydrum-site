@@ -86,6 +86,8 @@ export default {
   'payment.goToCashCharge': '포인트 충전 페이지로 이동',
   'payment.pointPrice': '포인트 결제 시: {{price}}P',
   'payment.kakao': '카카오페이',
+  'payment.kakaopay': '카카오페이',
+  'payment.kakaopayDescription': '카카오페이로 간편하게 결제합니다.',
   'payment.paypal': '페이팔',
   'payment.paypalDescription': '페이팔로 안전하게 결제하세요. 빠르고 간편한 결제.',
   'payment.processing': '결제 처리 중...',
