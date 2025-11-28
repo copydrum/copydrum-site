@@ -522,6 +522,17 @@ export const requestKakaoPayPayment = async (
         if (params.onSuccess) {
           params.onSuccess(paymentResult);
         }
+
+        // 결제 완료 후 리다이렉트 URL로 이동
+        // 카카오페이는 결제 완료 후 redirectUrl로 자동 리다이렉트되지만,
+        // onPaymentSuccess 콜백에서도 명시적으로 처리하여 이중결제 방지
+        if (returnUrl) {
+          console.log('[portone-kakaopay] 결제 완료 후 리다이렉트', { returnUrl });
+          // 약간의 지연 후 리다이렉트 (콜백 처리 완료 대기)
+          setTimeout(() => {
+            window.location.href = returnUrl;
+          }, 500);
+        }
       },
       onPaymentFail: (error: any) => {
         console.error('[portone-kakaopay] onPaymentFail', error);

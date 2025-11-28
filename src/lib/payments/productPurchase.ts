@@ -36,6 +36,8 @@ interface StartSheetPurchaseParams {
   depositorName?: string;
   returnUrl?: string;
   elementId?: string; // PayPal SPB 렌더링을 위한 컨테이너 ID
+  onSuccess?: (response: any) => void; // 결제 성공 콜백 (카카오페이용)
+  onError?: (error: any) => void; // 결제 실패 콜백 (카카오페이용)
 }
 
 export interface StartSheetPurchaseResult {
@@ -59,6 +61,8 @@ export const startSheetPurchase = async ({
   depositorName,
   returnUrl,
   elementId,
+  onSuccess,
+  onError,
 }: StartSheetPurchaseParams): Promise<StartSheetPurchaseResult> => {
   const trimmedDepositorName = depositorName?.trim();
 
@@ -161,9 +165,17 @@ export const startSheetPurchase = async ({
         returnUrl: returnUrl, // returnUrl이 없으면 requestKakaoPayPayment 내부에서 자동 생성
         onSuccess: (response) => {
           console.log('[productPurchase] KakaoPay 결제 성공 콜백', response);
+          // 전달받은 콜백 호출
+          if (onSuccess) {
+            onSuccess(response);
+          }
         },
         onError: (error) => {
           console.error('[productPurchase] KakaoPay 결제 실패 콜백', error);
+          // 전달받은 콜백 호출
+          if (onError) {
+            onError(error);
+          }
         },
       });
 

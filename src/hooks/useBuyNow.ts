@@ -4,7 +4,6 @@ import type { User } from '@supabase/supabase-js';
 import { useTranslation } from 'react-i18next';
 import { hasPurchasedSheet } from '../lib/purchaseCheck';
 import { buySheetNow, startSheetPurchase } from '../lib/payments';
-import { requestKakaoPayPayment } from '../lib/payments/portone';
 import type { VirtualAccountInfo } from '../lib/payments';
 import type { PaymentMethod } from '../components/payments';
 import { processCashPurchase } from '../lib/cashPurchases';
@@ -111,7 +110,7 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
 
         try {
           // 먼저 주문 생성
-          const orderResult = await startSheetPurchase({
+          await startSheetPurchase({
             userId: user.id,
             items: [
               {
@@ -125,31 +124,27 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
             description: t('categoriesPage.purchaseDescription', { title: pendingSheet.title }),
             buyerName: user.email ?? null,
             buyerEmail: user.email ?? null,
-          });
-
-          // 카카오페이 결제 시작
-          const paymentResult = await requestKakaoPayPayment({
-            userId: user.id,
-            amount: price,
-            orderId: orderResult.orderId,
-            buyerEmail: user.email ?? undefined,
-            buyerName: user.email ?? undefined,
-            description: t('categoriesPage.purchaseDescription', { title: pendingSheet.title }),
             onSuccess: (response) => {
-              console.log('[useBuyNow] KakaoPay 결제 성공', response);
-              // 결제 완료는 Webhook에서 처리되므로 여기서는 로그만 남김
-            },
-            onError: (error) => {
-              console.error('[useBuyNow] KakaoPay 결제 실패', error);
-              alert(t('categoriesPage.purchaseError') || '결제 중 오류가 발생했습니다.');
+              console.log('[useBuyNow] KakaoPay 결제 성공 콜백', response);
+              // 결제 완료 후 상태 초기화
               setPaymentProcessing(false);
               setPendingSheet(null);
+              // 결제 완료 후 리다이렉트는 returnUrl에서 처리됨
+            },
+            onError: (error) => {
+              console.error('[useBuyNow] KakaoPay 결제 실패 콜백', error);
+              setPaymentProcessing(false);
+              setPendingSheet(null);
+              alert(
+                error instanceof Error
+                  ? error.message
+                  : t('categoriesPage.purchaseError') || '결제 중 오류가 발생했습니다.'
+              );
             },
           });
 
-          if (!paymentResult.success) {
-            throw new Error(paymentResult.error_msg || 'KakaoPay 결제가 실패했습니다.');
-          }
+          // 카카오페이 결제는 startSheetPurchase 내부에서 처리됨
+          console.log('[useBuyNow] KakaoPay 결제 요청 완료');
         } catch (error) {
           console.error('[useBuyNow] KakaoPay 결제 오류:', error);
           alert(
@@ -196,7 +191,7 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
           } else if (result.reason === 'INSUFFICIENT_CREDIT') {
             alert(
               t('payment.notEnoughCashMessage') ||
-                `보유 포인트가 부족합니다. 현재 잔액: ${result.currentCredits.toLocaleString()}원`
+              `보유 포인트가 부족합니다. 현재 잔액: ${result.currentCredits.toLocaleString()}원`
             );
           }
         } catch (error) {
@@ -267,7 +262,7 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
           error instanceof Error
             ? error.message
             : t('categoriesPage.purchaseError') ||
-              '주문 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+            '주문 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
 
         alert(errorMessage);
 

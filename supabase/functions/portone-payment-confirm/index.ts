@@ -251,10 +251,13 @@ serve(async (req) => {
     }
 
     // 결제 상태 검증
+    // PortOne API 조회 결과를 우선시하여 처리
+    // (웹훅에서 "READY"로 왔어도 API 조회 결과가 "PAID"면 처리)
     if (portonePayment.status !== "PAID") {
-      console.warn("[portone-payment-confirm] 결제 상태가 PAID가 아님", {
+      console.warn("[portone-payment-confirm] 결제 상태가 PAID가 아님 (PortOne API 조회 결과)", {
         paymentId,
         status: portonePayment.status,
+        note: "웹훅에서 READY 상태로 왔어도 API 조회 결과가 PAID가 아니면 처리하지 않음",
       });
       return buildResponse(
         {
