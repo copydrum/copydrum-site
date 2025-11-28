@@ -344,41 +344,68 @@ export const requestPayPalPayment = async (
     // loadPaymentUI(requestData, { callbacks }) 형태로 호출
     await PortOne.loadPaymentUI(requestData, {
       onPaymentSuccess: async (paymentResult: any) => {
-        console.log('[portone-paypal] onPaymentSuccess', paymentResult);
+        console.log('[portone-paypal] onPaymentSuccess 전체 응답', JSON.stringify(paymentResult, null, 2));
 
-        // 결제 성공 시 orders.transaction_id 업데이트
+        // 결제 성공 시 orders.transaction_id 업데이트 (확실히 보장)
         // PortOne paymentId를 orders.transaction_id에 저장하여 웹훅에서 주문을 찾을 수 있도록 함
         // PayPal의 경우 paymentResult에서 paymentId 또는 txId 추출
+        // PortOne V2 SDK 응답 구조에 따라 다양한 필드명을 시도
         const portonePaymentId = paymentResult.paymentId || 
                                   paymentResult.txId || 
+                                  paymentResult.tx_id ||
                                   paymentResult.id || 
+                                  paymentResult.payment_id ||
                                   requestData.paymentId; // fallback to requestData의 paymentId
+        
+        console.log('[portone-paypal] paymentResult에서 추출한 paymentId', {
+          paymentId: portonePaymentId,
+          paymentResultKeys: Object.keys(paymentResult || {}),
+          fallbackUsed: portonePaymentId === requestData.paymentId,
+        });
         
         if (portonePaymentId && params.orderId) {
           try {
-            console.log('[portone-paypal] orders.transaction_id 업데이트 시도', {
+            console.log('[portone-paypal] onPaymentSuccess에서 orders.transaction_id 업데이트 시도', {
               orderId: params.orderId,
               paymentId: portonePaymentId,
             });
             
-            const { error: updateError } = await supabase
+            const { data: updateData, error: updateError } = await supabase
               .from('orders')
               .update({ transaction_id: portonePaymentId })
-              .eq('id', params.orderId);
+              .eq('id', params.orderId)
+              .select('id, transaction_id, payment_status')
+              .single();
             
             if (updateError) {
-              console.warn('[portone-paypal] orders.transaction_id 업데이트 실패 (계속 진행):', updateError);
-              // transaction_id 업데이트 실패해도 결제는 계속 진행 (웹훅에서 처리 가능)
-            } else {
-              console.log('[portone-paypal] orders.transaction_id 업데이트 성공', {
+              console.error('[portone-paypal] onPaymentSuccess에서 orders.transaction_id 업데이트 실패:', {
                 orderId: params.orderId,
                 paymentId: portonePaymentId,
+                error: updateError,
+              });
+              // transaction_id 업데이트 실패해도 결제는 계속 진행 (웹훅에서 처리 가능)
+            } else {
+              console.log('[portone-paypal] onPaymentSuccess에서 orders.transaction_id 업데이트 성공', {
+                orderId: params.orderId,
+                paymentId: portonePaymentId,
+                updatedOrder: updateData,
+                note: '이제 웹훅에서 transaction_id로 주문을 찾을 수 있음',
               });
             }
           } catch (error) {
-            console.error('[portone-paypal] orders.transaction_id 업데이트 중 오류:', error);
+            console.error('[portone-paypal] onPaymentSuccess에서 orders.transaction_id 업데이트 중 오류:', {
+              orderId: params.orderId,
+              paymentId: portonePaymentId,
+              error,
+            });
             // 오류가 발생해도 결제는 계속 진행
           }
+        } else {
+          console.warn('[portone-paypal] onPaymentSuccess에서 transaction_id 업데이트 건너뜀', {
+            orderId: params.orderId,
+            paymentId: portonePaymentId,
+            reason: !portonePaymentId ? 'paymentId 없음' : 'orderId 없음',
+          });
         }
         
         // 사용자 정의 성공 콜백 호출
@@ -515,16 +542,34 @@ export const requestKakaoPayPayment = async (
       locale: 'KO_KR', // 카카오페이는 KO_KR만 지원
     };
 
-    // 주문에 transaction_id(paymentId) 저장
+    // 주문에 transaction_id(paymentId) 저장 (결제 요청 전에 미리 저장)
     // orderId는 내부 주문 식별용, transaction_id는 PG 결제 식별용
-    const { error: updateError } = await supabase
+    // 카카오페이는 결제 완료 후 리다이렉트가 일어날 수 있으므로, 미리 저장하는 것이 중요
+    console.log('[portone-kakaopay] 결제 요청 전 transaction_id 저장 시도', {
+      orderId: params.orderId,
+      paymentId: newPaymentId,
+    });
+    
+    const { data: updateData, error: updateError } = await supabase
       .from('orders')
       .update({ transaction_id: newPaymentId })
-      .eq('id', params.orderId);
+      .eq('id', params.orderId)
+      .select('id, transaction_id')
+      .single();
 
     if (updateError) {
-      console.warn('[portone-kakaopay] 주문 transaction_id 업데이트 실패 (계속 진행):', updateError);
-      // transaction_id 업데이트 실패해도 결제는 계속 진행
+      console.error('[portone-kakaopay] 주문 transaction_id 업데이트 실패:', {
+        orderId: params.orderId,
+        paymentId: newPaymentId,
+        error: updateError,
+      });
+      // transaction_id 업데이트 실패해도 결제는 계속 진행 (onPaymentSuccess에서 재시도)
+    } else {
+      console.log('[portone-kakaopay] 주문 transaction_id 저장 성공 (결제 요청 전)', {
+        orderId: params.orderId,
+        paymentId: newPaymentId,
+        updatedOrder: updateData,
+      });
     }
 
     // 디버그 로그: requestData의 주요 필드 확인
@@ -545,41 +590,69 @@ export const requestKakaoPayPayment = async (
     // 포트원 V2 SDK로 카카오페이 결제 요청 (requestPayment 사용)
     await PortOne.requestPayment(requestData, {
       onPaymentSuccess: async (paymentResult: any) => {
-        console.log('[portone-kakaopay] onPaymentSuccess', paymentResult);
+        console.log('[portone-kakaopay] onPaymentSuccess 전체 응답', JSON.stringify(paymentResult, null, 2));
 
-        // 결제 성공 시 orders.transaction_id 업데이트
+        // 결제 성공 시 orders.transaction_id 업데이트 (확실히 보장)
         // PortOne paymentId를 orders.transaction_id에 저장하여 웹훅에서 주문을 찾을 수 있도록 함
         // paymentResult에서 paymentId 또는 txId 추출
+        // PortOne V2 SDK 응답 구조에 따라 다양한 필드명을 시도
         const portonePaymentId = paymentResult.paymentId || 
                                   paymentResult.txId || 
+                                  paymentResult.tx_id ||
                                   paymentResult.id || 
+                                  paymentResult.payment_id ||
                                   newPaymentId; // fallback to requestData의 paymentId
+        
+        console.log('[portone-kakaopay] paymentResult에서 추출한 paymentId', {
+          paymentId: portonePaymentId,
+          paymentResultKeys: Object.keys(paymentResult || {}),
+          fallbackUsed: portonePaymentId === newPaymentId,
+        });
         
         if (portonePaymentId && params.orderId) {
           try {
-            console.log('[portone-kakaopay] orders.transaction_id 업데이트 시도', {
+            console.log('[portone-kakaopay] onPaymentSuccess에서 orders.transaction_id 업데이트 시도', {
               orderId: params.orderId,
               paymentId: portonePaymentId,
+              note: '결제 요청 전에도 저장했지만, onPaymentSuccess에서도 확실히 업데이트',
             });
             
-            const { error: updateError } = await supabase
+            const { data: updateData, error: updateError } = await supabase
               .from('orders')
               .update({ transaction_id: portonePaymentId })
-              .eq('id', params.orderId);
+              .eq('id', params.orderId)
+              .select('id, transaction_id, payment_status')
+              .single();
             
             if (updateError) {
-              console.warn('[portone-kakaopay] orders.transaction_id 업데이트 실패 (계속 진행):', updateError);
-              // transaction_id 업데이트 실패해도 결제는 계속 진행 (웹훅에서 처리 가능)
-            } else {
-              console.log('[portone-kakaopay] orders.transaction_id 업데이트 성공', {
+              console.error('[portone-kakaopay] onPaymentSuccess에서 orders.transaction_id 업데이트 실패:', {
                 orderId: params.orderId,
                 paymentId: portonePaymentId,
+                error: updateError,
+              });
+              // transaction_id 업데이트 실패해도 결제는 계속 진행 (웹훅에서 처리 가능)
+            } else {
+              console.log('[portone-kakaopay] onPaymentSuccess에서 orders.transaction_id 업데이트 성공', {
+                orderId: params.orderId,
+                paymentId: portonePaymentId,
+                updatedOrder: updateData,
+                note: '이제 웹훅에서 transaction_id로 주문을 찾을 수 있음',
               });
             }
           } catch (error) {
-            console.error('[portone-kakaopay] orders.transaction_id 업데이트 중 오류:', error);
+            console.error('[portone-kakaopay] onPaymentSuccess에서 orders.transaction_id 업데이트 중 오류:', {
+              orderId: params.orderId,
+              paymentId: portonePaymentId,
+              error,
+            });
             // 오류가 발생해도 결제는 계속 진행
           }
+        } else {
+          console.warn('[portone-kakaopay] onPaymentSuccess에서 transaction_id 업데이트 건너뜀', {
+            orderId: params.orderId,
+            paymentId: portonePaymentId,
+            reason: !portonePaymentId ? 'paymentId 없음' : 'orderId 없음',
+          });
         }
         
         // 사용자 정의 성공 콜백 호출
