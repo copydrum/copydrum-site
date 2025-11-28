@@ -464,6 +464,7 @@ export const requestKakaoPayPayment = async (
       storeId,
       channelKey,
       paymentId: newPaymentId, // 항상 새로운 UUID 사용 (orderId와 분리)
+      orderId: params.orderId, // 내부 주문 ID를 PortOne에 전달 (웹훅에서 주문 찾기용)
       orderName: params.description,
       totalAmount: params.amount, // KRW 정수 금액 그대로 사용
       currency: 'CURRENCY_KRW' as const, // 카카오페이는 원화 결제만 지원

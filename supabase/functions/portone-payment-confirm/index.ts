@@ -188,17 +188,86 @@ serve(async (req) => {
     }
 
     if (orderError || !order) {
-      console.error("[portone-payment-confirm] 주문을 찾을 수 없음", {
+      console.error("[portone-payment-confirm] 주문을 찾을 수 없음 (첫 번째 시도)", {
         orderId: orderId || null,
         paymentId,
         orderError,
         searchMethod: orderId ? "by_id" : "by_transaction_id",
       });
-      return buildResponse(
-        { success: false, error: { message: "Order not found" } },
-        404,
-        origin
-      );
+
+      // orderId가 없고 transaction_id로도 찾지 못한 경우,
+      // PortOne API에서 orderId를 가져와서 다시 시도
+      if (!orderId) {
+        console.log("[portone-payment-confirm] PortOne API에서 orderId 조회 시도", { paymentId });
+        try {
+          const portonePayment = await getPortOnePayment(paymentId, portoneApiKey);
+          const portoneOrderId = portonePayment.orderId;
+          
+          if (portoneOrderId) {
+            console.log("[portone-payment-confirm] PortOne에서 orderId 발견, 재조회 시도", {
+              portoneOrderId,
+              paymentId,
+            });
+            
+            // PortOne의 orderId로 주문 조회
+            const { data: retryOrder, error: retryError } = await supabase
+              .from("orders")
+              .select("*, order_items(*, drum_sheets(*))")
+              .eq("id", portoneOrderId)
+              .single();
+            
+            if (retryOrder && !retryError) {
+              console.log("[portone-payment-confirm] PortOne orderId로 주문 조회 성공", {
+                orderId: retryOrder.id,
+                portoneOrderId,
+              });
+              order = retryOrder;
+              orderError = null;
+            } else {
+              console.error("[portone-payment-confirm] PortOne orderId로도 주문을 찾을 수 없음", {
+                portoneOrderId,
+                retryError,
+              });
+            }
+          } else {
+            console.warn("[portone-payment-confirm] PortOne API 응답에 orderId가 없음", {
+              paymentId,
+              portonePayment,
+            });
+          }
+        } catch (apiError) {
+          console.error("[portone-payment-confirm] PortOne API 조회 실패 (주문 찾기 재시도용)", {
+            paymentId,
+            error: apiError,
+          });
+        }
+      }
+
+      // 여전히 주문을 찾지 못한 경우
+      if (orderError || !order) {
+        console.error("[portone-payment-confirm] 주문을 찾을 수 없음 (최종)", {
+          orderId: orderId || null,
+          paymentId,
+          orderError,
+          searchMethod: orderId ? "by_id" : "by_transaction_id",
+          note: "transaction_id로 조회했지만 주문이 없거나, PortOne API에서 orderId를 가져와도 주문을 찾지 못함",
+        });
+        return buildResponse(
+          { 
+            success: false, 
+            error: { 
+              message: "Order not found",
+              details: {
+                paymentId,
+                orderId: orderId || null,
+                searchMethod: orderId ? "by_id" : "by_transaction_id",
+              }
+            } 
+          },
+          404,
+          origin
+        );
+      }
     }
 
     console.log("[portone-payment-confirm] 주문 조회 성공", {
