@@ -42,6 +42,11 @@ export default function MarketingStatus() {
     const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string>('');
 
+    // Search state
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<DrumSheet[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+
     // Pagination state
     const [page, setPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
@@ -378,6 +383,47 @@ ${sheet.youtube_url ? `<p>Related Video: <a href="${sheet.youtube_url}">${sheet.
         }
     };
 
+    const handleSearch = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!searchQuery.trim()) return;
+
+        setIsSearching(true);
+        try {
+            const { data, error } = await supabase
+                .from('drum_sheets')
+                .select('*')
+                .or(`title.ilike.%${searchQuery}%,artist.ilike.%${searchQuery}%`)
+                .order('created_at', { ascending: false })
+                .limit(10);
+
+            if (error) throw error;
+            setSearchResults(data || []);
+        } catch (error) {
+            console.error('Error searching sheets:', error);
+            alert('검색 중 오류가 발생했습니다.');
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleAddToQueue = (sheet: DrumSheet) => {
+        // Check if already in queue
+        if (queue.some(s => s.id === sheet.id)) {
+            alert('이미 대기열에 있는 악보입니다.');
+            return;
+        }
+
+        // Add to queue
+        setQueue(prev => [sheet, ...prev]);
+        
+        // Clear search results to look cleaner, or keep them? Let's keep them but give feedback
+        // alert('대기열에 추가되었습니다.'); // Optional: might be annoying
+        
+        // Remove from search results to indicate it's done? 
+        // Or just visual feedback. Let's just add it and maybe scroll to it or highlight it.
+        // For now, simple add.
+    };
+
     const activePlatform = PLATFORMS.find(p => p.id === activeTab);
     const totalPages = Math.ceil(totalCount / pageSize);
 
@@ -399,6 +445,65 @@ ${sheet.youtube_url ? `<p>Related Video: <a href="${sheet.youtube_url}">${sheet.
                         </button>
                     ))}
                 </div>
+            </div>
+
+            {/* Search & Register */}
+            <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <i className="ri-search-line"></i>
+                    악보 검색 및 등록
+                </h2>
+                <form onSubmit={handleSearch} className="flex gap-2 mb-4">
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="아티스트 또는 곡 제목 검색..."
+                        className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <button
+                        type="submit"
+                        disabled={isSearching}
+                        className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
+                    >
+                        {isSearching ? '검색 중...' : '검색'}
+                    </button>
+                </form>
+
+                {searchResults.length > 0 && (
+                    <div className="border rounded-lg divide-y">
+                        {searchResults.map(sheet => {
+                            const isInQueue = queue.some(q => q.id === sheet.id);
+                            return (
+                                <div key={sheet.id} className="p-3 flex items-center justify-between hover:bg-gray-50">
+                                    <div className="flex items-center gap-3">
+                                        {sheet.preview_image_url ? (
+                                            <img src={sheet.preview_image_url} alt={sheet.title} className="w-10 h-12 object-cover rounded bg-gray-100" />
+                                        ) : (
+                                            <div className="w-10 h-12 bg-gray-200 rounded flex items-center justify-center">
+                                                <i className="ri-music-2-line text-gray-400"></i>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <div className="font-medium text-gray-900">{sheet.title}</div>
+                                            <div className="text-sm text-gray-500">{sheet.artist}</div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => handleAddToQueue(sheet)}
+                                        disabled={isInQueue}
+                                        className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${isInQueue
+                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                            : 'bg-green-600 text-white hover:bg-green-700'
+                                            }`}
+                                    >
+                                        {isInQueue ? '대기열에 있음' : '등록'}
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
 
             {/* Work Queue */}

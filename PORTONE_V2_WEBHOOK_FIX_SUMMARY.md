@@ -334,3 +334,5 @@ PortOne V2 Webhook이 Supabase Edge Function에 도착하지만, 필수 필드 �
 - [ ] 주문 조회 실패 시 상세 에러 메시지
 - [ ] 카카오페이 결제 취소/환불 처리
 
+
+
