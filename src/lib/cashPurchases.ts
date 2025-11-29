@@ -92,7 +92,10 @@ export const processCashPurchase = async ({
           user_id: userId,
           order_number: orderNumber,
           total_amount: normalizedTotal,
-          status: 'completed',
+          status: 'completed', // ✅ 이건 잘 하셨습니다 (건드리지 마세요)
+          // 👇 [수정] 아래 두 줄을 꼭 추가해야 목록에 나옵니다!
+          payment_status: 'paid', 
+          payment_confirmed_at: new Date().toISOString(), 
           payment_method: paymentMethod,
           order_type: 'product', // 주문 타입 추가 (캐시로 악보 구매)
         },
