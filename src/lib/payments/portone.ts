@@ -186,6 +186,7 @@ export interface RequestPayPalPaymentResult {
   paid_amount?: number;
   error_code?: string;
   error_msg?: string;
+  paymentId?: string; // PortOne paymentId (transaction_id로 사용)
 }
 
 // PayPal 결제 요청 함수
@@ -244,7 +245,9 @@ export const requestPayPalPayment = async (
     }
   }
 
-  // 글로벌 사이트: 포트원 V2 SDK 사용
+  // ============================================================
+  // 🟢 [수정됨] 글로벌 사이트: 포트원 V2 SDK 사용 로직 강화
+  // ============================================================
   console.log('[portone-paypal] PayPal 결제 요청 (PortOne V2 SDK 사용)', {
     orderId: params.orderId,
     amount: params.amount,
@@ -262,57 +265,54 @@ export const requestPayPalPayment = async (
   }
 
   try {
-    // 리턴 URL 설정
     const returnUrl = params.returnUrl || getPortOneReturnUrl();
-
-    // Always use the fixed container - PortOne SDK will find .portone-ui-container automatically
-    // But we can also specify it explicitly via element parameter
-
-    // PayPal 통화 결정 로직
-    // 1. 일본어 사이트: JPY
-    // 2. 나머지 모든 언어: USD (영어 포함)
-    // 3. 한국어 사이트: 이미 isGlobalSite 체크로 차단됨
     const hostname = window.location.hostname;
     const locale = getLocaleFromHost(window.location.host);
 
-    // PayPal 통화 결정: 일본어만 JPY, 나머지는 모두 USD
+    // PayPal 통화 결정
     const isJapanSite = locale === 'ja' || isJapaneseSiteHost(hostname);
     const paypalCurrency: 'USD' | 'JPY' = isJapanSite ? 'JPY' : 'USD';
 
-    // KRW 금액을 PayPal 통화로 변환
+    // 금액 변환
     const convertedAmount = convertFromKrw(params.amount, paypalCurrency);
     const portOneCurrency = toPortOneCurrency(paypalCurrency);
 
-    // PayPal 금액 계산: PortOne SDK는 통화별로 다른 단위를 사용
-    // - USD: 센트 단위 (정수) - 예: 2.31 USD = 231 센트
-    // - JPY: 엔 단위 (정수) - 예: 300 JPY = 300
     let finalAmount: number;
     if (paypalCurrency === 'USD') {
-      // USD는 센트 단위로 변환 (소수점 2자리 반올림 후 100 곱하기)
-      finalAmount = Math.round(Number(convertedAmount.toFixed(2)) * 100);
+      finalAmount = Math.round(Number(convertedAmount.toFixed(2)) * 100); // 센트 단위
     } else {
-      // JPY는 엔 단위로 반올림
-      finalAmount = Math.round(convertedAmount);
+      finalAmount = Math.round(convertedAmount); // 엔 단위
     }
 
-    // 디버그 로그 추가
-    console.log('[paypal-debug] 금액 계산 과정', {
-      'params.amount (KRW)': params.amount,
-      'paypalCurrency': paypalCurrency,
-      'convertedAmount (소수점 포함)': convertedAmount,
-      'finalAmount (PortOne 전달값)': finalAmount,
-      'finalAmount 설명': paypalCurrency === 'USD' ? `${finalAmount} 센트 = $${(finalAmount / 100).toFixed(2)}` : `${finalAmount} 엔`,
+    // 🟢 [핵심 수정 1] Payment ID를 미리 생성 (카카오페이처럼)
+    // 기존에는 orderId를 paymentId로 썼지만, 'pay_' 접두어가 붙은 고유 ID를 쓰는 것이 안전합니다.
+    const newPaymentId = `pay_${uuidv4()}`;
+
+    // 🟢 [핵심 수정 2] 결제창 띄우기 전에 DB에 transaction_id 미리 저장!
+    // 이렇게 해야 결제 도중 창이 닫혀도 Webhook이 와서 처리해줄 수 있습니다.
+    console.log('[portone-paypal] 결제 요청 전 transaction_id 저장 시도', {
+      orderId: params.orderId,
+      paymentId: newPaymentId,
     });
 
-    // Request data와 콜백을 분리하여 전달
-    // PortOne SDK는 자동으로 .portone-ui-container를 찾지만, 명시적으로 지정할 수도 있음
+    const { error: updateError } = await supabase
+      .from('orders')
+      .update({ transaction_id: newPaymentId })
+      .eq('id', params.orderId);
+
+    if (updateError) {
+      console.error('[portone-paypal] DB 업데이트 실패 (치명적이지 않음, 계속 진행)', updateError);
+    } else {
+      console.log('[portone-paypal] DB 업데이트 성공');
+    }
+
+    // Request Data 구성
     const requestData: any = {
-      uiType: 'PAYPAL_SPB' as const,
+      uiType: 'PAYPAL_SPB',
       storeId,
       channelKey,
-      paymentId: params.orderId, // PayPal의 경우 orderId를 paymentId로 사용
-      // ✅ Supabase 주문과 연결하기 위한 orderId 설정 (웹훅에서 주문 찾기용)
-      orderId: params.orderId, // Supabase orders.id를 PortOne에 전달
+      paymentId: newPaymentId, // 🟢 생성한 ID 사용
+      orderId: params.orderId,
       orderName: params.description,
       totalAmount: finalAmount,
       currency: portOneCurrency,
@@ -322,102 +322,35 @@ export const requestPayPalPayment = async (
         fullName: params.buyerName ?? undefined,
         phoneNumber: params.buyerTel ?? undefined,
       },
-      redirectUrl: returnUrl,
-      // ✅ 나중에 Webhook / REST 조회에서 다시 확인할 수 있도록 metadata에도 기록
+      redirectUrl: returnUrl, // 🟢 리다이렉트 URL 필수
       metadata: {
-        supabaseOrderId: params.orderId, // Supabase orders.id
-        // 필요시 추가 메타데이터도 포함 가능
+        supabaseOrderId: params.orderId,
       },
     };
 
-    // element 파라미터는 선택사항이지만, 명시적으로 지정하면 더 안전함
     if (params.elementId) {
       requestData.element = params.elementId.startsWith('#') ? params.elementId : `#${params.elementId}`;
     } else {
       requestData.element = '#portone-ui-container';
     }
 
-    console.log('[portone-paypal] loadPaymentUI requestData', {
-      ...requestData,
-      originalAmount: params.amount,
-      convertedAmount,
-      finalAmount,
-      '금액 설명': paypalCurrency === 'USD'
-        ? `${params.amount} KRW → ${convertedAmount.toFixed(2)} USD → ${finalAmount} 센트`
-        : `${params.amount} KRW → ${convertedAmount.toFixed(0)} JPY → ${finalAmount} 엔`,
-    });
+    console.log('[portone-paypal] loadPaymentUI 호출', requestData);
 
     // 포트원 V2 SDK로 PayPal 결제 UI 로드
-    // loadPaymentUI(requestData, { callbacks }) 형태로 호출
     await PortOne.loadPaymentUI(requestData, {
       onPaymentSuccess: async (paymentResult: any) => {
-        console.log('[portone-paypal] onPaymentSuccess 전체 응답', JSON.stringify(paymentResult, null, 2));
-
-        // 결제 성공 시 orders.transaction_id 업데이트 (확실히 보장)
-        // PortOne paymentId를 orders.transaction_id에 저장하여 웹훅에서 주문을 찾을 수 있도록 함
-        // PayPal의 경우 paymentResult에서 paymentId 또는 txId 추출
-        // PortOne V2 SDK 응답 구조에 따라 다양한 필드명을 시도
-        const portonePaymentId = paymentResult.paymentId || 
-                                  paymentResult.txId || 
-                                  paymentResult.tx_id ||
-                                  paymentResult.id || 
-                                  paymentResult.payment_id ||
-                                  requestData.paymentId; // fallback to requestData의 paymentId
+        console.log('[portone-paypal] onPaymentSuccess 콜백 실행', paymentResult);
         
-        console.log('[portone-paypal] paymentResult에서 추출한 paymentId', {
-          paymentId: portonePaymentId,
-          paymentResultKeys: Object.keys(paymentResult || {}),
-          fallbackUsed: portonePaymentId === requestData.paymentId,
-        });
-        
-        if (portonePaymentId && params.orderId) {
-          try {
-            console.log('[portone-paypal] onPaymentSuccess에서 orders.transaction_id 업데이트 시도', {
-              orderId: params.orderId,
-              paymentId: portonePaymentId,
-            });
-            
-            const { data: updateData, error: updateError } = await supabase
-              .from('orders')
-              .update({ transaction_id: portonePaymentId })
-              .eq('id', params.orderId)
-              .select('id, transaction_id, payment_status')
-              .single();
-            
-            if (updateError) {
-              console.error('[portone-paypal] onPaymentSuccess에서 orders.transaction_id 업데이트 실패:', {
-                orderId: params.orderId,
-                paymentId: portonePaymentId,
-                error: updateError,
-              });
-              // transaction_id 업데이트 실패해도 결제는 계속 진행 (웹훅에서 처리 가능)
-            } else {
-              console.log('[portone-paypal] onPaymentSuccess에서 orders.transaction_id 업데이트 성공', {
-                orderId: params.orderId,
-                paymentId: portonePaymentId,
-                updatedOrder: updateData,
-                note: '이제 웹훅에서 transaction_id로 주문을 찾을 수 있음',
-              });
-            }
-          } catch (error) {
-            console.error('[portone-paypal] onPaymentSuccess에서 orders.transaction_id 업데이트 중 오류:', {
-              orderId: params.orderId,
-              paymentId: portonePaymentId,
-              error,
-            });
-            // 오류가 발생해도 결제는 계속 진행
-          }
-        } else {
-          console.warn('[portone-paypal] onPaymentSuccess에서 transaction_id 업데이트 건너뜀', {
-            orderId: params.orderId,
-            paymentId: portonePaymentId,
-            reason: !portonePaymentId ? 'paymentId 없음' : 'orderId 없음',
-          });
-        }
-        
-        // 사용자 정의 성공 콜백 호출
+        // 프론트엔드 콜백 호출
         if (params.onSuccess) {
           params.onSuccess(paymentResult);
+        }
+
+        // 명시적 리다이렉트 (안전장치)
+        // 모바일이나 일부 환경에서는 자동 리다이렉트가 안 될 수 있으므로 강제 이동
+        if (returnUrl) {
+           console.log('[portone-paypal] 리다이렉트 실행');
+           window.location.href = returnUrl;
         }
       },
       onPaymentFail: (error: any) => {
@@ -431,9 +364,8 @@ export const requestPayPalPayment = async (
     return {
       success: true,
       merchant_uid: params.orderId,
-      error_msg: params.elementId
-        ? 'PayPal 버튼이 로드되었습니다.'
-        : 'PayPal 버튼이 로드되었습니다. (주의: 컨테이너 요소가 없어 화면에 안 보일 수 있음)',
+      paymentId: newPaymentId,
+      error_msg: 'PayPal 버튼이 로드되었습니다.',
     };
   } catch (error) {
     console.error('[portone-paypal] PayPal 결제 요청 오류', error);
