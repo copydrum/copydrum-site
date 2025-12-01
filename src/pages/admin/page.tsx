@@ -4179,10 +4179,10 @@ const AdminPage: React.FC = () => {
   };
 
   const downloadSheetCsvSample = () => {
-    const csvContent = `곡명,아티스트,난이도,파일명,유튜브링크장르,가격
-ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://www.youtube.com/watch?v=영상ID,3000
-곡 제목 2,아티스트 2,초급,아티스트2-곡제목2.pdf,,5000
-곡 제목 3,아티스트 3,고급,아티스트3-곡제목3.pdf,https://youtu.be/영상ID,10000`;
+    const csvContent = `곡명,아티스트,난이도,파일명,유튜브링크,장르,가격
+ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://www.youtube.com/watch?v=영상ID,팝,3000
+곡 제목 2,아티스트 2,초급,아티스트2-곡제목2.pdf,,록,5000
+곡 제목 3,아티스트 3,고급,아티스트3-곡제목3.pdf,https://youtu.be/영상ID,재즈,10000`;
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' }); // UTF-8 BOM 추가
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -4221,12 +4221,13 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
         const rowNum = i + 2; // 헤더 제외하고 1부터 시작, 실제로는 2행부터
 
         try {
-          // CSV 필드 파싱 (새 형식: 곡명, 아티스트, 난이도, 파일명, 유튜브링크장르, 가격)
+          // CSV 필드 파싱 (새 형식: 곡명, 아티스트, 난이도, 파일명, 유튜브링크, 장르, 가격)
           const title = norm(row.곡명 || row.title || row.Title || row['곡 제목'] || '');
           const artist = norm(row.아티스트 || row.artist || row.Artist || '');
           const difficultyInput = norm(row.난이도 || row.difficulty || row.Difficulty || '초급');
           const fileName = norm(row.파일명 || row.filename || row.fileName || row['파일명'] || '');
-          const youtubeUrlGenre = norm(row.유튜브링크장르 || row.youtube_url || row.youtubeUrl || row['유튜브링크장르'] || '');
+          const youtubeUrl = norm(row.유튜브링크 || row.youtube_url || row.youtubeUrl || row['유튜브링크'] || '');
+          const genre = norm(row.장르 || row.genre || row.Genre || row['장르'] || '');
           const price = num(row.가격 || row.price || row.Price || 0);
 
           if (!title || !artist) {
@@ -4263,32 +4264,34 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
               thumbnailUrl = spotifyResult.albumCoverUrl || '';
               albumName = spotifyResult.albumName || '';
 
-              // 장르가 있으면 카테고리 자동 선택
-              if (spotifyResult.genre) {
+              // CSV에서 장르가 없고 Spotify에서 장르를 가져온 경우 카테고리 자동 선택
+              if (!genre && spotifyResult.genre) {
                 const matchingCategory = categories.find(cat =>
                   cat.name.toLowerCase().includes(spotifyResult.genre!.toLowerCase())
                 );
                 if (matchingCategory) {
                   categoryId = matchingCategory.id;
-                  console.log(`행 ${rowNum}: 카테고리 자동 선택: ${matchingCategory.name}`);
+                  console.log(`행 ${rowNum}: Spotify 장르로 카테고리 자동 선택: ${matchingCategory.name}`);
                 }
               }
-
-              console.log(`행 ${rowNum}: Spotify 정보 가져오기 완료 - 썸네일: ${thumbnailUrl ? '있음' : '없음'}`);
             }
+
+            console.log(`행 ${rowNum}: Spotify 정보 가져오기 완료 - 썸네일: ${thumbnailUrl ? '있음' : '없음'}`);
           } catch (spotifyError) {
             console.warn(`행 ${rowNum}: Spotify 정보 가져오기 실패 (계속 진행):`, spotifyError);
           }
 
-          // 3. 유튜브 URL 파싱 (유튜브링크장르 필드에서 URL 추출)
-          let youtubeUrl = '';
-          if (youtubeUrlGenre) {
-            // URL인지 확인
-            if (youtubeUrlGenre.startsWith('http://') || youtubeUrlGenre.startsWith('https://')) {
-              youtubeUrl = youtubeUrlGenre;
+          // 3. CSV에서 입력한 장르로 카테고리 선택
+          if (genre && !categoryId) {
+            const matchingCategory = categories.find(cat =>
+              cat.name.toLowerCase().includes(genre.toLowerCase()) ||
+              genre.toLowerCase().includes(cat.name.toLowerCase())
+            );
+            if (matchingCategory) {
+              categoryId = matchingCategory.id;
+              console.log(`행 ${rowNum}: CSV 장르로 카테고리 선택: ${matchingCategory.name}`);
             } else {
-              // 장르로 처리 (나중에 사용 가능)
-              console.log(`행 ${rowNum}: 장르 정보: ${youtubeUrlGenre}`);
+              console.log(`행 ${rowNum}: 장르 "${genre}"에 해당하는 카테고리를 찾을 수 없습니다.`);
             }
           }
 
@@ -6588,7 +6591,8 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   <li><strong>아티스트</strong> (필수) - 아티스트명</li>
                   <li><strong>난이도</strong> (선택) - 초급/중급/고급 또는 beginner/intermediate/advanced</li>
                   <li><strong>파일명</strong> (선택) - PDF 파일명 (예: ALLDAY PROJECT - ONE MORE TIME.pdf)</li>
-                  <li><strong>유튜브링크장르</strong> (선택) - 유튜브 URL 또는 장르 정보</li>
+                  <li><strong>유튜브링크</strong> (선택) - 유튜브 URL (예: https://www.youtube.com/watch?v=영상ID)</li>
+                  <li><strong>장르</strong> (선택) - 장르 정보 (예: 팝, 록, 재즈 등)</li>
                   <li><strong>가격</strong> (선택) - 가격 (숫자, 기본값: 0)</li>
                 </ul>
                 <p className="mt-2 text-xs text-gray-500">
