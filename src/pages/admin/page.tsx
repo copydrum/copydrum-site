@@ -957,6 +957,7 @@ const AdminPage: React.FC = () => {
   const [sheetCsvFile, setSheetCsvFile] = useState<File | null>(null);
   const [sheetCsvData, setSheetCsvData] = useState<any[]>([]);
   const [isSheetCsvProcessing, setIsSheetCsvProcessing] = useState(false);
+  const [bulkPdfFiles, setBulkPdfFiles] = useState<File[]>([]); // 대량 PDF 파일 상태
   const [newSheet, setNewSheet] = useState({
     title: '',
     artist: '',
@@ -1993,6 +1994,41 @@ const AdminPage: React.FC = () => {
     } finally {
       setOrderActionLoading(null);
     }
+  };
+
+  // [추가] 맞춤 제작 주문을 일반 악보로 등록하기 위한 핸들러
+  const handleRegisterCustomOrderAsSheet = (customOrder: CustomOrder) => {
+    if (!customOrder.completed_pdf_url) {
+      alert('완료된 PDF 파일이 없는 주문입니다.');
+      return;
+    }
+
+    // 1. 새 악보 폼 데이터 채우기
+    setNewSheet({
+      title: customOrder.song_title,
+      artist: customOrder.artist,
+      difficulty: '초급', // 기본값
+      price: 3000, // 기본 판매가 설정 (필요시 수정)
+      category_id: '', // 카테고리는 직접 선택하도록 비워둠
+      thumbnail_url: '',
+      album_name: '',
+      page_count: 0,
+      tempo: 0,
+      pdf_file: null,
+      preview_image_url: '',
+      pdf_url: customOrder.completed_pdf_url || '', // 주문제작 완료 PDF URL
+      youtube_url: customOrder.song_url || ''
+    });
+
+    // 2. Spotify 정보 자동 검색 시도 (썸네일 등을 위해)
+    fetchSpotifyInfo(customOrder.song_title, customOrder.artist);
+
+    // 3. UI 상태 변경: 메뉴를 '악보 관리'로 이동하고 모달 열기
+    setActiveMenu('sheets');
+    setIsAddingSheet(true);
+    
+    // 알림 (선택 사항)
+    alert(`'${customOrder.song_title}' 정보를 불러왔습니다.\n카테고리 선택 및 PDF 파일을 업로드하여 등록을 완료해주세요.`);
   };
 
   const handleRefundOrder = async () => {
@@ -4179,10 +4215,10 @@ const AdminPage: React.FC = () => {
   };
 
   const downloadSheetCsvSample = () => {
-    const csvContent = `곡명,아티스트,난이도,파일명,유튜브링크,장르,가격
-ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://www.youtube.com/watch?v=영상ID,팝,3000
-곡 제목 2,아티스트 2,초급,아티스트2-곡제목2.pdf,,록,5000
-곡 제목 3,아티스트 3,고급,아티스트3-곡제목3.pdf,https://youtu.be/영상ID,재즈,10000`;
+    const csvContent = `곡명,아티스트,난이도,파일명,유튜브링크,장르,가격,템포
+ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://www.youtube.com/watch?v=영상ID,POP,3000,120
+곡 제목 2,아티스트 2,초급,아티스트2-곡제목2.pdf,,ROCK,5000,95
+곡 제목 3,아티스트 3,고급,아티스트3-곡제목3.pdf,https://youtu.be/영상ID,KPOP,10000,140`;
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' }); // UTF-8 BOM 추가
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -4211,6 +4247,36 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
         return isNaN(n) ? 0 : n;
       };
 
+      // [수정] 장르 매핑 테이블 (CSV 입력값 -> 사이트 카테고리명)
+      // 소문자로 비교하므로 키값은 모두 소문자로 작성
+      const genreMap: Record<string, string> = {
+        // 요청하신 매핑
+        'drum solo': '드럼솔로',
+        'drumsolo': '드럼솔로',
+        'kpop': '가요',
+        'k-pop': '가요',
+        'rock': '락',
+        'jazz': '재즈',
+        'ccm': 'CCM',
+        'ost': 'OST',
+        'jpop': 'J-POP',
+        'j-pop': 'J-POP',
+        'drum lesson': '드럼레슨',
+        'drumlesson': '드럼레슨',
+        'drum cover': '드럼커버',
+        'drumcover': '드럼커버',
+        'pop': '팝',
+        
+        // 그 외 편의를 위한 추가 매핑
+        '트로트': '트로트/성인가요',
+        'trot': '트로트/성인가요',
+        '성인가요': '트로트/성인가요',
+        'newage': '뉴에이지',
+        'classic': '클래식',
+        'latin': '라틴',
+        'carol': '캐롤'
+      };
+
       let successCount = 0;
       let errorCount = 0;
       const errors: string[] = [];
@@ -4221,14 +4287,15 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
         const rowNum = i + 2; // 헤더 제외하고 1부터 시작, 실제로는 2행부터
 
         try {
-          // CSV 필드 파싱 (새 형식: 곡명, 아티스트, 난이도, 파일명, 유튜브링크, 장르, 가격)
+          // [수정] CSV 필드 파싱 (템포 추가)
           const title = norm(row.곡명 || row.title || row.Title || row['곡 제목'] || '');
           const artist = norm(row.아티스트 || row.artist || row.Artist || '');
           const difficultyInput = norm(row.난이도 || row.difficulty || row.Difficulty || '초급');
           const fileName = norm(row.파일명 || row.filename || row.fileName || row['파일명'] || '');
           const youtubeUrl = norm(row.유튜브링크 || row.youtube_url || row.youtubeUrl || row['유튜브링크'] || '');
-          const genre = norm(row.장르 || row.genre || row.Genre || row['장르'] || '');
+          const genreInput = norm(row.장르 || row.genre || row.Genre || row['장르'] || '');
           const price = num(row.가격 || row.price || row.Price || 0);
+          const tempo = num(row.템포 || row.tempo || row.Tempo || 0); // [추가] 템포
 
           if (!title || !artist) {
             console.warn(`행 ${rowNum}: 제목 또는 아티스트가 없어 건너뜁니다.`);
@@ -4265,7 +4332,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
               albumName = spotifyResult.albumName || '';
 
               // CSV에서 장르가 없고 Spotify에서 장르를 가져온 경우 카테고리 자동 선택
-              if (!genre && spotifyResult.genre) {
+              if (!genreInput && spotifyResult.genre) {
                 const matchingCategory = categories.find(cat =>
                   cat.name.toLowerCase().includes(spotifyResult.genre!.toLowerCase())
                 );
@@ -4281,34 +4348,73 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
             console.warn(`행 ${rowNum}: Spotify 정보 가져오기 실패 (계속 진행):`, spotifyError);
           }
 
-          // 3. CSV에서 입력한 장르로 카테고리 선택
-          if (genre && !categoryId) {
-            const matchingCategory = categories.find(cat =>
-              cat.name.toLowerCase().includes(genre.toLowerCase()) ||
-              genre.toLowerCase().includes(cat.name.toLowerCase())
-            );
-            if (matchingCategory) {
-              categoryId = matchingCategory.id;
-              console.log(`행 ${rowNum}: CSV 장르로 카테고리 선택: ${matchingCategory.name}`);
-            } else {
-              console.log(`행 ${rowNum}: 장르 "${genre}"에 해당하는 카테고리를 찾을 수 없습니다.`);
+          // 3. 장르 매핑 및 카테고리 선택 로직
+          if (genreInput && !categoryId) {
+            // 입력값을 소문자로 변환하여 매핑 테이블에서 찾음. 없으면 입력값 그대로 사용.
+            const mappedGenre = genreMap[genreInput.toLowerCase()] || genreInput;
+
+            if (mappedGenre) {
+              // 카테고리 이름에 매핑된 장르명이 포함되어 있는지 확인 (부분 일치 허용)
+              const matchingCategory = categories.find(cat =>
+                cat.name.toLowerCase() === mappedGenre.toLowerCase() || // 정확히 일치하거나
+                cat.name.toLowerCase().includes(mappedGenre.toLowerCase()) // 포함하거나
+              );
+
+              if (matchingCategory) {
+                categoryId = matchingCategory.id;
+                console.log(`행 ${rowNum}: 장르 "${genreInput}" -> "${mappedGenre}" -> 카테고리: ${matchingCategory.name}`);
+              } else {
+                console.log(`행 ${rowNum}: 장르 "${genreInput}"에 해당하는 카테고리를 찾을 수 없습니다. (매핑됨: ${mappedGenre})`);
+              }
             }
           }
 
-          // 4. PDF 파일 처리
-          // 브라우저에서는 로컬 파일 시스템에 직접 접근할 수 없으므로,
-          // PDF 파일은 별도로 업로드해야 합니다.
-          // 여기서는 파일명만 기록하고, 실제 PDF는 나중에 개별 등록으로 업로드하도록 안내
+          // 4. PDF 파일 처리 (업로드된 파일 목록에서 매칭)
           let pdfUrl = '';
           let previewImageUrl = '';
           let pageCount = 0;
 
           if (fileName) {
-            console.log(`행 ${rowNum}: PDF 파일명: ${fileName} (별도 업로드 필요)`);
-            // TODO: 서버 사이드 Edge Function을 통해 로컬 폴더에서 PDF 파일을 읽어서 처리
-            // 현재는 브라우저 제약으로 인해 PDF 파일 처리가 제한적입니다.
-            // PDF 파일은 개별 등록 기능을 통해 업로드하거나,
-            // 서버 사이드 스크립트를 통해 처리해야 합니다.
+            // [추가] 사용자가 선택한 파일들 중에서 이름이 일치하는 파일 찾기
+            const matchedFile = bulkPdfFiles.find(f => f.name === fileName);
+
+            if (matchedFile) {
+              console.log(`행 ${rowNum}: PDF 파일 매칭 성공 (${fileName})`);
+              // PDF 업로드 로직 실행
+              try {
+                const uploadPath = `pdfs/${Date.now()}_${matchedFile.name}`;
+                const { error: uploadError } = await supabase.storage
+                  .from('drum-sheets')
+                  .upload(uploadPath, matchedFile, {
+                    contentType: 'application/pdf',
+                    upsert: false
+                  });
+
+                if (!uploadError) {
+                  const { data: urlData } = supabase.storage
+                    .from('drum-sheets')
+                    .getPublicUrl(uploadPath);
+                  pdfUrl = urlData.publicUrl;
+
+                  // 페이지 수 추출 (선택 사항)
+                  try {
+                    const pageCountResult = await extractPdfPageCount(matchedFile);
+                    if (pageCountResult > 0) pageCount = pageCountResult;
+                  } catch (e) {
+                    console.warn(`행 ${rowNum}: 페이지 수 추출 실패`);
+                  }
+                } else {
+                  console.error(`행 ${rowNum}: PDF 업로드 실패`, uploadError);
+                  errors.push(`행 ${rowNum}: PDF 업로드 실패 (${fileName})`);
+                }
+              } catch (e) {
+                console.error(`행 ${rowNum}: PDF 업로드 실패`, e);
+                errors.push(`행 ${rowNum}: PDF 업로드 실패 (${fileName})`);
+              }
+            } else {
+              console.warn(`행 ${rowNum}: 일치하는 PDF 파일을 찾을 수 없음 (${fileName})`);
+              // PDF 파일이 없어도 계속 진행 (경고만 표시)
+            }
           }
 
           // 5. 데이터베이스에 삽입
@@ -4317,6 +4423,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
             artist: artist.trim(),
             difficulty: difficulty,
             price: Math.max(0, price),
+            tempo: Math.max(0, tempo), // [추가] 템포 저장
             is_active: true
           };
 
@@ -4379,6 +4486,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
       setShowSheetBulkModal(false);
       setSheetCsvFile(null);
       setSheetCsvData([]);
+      setBulkPdfFiles([]);
 
       await loadSheets();
     } catch (error) {
@@ -6559,64 +6667,120 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
 
       {/* CSV 대량 등록 모달 */}
       {showSheetBulkModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">CSV 대량 악보 등록</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">CSV 대량 악보 등록</h3>
               <button
-                onClick={() => setShowSheetBulkModal(false)}
+                onClick={() => {
+                  setShowSheetBulkModal(false);
+                  setSheetCsvData([]);
+                  setBulkPdfFiles([]);
+                }}
                 className="text-gray-400 hover:text-gray-600"
               >
-                <i className="ri-close-line w-5 h-5"></i>
+                <i className="ri-close-line w-6 h-6"></i>
               </button>
             </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  CSV 파일 선택
-                </label>
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleSheetCsvUpload}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div className="text-sm text-gray-600">
-                <p className="mb-2">CSV 파일 형식 (순서대로):</p>
-                <ul className="list-disc list-inside space-y-1 text-sm">
-                  <li><strong>곡명</strong> (필수) - 곡 제목</li>
-                  <li><strong>아티스트</strong> (필수) - 아티스트명</li>
-                  <li><strong>난이도</strong> (선택) - 초급/중급/고급 또는 beginner/intermediate/advanced</li>
-                  <li><strong>파일명</strong> (선택) - PDF 파일명 (예: ALLDAY PROJECT - ONE MORE TIME.pdf)</li>
-                  <li><strong>유튜브링크</strong> (선택) - 유튜브 URL (예: https://www.youtube.com/watch?v=영상ID)</li>
-                  <li><strong>장르</strong> (선택) - 장르 정보 (예: 팝, 록, 재즈 등)</li>
-                  <li><strong>가격</strong> (선택) - 가격 (숫자, 기본값: 0)</li>
-                </ul>
-                <p className="mt-2 text-xs text-gray-500">
-                  * 썸네일은 Spotify API로 자동 가져옵니다.<br />
-                  * PDF 파일은 별도로 업로드해야 합니다.
+            <div className="space-y-6">
+              {/* 1단계: CSV 파일 선택 */}
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                <h4 className="font-semibold text-blue-900 mb-2">Step 1. 데이터 파일 (CSV)</h4>
+                <div className="flex gap-3 items-center">
+                  <label className="flex-1 cursor-pointer">
+                    <span className="block w-full px-4 py-2 bg-white border border-blue-300 rounded-lg text-blue-700 text-center hover:bg-blue-50 transition-colors">
+                      {sheetCsvFile ? sheetCsvFile.name : 'CSV 파일 선택'}
+                    </span>
+                    <input
+                      type="file"
+                      accept=".csv"
+                      onChange={handleSheetCsvUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  <button
+                    onClick={downloadSheetCsvSample}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center gap-2"
+                  >
+                    <i className="ri-download-line"></i>
+                    <span className="text-sm">샘플</span>
+                  </button>
+                </div>
+                <p className="text-xs text-blue-600 mt-2">
+                  * 필수 항목: 곡명, 아티스트<br/>
+                  * 추가 항목: 난이도, 파일명, 유튜브링크, 장르(KPOP, POP 등), 가격, 템포
                 </p>
               </div>
-
-              <button
-                onClick={downloadSheetCsvSample}
-                className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2"
-              >
-                <i className="ri-download-line w-4 h-4"></i>
-                <span>샘플 CSV 다운로드</span>
-              </button>
-
+              {/* 2단계: PDF 파일 다중 선택 */}
+              <div className="bg-green-50 border border-green-100 rounded-lg p-4">
+                <h4 className="font-semibold text-green-900 mb-2">Step 2. 악보 파일 (PDF)</h4>
+                <label className="block w-full cursor-pointer">
+                  <div className="border-2 border-dashed border-green-300 rounded-lg p-6 text-center bg-white hover:bg-green-50 transition-colors">
+                    <i className="ri-file-pdf-line text-3xl text-green-500 mb-2"></i>
+                    <p className="text-green-800 font-medium">
+                      {bulkPdfFiles.length > 0 
+                        ? `${bulkPdfFiles.length}개의 파일이 선택됨` 
+                        : '여기를 클릭하여 PDF 파일들을 선택하세요 (다중 선택 가능)'}
+                    </p>
+                    <p className="text-xs text-green-600 mt-1">
+                      CSV의 '파일명' 컬럼과 정확히 일치하는 파일을 자동으로 매칭합니다.
+                    </p>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    multiple
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        setBulkPdfFiles(Array.from(e.target.files));
+                      }
+                    }}
+                    className="hidden"
+                  />
+                </label>
+                {bulkPdfFiles.length > 0 && (
+                  <div className="mt-2 max-h-32 overflow-y-auto text-xs text-gray-600 bg-white p-2 rounded border border-green-200">
+                    {bulkPdfFiles.map(f => f.name).join(', ')}
+                  </div>
+                )}
+              </div>
+              {/* 데이터 미리보기 및 등록 버튼 */}
               {sheetCsvData.length > 0 && (
-                <button
-                  onClick={processSheetCsvData}
-                  disabled={isSheetCsvProcessing}
-                  className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                >
-                  {isSheetCsvProcessing ? '처리 중...' : `${sheetCsvData.length}개 악보 등록`}
-                </button>
+                <div className="border-t border-gray-200 pt-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-sm font-medium text-gray-700">
+                      총 {sheetCsvData.length}개 데이터 준비됨
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      PDF 매칭: {sheetCsvData.filter(row => {
+                        const fname = row.파일명 || row.filename || row.fileName || row['파일명'];
+                        return bulkPdfFiles.some(f => f.name === fname);
+                      }).length}개 가능
+                    </span>
+                  </div>
+                  
+                  <button
+                    onClick={processSheetCsvData}
+                    disabled={isSheetCsvProcessing}
+                    className={`w-full py-3 rounded-lg font-bold text-white shadow-sm transition-all flex items-center justify-center gap-2 ${
+                      isSheetCsvProcessing 
+                        ? 'bg-gray-400 cursor-not-allowed' 
+                        : 'bg-indigo-600 hover:bg-indigo-700'
+                    }`}
+                  >
+                    {isSheetCsvProcessing ? (
+                      <>
+                        <i className="ri-loader-4-line animate-spin text-xl"></i>
+                        <span>처리 중... (잠시만 기다려주세요)</span>
+                      </>
+                    ) : (
+                      <>
+                        <i className="ri-check-double-line text-xl"></i>
+                        <span>일괄 등록 시작하기</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -6768,6 +6932,23 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                 {/* PDF 파일 업로드 */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">PDF 파일</label>
+                  
+                  {/* [추가] PDF URL이 이미 세팅되어 있다면(주문제작에서 넘어온 경우) 다운로드 링크 제공 */}
+                  {newSheet.pdf_url && !newSheet.pdf_file && (
+                    <div className="mb-2 p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-800">
+                      <p className="font-semibold mb-1">ℹ️ 주문 제작된 원본 파일이 있습니다.</p>
+                      <p className="mb-2">판매용 악보로 등록하려면 아래 파일을 다운로드한 후, 다시 업로드해주세요. (미리보기 생성 및 권한 설정을 위해 재업로드가 권장됩니다.)</p>
+                      <a 
+                        href={newSheet.pdf_url} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="text-blue-600 hover:underline flex items-center gap-1"
+                      >
+                        <i className="ri-download-line"></i> 원본 파일 다운로드
+                      </a>
+                    </div>
+                  )}
+                  
                   <input
                     type="file"
                     accept=".pdf"
@@ -9058,17 +9239,32 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                         {new Date(order.updated_at ?? order.created_at).toLocaleString('ko-KR')}
                       </td>
                       <td className="px-6 py-4 text-right text-sm font-medium">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedCustomOrderId(order.id);
-                            setIsCustomOrderModalOpen(true);
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
-                        >
-                          <i className="ri-chat-1-line text-sm"></i>
-                          상세 보기
-                        </button>
+                        <div className="flex justify-end gap-2">
+                          {/* [추가] 악보 등록 버튼 */}
+                          {order.status === 'completed' && order.completed_pdf_url && (
+                            <button
+                              type="button"
+                              onClick={() => handleRegisterCustomOrderAsSheet(order)}
+                              className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700"
+                              title="일반 악보로 등록"
+                            >
+                              <i className="ri-music-2-line text-sm"></i>
+                              악보등록
+                            </button>
+                          )}
+                          
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCustomOrderId(order.id);
+                              setIsCustomOrderModalOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                          >
+                            <i className="ri-chat-1-line text-sm"></i>
+                            상세 보기
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
