@@ -4195,6 +4195,25 @@ const AdminPage: React.FC = () => {
     }
   };
 
+  const handleDeleteSheet = async (sheetId: string) => {
+    if (!confirm('정말로 이 악보를 삭제하시겠습니까?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('drum_sheets')
+        .delete()
+        .eq('id', sheetId);
+
+      if (error) throw error;
+
+      alert('악보가 삭제되었습니다.');
+      loadSheets();
+    } catch (error) {
+      console.error('악보 삭제 오류:', error);
+      alert('악보 삭제 중 오류가 발생했습니다.');
+    }
+  };
+
   const startBulkAddSheets = () => {
     setShowSheetBulkModal(true);
   };
@@ -6598,7 +6617,11 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                           >
                             <i className="ri-edit-line w-4 h-4"></i>
                           </button>
-                          <button className="text-red-600 hover:text-red-900 transition-colors">
+                          <button
+                            onClick={() => handleDeleteSheet(sheet.id)}
+                            className="text-red-600 hover:text-red-900 transition-colors"
+                            title="삭제"
+                          >
                             <i className="ri-delete-bin-line w-4 h-4"></i>
                           </button>
                         </div>
