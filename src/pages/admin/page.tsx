@@ -4500,27 +4500,38 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
     const reader = new FileReader();
 
     reader.onload = (e) => {
-      const text = e.target?.result as string;
-      if (!text) {
-        alert('CSV 파일에 데이터가 없습니다.');
-        return;
-      }
+      const buffer = e.target?.result as ArrayBuffer;
+      // 1. 먼저 UTF-8로 디코딩 시도
+      let text = new TextDecoder('utf-8').decode(buffer);
 
-      // UTF-8 BOM 제거
-      const cleanText = text.replace(/^\uFEFF/, '');
-      const lines = cleanText.split('\n').filter(line => line.trim());
+      // 2. 헤더 확인 (제대로 읽혔는지 체크)
+      let lines = text.split('\n').filter(line => line.trim());
+      if (lines.length > 0) {
+        const firstLine = lines[0];
+        // 필수 헤더인 '곡명'이나 'title'이 제대로 보이는지 확인
+        const hasValidHeader = ['곡명', 'title', '아티스트', 'artist'].some(keyword => 
+          firstLine.toLowerCase().includes(keyword)
+        );
+
+        // 3. UTF-8이 아니라고 판단되면 EUC-KR(한국 엑셀 표준)로 다시 디코딩
+        if (!hasValidHeader) {
+          console.log('CSV 인코딩 감지: EUC-KR로 재시도');
+          text = new TextDecoder('euc-kr').decode(buffer);
+          // 다시 줄 나누기
+          lines = text.split('\n').filter(line => line.trim());
+        }
+      }
 
       if (lines.length < 2) {
-        alert('CSV 파일 형식이 올바르지 않습니다. 최소 2줄(헤더 + 데이터 1줄)이 필요합니다.');
+        alert('CSV 파일 형식이 올바르지 않거나 데이터가 없습니다. (최소 2줄 필요)');
         return;
       }
 
-      // CSV 파싱 (쉼표로 분리, 따옴표 처리)
+      // CSV 파싱 로직 (따옴표 처리 포함)
       const parseCsvLine = (line: string): string[] => {
         const result: string[] = [];
         let current = '';
         let inQuotes = false;
-
         for (let i = 0; i < line.length; i++) {
           const char = line[i];
           if (char === '"') {
@@ -4536,26 +4547,31 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
         return result;
       };
 
-      const headers = parseCsvLine(lines[0]).map(h => h.trim());
-      console.log('CSV 헤더:', headers);
+      // 헤더 파싱
+      const headers = parseCsvLine(lines[0]).map(h => h.trim().replace(/"/g, ''));
+      console.log('CSV 헤더 파싱 결과:', headers);
 
+      // 데이터 매핑
       const data = lines.slice(1).map((line, index) => {
         const values = parseCsvLine(line);
         const row: any = {};
         headers.forEach((header, idx) => {
-          row[header] = values[idx] || '';
+          if (header) row[header] = values[idx] || '';
         });
         return row;
       }).filter(item => {
-        // 곡명 또는 아티스트가 있는 행만 포함
-        const title = item.곡명 || item.title || item.Title || '';
+        // 필수 값이 있는 행만 포함
+        const title = item.곡명 || item.title || item.Title || item['곡 제목'] || '';
         const artist = item.아티스트 || item.artist || item.Artist || '';
         return title.trim() || artist.trim();
       });
 
-      console.log('CSV 파일 내용:', data);
-      console.log(`총 ${data.length}개의 악보 데이터 발견`);
+      console.log(`총 ${data.length}개의 데이터가 로드되었습니다.`);
       setSheetCsvData(data);
+      
+      if (data.length === 0) {
+        alert('데이터를 찾을 수 없습니다. CSV 파일의 인코딩이나 헤더명을 확인해주세요.');
+      }
     };
 
     reader.onerror = (error) => {
@@ -4563,7 +4579,8 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
       alert('파일을 읽는 중 오류가 발생했습니다.');
     };
 
-    reader.readAsText(file, 'UTF-8');
+    // 텍스트가 아닌 ArrayBuffer로 읽어서 직접 디코딩
+    reader.readAsArrayBuffer(file);
   };
 
   const handleAddCategory = async () => {
@@ -6738,44 +6755,56 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   </div>
                 )}
               </div>
-              {/* 데이터 미리보기 및 등록 버튼 */}
-              {sheetCsvData.length > 0 && (
-                <div className="border-t border-gray-200 pt-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-sm font-medium text-gray-700">
-                      총 {sheetCsvData.length}개 데이터 준비됨
-                    </span>
+              {/* 데이터 미리보기 및 등록 버튼 (항상 표시하되 데이터 없으면 비활성) */}
+              <div className="border-t border-gray-200 pt-6">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="text-sm font-medium text-gray-700">
+                    {sheetCsvData.length > 0 ? (
+                      <span className="text-blue-600">총 {sheetCsvData.length}개 데이터 준비됨</span>
+                    ) : (
+                      <span className="text-gray-400">데이터가 로드되지 않았습니다.</span>
+                    )}
+                  </div>
+                  
+                  {/* PDF 매칭 정보 */}
+                  {sheetCsvData.length > 0 && (
                     <span className="text-xs text-gray-500">
-                      PDF 매칭: {sheetCsvData.filter(row => {
+                      PDF 자동 매칭: {sheetCsvData.filter(row => {
                         const fname = row.파일명 || row.filename || row.fileName || row['파일명'];
+                        const link = row.PDF링크 || row.pdf_url || row.pdfUrl || row['PDF URL'];
+                        if (link) return true; // URL 있으면 매칭 성공으로 간주
                         return bulkPdfFiles.some(f => f.name === fname);
                       }).length}개 가능
                     </span>
-                  </div>
-                  
-                  <button
-                    onClick={processSheetCsvData}
-                    disabled={isSheetCsvProcessing}
-                    className={`w-full py-3 rounded-lg font-bold text-white shadow-sm transition-all flex items-center justify-center gap-2 ${
-                      isSheetCsvProcessing 
-                        ? 'bg-gray-400 cursor-not-allowed' 
-                        : 'bg-indigo-600 hover:bg-indigo-700'
-                    }`}
-                  >
-                    {isSheetCsvProcessing ? (
-                      <>
-                        <i className="ri-loader-4-line animate-spin text-xl"></i>
-                        <span>처리 중... (잠시만 기다려주세요)</span>
-                      </>
-                    ) : (
-                      <>
-                        <i className="ri-check-double-line text-xl"></i>
-                        <span>일괄 등록 시작하기</span>
-                      </>
-                    )}
-                  </button>
+                  )}
                 </div>
-              )}
+                
+                <button
+                  onClick={processSheetCsvData}
+                  disabled={isSheetCsvProcessing || sheetCsvData.length === 0}
+                  className={`w-full py-3 rounded-lg font-bold text-white shadow-sm transition-all flex items-center justify-center gap-2 ${
+                    isSheetCsvProcessing || sheetCsvData.length === 0
+                      ? 'bg-gray-400 cursor-not-allowed' 
+                      : 'bg-indigo-600 hover:bg-indigo-700'
+                  }`}
+                >
+                  {isSheetCsvProcessing ? (
+                    <>
+                      <i className="ri-loader-4-line animate-spin text-xl"></i>
+                      <span>처리 중... (잠시만 기다려주세요)</span>
+                    </>
+                  ) : (
+                    <>
+                      <i className="ri-check-double-line text-xl"></i>
+                      <span>
+                        {sheetCsvData.length > 0 
+                          ? `${sheetCsvData.length}개 일괄 등록 시작하기` 
+                          : 'CSV 파일을 먼저 선택해주세요'}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
