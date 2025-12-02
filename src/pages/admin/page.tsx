@@ -3927,7 +3927,17 @@ const AdminPage: React.FC = () => {
       setNewSheet(prev => ({ ...prev, page_count: pageCount }));
 
       // 2. PDF 파일을 Supabase Storage에 업로드
-      const fileName = `${Date.now()}_${file.name}`;
+      // [수정] 파일명 안전하게 처리 (한글/공백/특수문자 제거)
+      const fileExt = file.name.split('.').pop() || 'pdf';
+      // 영문, 숫자, ., -, _ 만 남기고 모두 제거
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '');
+      // 만약 이름이 다 지워졌다면(한글로만 된 파일 등), 랜덤 ID 사용
+      const safeName = sanitizedName.length > 2 
+        ? sanitizedName 
+        : `sheet_${Math.random().toString(36).substring(2, 10)}.${fileExt}`;
+      
+      // 타임스탬프 + 안전한 파일명 조합
+      const fileName = `${Date.now()}_${safeName}`;
       const filePath = `pdfs/${fileName}`;
 
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -3947,48 +3957,31 @@ const AdminPage: React.FC = () => {
       const pdfUrl = urlData.publicUrl;
 
       // 4. 미리보기 이미지 생성 (클라이언트 사이드에서 PDF.js로 렌더링)
-      // 실패해도 악보 등록은 계속 진행되도록 try-catch로 분리
       let previewImageUrl = '';
       try {
         console.log('미리보기 이미지 생성 시작 (클라이언트 사이드 렌더링)');
-
-        // PDF.js로 PDF의 첫 페이지를 Canvas로 렌더링
         const arrayBuffer = await file.arrayBuffer();
         const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
         const pdf = await loadingTask.promise;
-
         if (pdf.numPages === 0) {
           throw new Error('PDF에 페이지가 없습니다.');
         }
-
-        // 첫 페이지 가져오기
         const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 2.0 }); // 고해상도
-
-        // Canvas 생성
+        const viewport = page.getViewport({ scale: 2.0 });
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         if (!context) {
           throw new Error('Canvas context를 가져올 수 없습니다.');
         }
-
         canvas.width = viewport.width;
         canvas.height = viewport.height;
-
-        // PDF 페이지를 Canvas에 렌더링
         await page.render({
           canvasContext: context,
           viewport: viewport
         }).promise;
-
-        console.log('PDF 렌더링 완료, Canvas 크기:', canvas.width, 'x', canvas.height);
-
-        // 모자이크 효과 적용 (하단 절반)
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
         const mosaicImageData = applyMosaicToImageData(imageData, 15);
         context.putImageData(mosaicImageData, 0, 0);
-
-        // Canvas를 Blob으로 변환
         const blob = await new Promise<Blob>((resolve, reject) => {
           canvas.toBlob((blob) => {
             if (blob) {
@@ -3999,10 +3992,8 @@ const AdminPage: React.FC = () => {
           }, 'image/jpeg', 0.85);
         });
 
-        console.log('이미지 Blob 생성 완료, 크기:', blob.size, 'bytes');
-
-        // Supabase Storage에 이미지 업로드
-        const imageFileName = `preview_${Date.now()}_${crypto.randomUUID().substring(0, 8)}.jpg`;
+        // 미리보기 이미지명도 안전하게 처리
+        const imageFileName = `preview_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
         const imageFilePath = `previews/${imageFileName}`;
 
         const { error: imageUploadError } = await supabase.storage
@@ -4016,32 +4007,26 @@ const AdminPage: React.FC = () => {
           throw new Error(`이미지 업로드 실패: ${imageUploadError.message}`);
         }
 
-        // 공개 URL 생성
         const { data: imageUrlData } = supabase.storage
           .from('drum-sheets')
           .getPublicUrl(imageFilePath);
 
         previewImageUrl = imageUrlData.publicUrl;
         setNewSheet(prev => ({ ...prev, preview_image_url: previewImageUrl }));
-        console.log('미리보기 이미지 생성 성공:', previewImageUrl);
 
       } catch (previewError) {
-        // 미리보기 이미지 생성 실패는 치명적 오류가 아니므로 로그만 남기고 계속 진행
         console.warn('미리보기 이미지 생성 중 오류 발생 (악보 등록은 계속 진행):', previewError);
       }
 
-      // PDF URL을 상태에 저장 (나중에 DB에 저장할 때 사용)
       setNewSheet(prev => ({ ...prev, pdf_url: pdfUrl }));
-
-      // 미리보기 이미지 생성 성공 여부에 따라 메시지 변경
       if (previewImageUrl) {
         alert(`PDF 업로드 완료! 페이지수: ${pageCount}페이지`);
       } else {
-        alert(`PDF 업로드 완료! 페이지수: ${pageCount}페이지\n\n⚠️ 미리보기 이미지 생성에 실패했습니다. 악보는 정상적으로 등록되지만 미리보기 이미지가 없을 수 있습니다.`);
+        alert(`PDF 업로드 완료! 페이지수: ${pageCount}페이지\n\n⚠️ 미리보기 이미지 생성에 실패했습니다.`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('PDF 업로드 오류:', error);
-      alert('PDF 업로드 중 오류가 발생했습니다.');
+      alert(`PDF 업로드 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
     } finally {
       setIsUploadingPdf(false);
     }
@@ -4382,7 +4367,16 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
               console.log(`행 ${rowNum}: PDF 파일 매칭 성공 (${fileName})`);
               // PDF 업로드 로직 실행
               try {
-                const uploadPath = `pdfs/${Date.now()}_${matchedFile.name}`;
+                // [수정] 안전한 파일명 생성 로직 적용
+                const fileExt = matchedFile.name.split('.').pop() || 'pdf';
+                // 한글/공백 제거
+                const sanitizedName = matchedFile.name.replace(/[^a-zA-Z0-9.\-_]/g, '');
+                const safeName = sanitizedName.length > 2 
+                  ? sanitizedName 
+                  : `imported_${Math.random().toString(36).substring(2, 10)}.${fileExt}`;
+                const uploadFileName = `${Date.now()}_${safeName}`;
+                
+                const uploadPath = `pdfs/${uploadFileName}`;
                 const { error: uploadError } = await supabase.storage
                   .from('drum-sheets')
                   .upload(uploadPath, matchedFile, {
