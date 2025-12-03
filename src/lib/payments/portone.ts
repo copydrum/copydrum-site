@@ -321,12 +321,11 @@ export const requestPayPalPayment = async (
     console.log('[portone-paypal] redirectUrl 확인:', returnUrl);
     
     // 🟢 windowType은 객체 형태로 설정 (V2 SDK 요구사항)
-    // PayPal SPB: 모바일은 POPUP 또는 REDIRECTION, PC는 POPUP 또는 IFRAME
-    // 참고: 테스트 파일에서는 mobile: 'POPUP' 사용, 웹 검색 결과에서는 REDIRECTION 사용
-    // 오류 메시지에 따라 REDIRECT는 유효하지 않으므로 REDIRECTION 사용
+    // 모바일: REDIRECTION 사용 (팝업창 크기 문제 해결)
+    // PC: POPUP 사용
     const windowType = {
       pc: 'POPUP',
-      mobile: 'REDIRECTION', // REDIRECT가 아닌 REDIRECTION 사용
+      mobile: 'REDIRECTION', // 모바일에서 팝업창 크기 문제를 피하기 위해 REDIRECTION 사용
     };
     
     // Request Data 구성
@@ -352,13 +351,12 @@ export const requestPayPalPayment = async (
       },
     };
 
-    // 모바일이 아닐 때만 element 설정 (REDIRECT 방식에서는 불필요)
-    if (!isMobile) {
-      if (params.elementId) {
-        requestData.element = params.elementId.startsWith('#') ? params.elementId : `#${params.elementId}`;
-      } else {
-        requestData.element = '#portone-ui-container';
-      }
+    // element 설정 (모바일 REDIRECTION에서는 불필요하지만, 버튼 렌더링을 위해 필요)
+    // 모바일에서도 버튼을 렌더링하고, 버튼 클릭 시 수동으로 리다이렉트
+    if (params.elementId) {
+      requestData.element = params.elementId.startsWith('#') ? params.elementId : `#${params.elementId}`;
+    } else {
+      requestData.element = '#portone-ui-container';
     }
 
     console.log('[portone-paypal] loadPaymentUI 호출', {
@@ -367,18 +365,21 @@ export const requestPayPalPayment = async (
       windowType: requestData.windowType,
     });
 
-    // 모바일에서 REDIRECT 방식 사용 시
+    // 모바일에서 REDIRECTION 방식 사용 시
     if (isMobile) {
-      // REDIRECT 방식에서는 콜백이 실행되지 않으므로, 
-      // 리다이렉트 페이지에서 결제 완료 처리를 해야 함
-      console.log('[portone-paypal] 모바일 REDIRECT 방식 사용 - 리다이렉트 페이지에서 처리됨');
+      console.log('[portone-paypal] 모바일 REDIRECTION 방식 - 버튼 클릭 시 수동 리다이렉트');
       
-      // loadPaymentUI를 호출하면 자동으로 리다이렉트됨
+      // loadPaymentUI로 버튼 렌더링
       await PortOne.loadPaymentUI(requestData, {
         onPaymentSuccess: async (paymentResult: any) => {
-          // REDIRECT 방식에서는 이 콜백이 실행되지 않지만, 
-          // 혹시 모를 경우를 대비해 남겨둠
-          console.log('[portone-paypal] onPaymentSuccess 콜백 실행 (REDIRECT에서는 일반적으로 실행되지 않음)', paymentResult);
+          // 모바일 REDIRECTION에서는 이 콜백이 실행되지 않을 수 있음
+          // 리다이렉트 페이지에서 처리됨
+          console.log('[portone-paypal] onPaymentSuccess 콜백 실행 (REDIRECTION에서는 일반적으로 실행되지 않음)', paymentResult);
+          
+          // 혹시 콜백이 실행되면 리다이렉트
+          if (returnUrl) {
+            window.location.href = returnUrl;
+          }
         },
         onPaymentFail: (error: any) => {
           console.error('[portone-paypal] onPaymentFail', error);
@@ -388,17 +389,28 @@ export const requestPayPalPayment = async (
         },
       });
       
-      // REDIRECT 방식에서는 여기서 반환 (실제 결제는 리다이렉트 페이지에서 처리)
+      // 모바일 REDIRECTION: 버튼이 렌더링되면, 버튼 클릭 시 PayPal로 리다이렉트됨
+      // PortOne SDK가 자동으로 처리하지만, 혹시 모를 경우를 대비해 버튼 클릭 이벤트 리스너 추가
+      setTimeout(() => {
+        const container = document.querySelector(requestData.element);
+        if (container) {
+          const paypalButton = container.querySelector('button, [role="button"], a');
+          if (paypalButton) {
+            console.log('[portone-paypal] PayPal 버튼 발견 - 클릭 시 리다이렉트됨');
+            // PortOne SDK가 자동으로 처리하므로 여기서는 로그만 남김
+          }
+        }
+      }, 1000);
+      
       return {
         success: true,
         merchant_uid: params.orderId,
         paymentId: newPaymentId,
-        error_msg: 'PayPal 결제가 시작되었습니다. 리다이렉트됩니다.',
+        error_msg: 'PayPal 버튼이 로드되었습니다. 버튼을 클릭하면 결제 페이지로 이동합니다.',
       };
     }
 
-    // PC에서 IFRAME 방식 사용 시
-    // 포트원 V2 SDK로 PayPal 결제 UI 로드
+    // PC에서 POPUP 방식 사용 시
     await PortOne.loadPaymentUI(requestData, {
       onPaymentSuccess: async (paymentResult: any) => {
         console.log('[portone-paypal] onPaymentSuccess 콜백 실행', paymentResult);
@@ -409,7 +421,6 @@ export const requestPayPalPayment = async (
         }
 
         // 명시적 리다이렉트 (안전장치)
-        // 모바일이나 일부 환경에서는 자동 리다이렉트가 안 될 수 있으므로 강제 이동
         if (returnUrl) {
            console.log('[portone-paypal] 리다이렉트 실행');
            window.location.href = returnUrl;

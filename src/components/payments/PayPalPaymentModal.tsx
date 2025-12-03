@@ -59,18 +59,8 @@ export default function PayPalPaymentModal({
                 isMobile,
             });
 
-            // 모바일에서 REDIRECT 방식 사용 시
-            if (isMobile) {
-                console.log('[PayPalPaymentModal] 모바일 REDIRECT 방식 - 모달을 닫고 리다이렉트합니다');
-                // 모달을 먼저 닫음 (리다이렉트가 곧 일어나므로)
-                onClose();
-                // initiatePayment 호출하면 자동으로 리다이렉트됨
-                await initiatePayment(containerId);
-                // 리다이렉트되므로 여기서 함수 종료
-                return;
-            }
-
-            // PC에서 IFRAME 방식 사용 시
+            // 모바일: REDIRECTION 방식 (버튼 클릭 시 리다이렉트)
+            // PC: POPUP 방식
             const container = document.querySelector('.portone-ui-container');
             console.log('[PayPalPaymentModal] Container check:', {
                 containerId,
