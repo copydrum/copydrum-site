@@ -321,10 +321,12 @@ export const requestPayPalPayment = async (
     console.log('[portone-paypal] redirectUrl 확인:', returnUrl);
     
     // 🟢 windowType은 객체 형태로 설정 (V2 SDK 요구사항)
-    // 모바일에서는 REDIRECT, PC에서는 POPUP 사용
+    // PayPal SPB: 모바일은 POPUP 또는 REDIRECTION, PC는 POPUP 또는 IFRAME
+    // 참고: 테스트 파일에서는 mobile: 'POPUP' 사용, 웹 검색 결과에서는 REDIRECTION 사용
+    // 오류 메시지에 따라 REDIRECT는 유효하지 않으므로 REDIRECTION 사용
     const windowType = {
       pc: 'POPUP',
-      mobile: 'REDIRECT',
+      mobile: 'REDIRECTION', // REDIRECT가 아닌 REDIRECTION 사용
     };
     
     // Request Data 구성
