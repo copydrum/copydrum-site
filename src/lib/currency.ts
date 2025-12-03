@@ -172,6 +172,11 @@ export function convertFromKrw(krw: number, to: Currency): number {
  * - Intl.NumberFormat을 사용하여 각 통화의 표준 형식으로 표시
  */
 export function formatCurrency(amount: number, currency: Currency): string {
+    // TWD는 Intl.NumberFormat이 일관되게 지원하지 않을 수 있으므로 항상 fallback 사용
+    if (currency === 'TWD') {
+        return `NT$${amount.toLocaleString('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    
     const locale = CURRENCY_TO_LOCALE[currency] || 'en-US';
     
     try {
@@ -183,7 +188,11 @@ export function formatCurrency(amount: number, currency: Currency): string {
             maximumFractionDigits: (currency === 'KRW' || currency === 'JPY' || currency === 'VND' || currency === 'IDR') ? 0 : 2,
         });
         
-        return formatter.format(amount);
+        const formatted = formatter.format(amount);
+        
+        // TWD가 아닌데도 $로 표시되는 경우 체크 (Intl.NumberFormat이 TWD를 지원하지 않는 경우)
+        // 이 경우는 이미 위에서 처리했으므로 여기서는 다른 통화만 처리
+        return formatted;
     } catch (error) {
         // Intl.NumberFormat이 지원하지 않는 통화인 경우 fallback
         console.warn(`Currency ${currency} not supported by Intl.NumberFormat, using fallback`);
