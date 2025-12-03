@@ -114,26 +114,41 @@ export default function Home() {
     }
 
     try {
-      // 1. 해당 장르의 모든 활성 악보 가져오기
-      const { data: sheets, error: sheetsError } = await supabase
+      // 1. 순위가 지정된 악보 먼저 가져오기 (popularity_rank가 1-10인 것들)
+      const { data: rankedSheets, error: rankedError } = await supabase
         .from('drum_sheets')
-        .select('id, title, artist, price, thumbnail_url, youtube_url, category_id, created_at')
+        .select('id, title, artist, price, thumbnail_url, youtube_url, category_id, created_at, popularity_rank')
         .eq('is_active', true)
-        .eq('category_id', selectedGenre);
+        .eq('category_id', selectedGenre)
+        .not('popularity_rank', 'is', null)
+        .gte('popularity_rank', 1)
+        .lte('popularity_rank', 10)
+        .order('popularity_rank', { ascending: true });
 
-      if (sheetsError) throw sheetsError;
-      if (!sheets || sheets.length === 0) {
-        setPopularSheets([]);
-        return;
-      }
+      if (rankedError) throw rankedError;
 
-      // 2. 날짜 계산 (최근 7일과 전체 기간)
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      const sevenDaysAgoISO = sevenDaysAgo.toISOString();
+      // 2. 순위가 지정된 악보가 10개 미만이면 나머지는 기존 방식으로 채움
+      const rankedCount = rankedSheets?.length || 0;
+      let remainingSheets: typeof rankedSheets = [];
 
-      // 3. 악보 ID 목록 추출
-      const sheetIds = sheets.map(sheet => sheet.id);
+      if (rankedCount < 10) {
+        // 순위가 지정되지 않은 악보들 가져오기
+        const { data: unrankedSheets, error: unrankedError } = await supabase
+          .from('drum_sheets')
+          .select('id, title, artist, price, thumbnail_url, youtube_url, category_id, created_at')
+          .eq('is_active', true)
+          .eq('category_id', selectedGenre)
+          .or('popularity_rank.is.null,popularity_rank.lt.1,popularity_rank.gt.10');
+
+        if (unrankedError) throw unrankedError;
+
+        if (unrankedSheets && unrankedSheets.length > 0) {
+          // 기존 방식: 구매수/조회수 기반 정렬
+          const sheetIds = unrankedSheets.map(sheet => sheet.id);
+
+          // 날짜 계산 (최근 7일과 전체 기간)
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
       // 4. 전체 기간 구매수 가져오기 (모든 악보에 대해 한 번에)
       const { data: allOrderItems, error: orderItemsError } = await supabase
@@ -219,7 +234,7 @@ export default function Home() {
       const recentViewWeight = 0.2;
       const totalViewWeight = 0.1;
 
-      const sheetsWithScores = sheets.map(sheet => {
+      const sheetsWithScores = unrankedSheets.map(sheet => {
         const totalPurchaseCount = purchaseCountMap.get(sheet.id) || 0;
         const recentPurchaseCount = recentPurchaseCountMap.get(sheet.id) || 0;
         const totalViewCount = viewCountMap.get(sheet.id) || 0;
@@ -271,17 +286,28 @@ export default function Home() {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
 
-      // 9. 상위 10개만 선택
-      const topSheets = sheetsWithScores.slice(0, 10).map(({ 
-        totalPurchaseCount, 
-        recentPurchaseCount, 
-        totalViewCount, 
-        recentViewCount, 
-        score, 
-        ...sheet 
-      }) => sheet);
+          // 9. 상위 N개만 선택 (순위 지정된 곡이 10개 미만이면 나머지 자리 채움)
+          const remainingCount = 10 - rankedCount;
+          const topUnrankedSheets = sheetsWithScores.slice(0, remainingCount).map(({ 
+            totalPurchaseCount, 
+            recentPurchaseCount, 
+            totalViewCount, 
+            recentViewCount, 
+            score, 
+            ...sheet 
+          }) => sheet);
 
-      setPopularSheets(topSheets);
+          remainingSheets = topUnrankedSheets;
+        }
+      }
+
+      // 3. 최종 순위: 순위 지정된 곡들 + 순위 미지정 곡들
+      const finalSheets = [
+        ...(rankedSheets || []).map(({ popularity_rank, ...sheet }) => sheet),
+        ...remainingSheets
+      ].slice(0, 10);
+
+      setPopularSheets(finalSheets);
     } catch (error) {
       console.error(t('home.console.popularSheetsLoadError'), error);
       setPopularSheets([]);

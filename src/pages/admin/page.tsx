@@ -11096,6 +11096,445 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
     );
   };
 
+  // 인기곡 순위 관리 상태
+  const [popularitySelectedGenre, setPopularitySelectedGenre] = useState<string>('');
+  const [popularityRanks, setPopularityRanks] = useState<Map<number, DrumSheet | null>>(new Map());
+  const [popularitySearchTerm, setPopularitySearchTerm] = useState('');
+  const [popularitySearchResults, setPopularitySearchResults] = useState<DrumSheet[]>([]);
+  const [popularitySearchLoading, setPopularitySearchLoading] = useState(false);
+  const [popularitySearchModalOpen, setPopularitySearchModalOpen] = useState(false);
+  const [popularitySearchTargetRank, setPopularitySearchTargetRank] = useState<number | null>(null);
+  const [popularitySaving, setPopularitySaving] = useState(false);
+  const [popularityHasChanges, setPopularityHasChanges] = useState(false);
+  const [popularityOriginalRanks, setPopularityOriginalRanks] = useState<Map<number, DrumSheet | null>>(new Map());
+
+  // 인기곡 순위 관리: 장르 목록 로드
+  useEffect(() => {
+    if (activeMenu !== 'popularity') return;
+
+    const loadGenres = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('categories')
+          .select('id, name')
+          .order('name');
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          // 첫 번째 장르를 기본 선택
+          if (!popularitySelectedGenre) {
+            setPopularitySelectedGenre(data[0].id);
+          }
+        }
+      } catch (error) {
+        console.error('장르 로드 실패:', error);
+      }
+    };
+
+    loadGenres();
+  }, [activeMenu, popularitySelectedGenre]);
+
+  // 인기곡 순위 관리: 선택된 장르의 순위 로드
+  useEffect(() => {
+    if (activeMenu !== 'popularity' || !popularitySelectedGenre) return;
+
+    const loadPopularityRanks = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('drum_sheets')
+          .select('id, title, artist, thumbnail_url, category_id, popularity_rank')
+          .eq('category_id', popularitySelectedGenre)
+          .eq('is_active', true)
+          .not('popularity_rank', 'is', null)
+          .order('popularity_rank', { ascending: true });
+
+        if (error) throw error;
+
+        const ranksMap = new Map<number, DrumSheet | null>();
+        // 1-10위 초기화
+        for (let i = 1; i <= 10; i++) {
+          ranksMap.set(i, null);
+        }
+
+        // 로드된 순위 데이터 매핑
+        if (data) {
+          data.forEach((sheet) => {
+            if (sheet.popularity_rank && sheet.popularity_rank >= 1 && sheet.popularity_rank <= 10) {
+              ranksMap.set(sheet.popularity_rank, sheet as DrumSheet);
+            }
+          });
+        }
+
+        setPopularityRanks(ranksMap);
+        setPopularityOriginalRanks(new Map(ranksMap));
+        setPopularityHasChanges(false);
+      } catch (error) {
+        console.error('순위 로드 실패:', error);
+        alert('순위를 불러오는데 실패했습니다.');
+      }
+    };
+
+    loadPopularityRanks();
+  }, [activeMenu, popularitySelectedGenre]);
+
+  const renderPopularityManagement = () => {
+
+    // 장르 목록 가져오기
+    const genreOrder = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
+    const sortedCategories = [...categories].sort((a, b) => {
+      const indexA = genreOrder.indexOf(a.name);
+      const indexB = genreOrder.indexOf(b.name);
+      if (indexA === -1 && indexB === -1) return 0;
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      return indexA - indexB;
+    });
+
+    // 악보 검색
+    const handleSearchSheets = async (searchTerm: string) => {
+      if (!searchTerm.trim() || !popularitySelectedGenre) {
+        setPopularitySearchResults([]);
+        return;
+      }
+
+      setPopularitySearchLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('drum_sheets')
+          .select('id, title, artist, thumbnail_url, category_id')
+          .eq('category_id', popularitySelectedGenre)
+          .eq('is_active', true)
+          .or(`title.ilike.%${searchTerm}%,artist.ilike.%${searchTerm}%`)
+          .limit(20);
+
+        if (error) throw error;
+
+        setPopularitySearchResults(data || []);
+      } catch (error) {
+        console.error('악보 검색 실패:', error);
+        alert('악보 검색에 실패했습니다.');
+      } finally {
+        setPopularitySearchLoading(false);
+      }
+    };
+
+    // 순위에 악보 배정
+    const handleAssignSheet = (rank: number, sheet: DrumSheet) => {
+      // 중복 체크: 같은 악보가 다른 순위에 있는지 확인
+      const newRanks = new Map(popularityRanks);
+      let hasDuplicate = false;
+      
+      newRanks.forEach((existingSheet, existingRank) => {
+        if (existingSheet && existingSheet.id === sheet.id && existingRank !== rank) {
+          hasDuplicate = true;
+        }
+      });
+
+      if (hasDuplicate) {
+        if (!confirm(`이 악보는 이미 다른 순위에 배정되어 있습니다. 기존 순위를 제거하고 ${rank}위로 이동하시겠습니까?`)) {
+          return;
+        }
+        // 기존 순위에서 제거
+        newRanks.forEach((existingSheet, existingRank) => {
+          if (existingSheet && existingSheet.id === sheet.id) {
+            newRanks.set(existingRank, null);
+          }
+        });
+      }
+
+      // 새 순위에 배정
+      newRanks.set(rank, sheet);
+      setPopularityRanks(newRanks);
+      setPopularityHasChanges(true);
+      setPopularitySearchModalOpen(false);
+      setPopularitySearchTerm('');
+    };
+
+    // 순위에서 악보 제거
+    const handleRemoveSheet = (rank: number) => {
+      if (!confirm(`${rank}위의 악보를 제거하시겠습니까?`)) {
+        return;
+      }
+
+      const newRanks = new Map(popularityRanks);
+      newRanks.set(rank, null);
+      setPopularityRanks(newRanks);
+      setPopularityHasChanges(true);
+    };
+
+    // 순위 저장
+    const handleSaveRanks = async () => {
+      if (!popularitySelectedGenre) return;
+
+      setPopularitySaving(true);
+      try {
+        // 먼저 해당 장르의 모든 순위를 NULL로 초기화
+        const { error: clearError } = await supabase
+          .from('drum_sheets')
+          .update({ popularity_rank: null })
+          .eq('category_id', popularitySelectedGenre);
+
+        if (clearError) throw clearError;
+
+        // 새 순위 배정
+        const updates: Array<{ id: string; rank: number }> = [];
+        popularityRanks.forEach((sheet, rank) => {
+          if (sheet) {
+            updates.push({ id: sheet.id, rank });
+          }
+        });
+
+        // 배치 업데이트
+        for (const update of updates) {
+          const { error: updateError } = await supabase
+            .from('drum_sheets')
+            .update({ popularity_rank: update.rank })
+            .eq('id', update.id);
+
+          if (updateError) throw updateError;
+        }
+
+        setPopularityOriginalRanks(new Map(popularityRanks));
+        setPopularityHasChanges(false);
+        alert('순위가 저장되었습니다.');
+      } catch (error) {
+        console.error('순위 저장 실패:', error);
+        alert('순위 저장에 실패했습니다.');
+      } finally {
+        setPopularitySaving(false);
+      }
+    };
+
+    // 초기화
+    const handleResetRanks = () => {
+      if (!popularityHasChanges) return;
+      if (!confirm('변경사항을 취소하고 마지막 저장 상태로 되돌리시겠습니까?')) {
+        return;
+      }
+
+      setPopularityRanks(new Map(popularityOriginalRanks));
+      setPopularityHasChanges(false);
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold text-gray-900">인기곡 순위 관리</h2>
+          <p className="text-gray-500">
+            장르별로 인기곡 순위를 1-10위까지 지정할 수 있습니다. 지정된 순위는 메인 페이지의 인기곡 섹션에 표시됩니다.
+          </p>
+        </div>
+
+        {/* 장르 탭 */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex flex-wrap gap-2">
+            {sortedCategories.map((category) => (
+              <button
+                key={category.id}
+                onClick={() => {
+                  setPopularitySelectedGenre(category.id);
+                  setPopularityHasChanges(false);
+                }}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  popularitySelectedGenre === category.id
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {category.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 저장/초기화 버튼 */}
+        <div className="flex items-center justify-between bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center gap-2">
+            {popularityHasChanges && (
+              <span className="text-sm text-orange-600 font-medium">변경사항이 있습니다</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleResetRanks}
+              disabled={!popularityHasChanges || popularitySaving}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                popularityHasChanges && !popularitySaving
+                  ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : 'bg-gray-50 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              초기화
+            </button>
+            <button
+              onClick={handleSaveRanks}
+              disabled={!popularityHasChanges || popularitySaving}
+              className={`px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors ${
+                popularityHasChanges && !popularitySaving
+                  ? 'bg-blue-600 hover:bg-blue-700'
+                  : 'bg-gray-300 cursor-not-allowed'
+              }`}
+            >
+              {popularitySaving ? '저장 중...' : '저장'}
+            </button>
+          </div>
+        </div>
+
+        {/* 순위 관리 영역 */}
+        {popularitySelectedGenre && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {Array.from({ length: 10 }, (_, i) => i + 1).map((rank) => {
+              const sheet = popularityRanks.get(rank);
+              return (
+                <div
+                  key={rank}
+                  className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-bold text-gray-900">{rank}위</span>
+                    {sheet && (
+                      <button
+                        onClick={() => handleRemoveSheet(rank)}
+                        className="text-red-500 hover:text-red-700 transition-colors"
+                        title="순위 제거"
+                      >
+                        <i className="ri-close-line text-xl"></i>
+                      </button>
+                    )}
+                  </div>
+
+                  {sheet ? (
+                    <div className="space-y-2">
+                      {sheet.thumbnail_url ? (
+                        <img
+                          src={sheet.thumbnail_url}
+                          alt={sheet.title}
+                          className="w-full aspect-square object-cover rounded-lg"
+                        />
+                      ) : (
+                        <div className="w-full aspect-square bg-gray-100 rounded-lg flex items-center justify-center">
+                          <i className="ri-music-line text-4xl text-gray-400"></i>
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-gray-900 truncate" title={sheet.title}>
+                          {sheet.title}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate" title={sheet.artist}>
+                          {sheet.artist}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setPopularitySearchTargetRank(rank);
+                          setPopularitySearchModalOpen(true);
+                        }}
+                        className="w-full px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                      >
+                        변경
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setPopularitySearchTargetRank(rank);
+                        setPopularitySearchModalOpen(true);
+                      }}
+                      className="w-full py-8 border-2 border-dashed border-gray-300 rounded-lg text-gray-400 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                    >
+                      <i className="ri-add-line text-2xl mb-2 block"></i>
+                      <span className="text-sm">악보 검색</span>
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 악보 검색 모달 */}
+        {popularitySearchModalOpen && popularitySearchTargetRank && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+              <div className="flex items-center justify-between p-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {popularitySearchTargetRank}위 악보 검색
+                </h3>
+                <button
+                  onClick={() => {
+                    setPopularitySearchModalOpen(false);
+                    setPopularitySearchTerm('');
+                    setPopularitySearchResults([]);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <i className="ri-close-line text-xl"></i>
+                </button>
+              </div>
+
+              <div className="p-4 border-b border-gray-200">
+                <input
+                  type="text"
+                  value={popularitySearchTerm}
+                  onChange={(e) => {
+                    setPopularitySearchTerm(e.target.value);
+                    handleSearchSheets(e.target.value);
+                  }}
+                  placeholder="제목 또는 아티스트로 검색..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4">
+                {popularitySearchLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <i className="ri-loader-4-line animate-spin text-2xl text-blue-600"></i>
+                  </div>
+                ) : popularitySearchResults.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {popularitySearchResults.map((result) => (
+                      <button
+                        key={result.id}
+                        onClick={() => handleAssignSheet(popularitySearchTargetRank!, result)}
+                        className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors text-left"
+                      >
+                        {result.thumbnail_url ? (
+                          <img
+                            src={result.thumbnail_url}
+                            alt={result.title}
+                            className="w-16 h-16 object-cover rounded"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 bg-gray-100 rounded flex items-center justify-center">
+                            <i className="ri-music-line text-2xl text-gray-400"></i>
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{result.title}</p>
+                          <p className="text-xs text-gray-500 truncate">{result.artist}</p>
+                        </div>
+                        <i className="ri-arrow-right-line text-gray-400"></i>
+                      </button>
+                    ))}
+                  </div>
+                ) : popularitySearchTerm ? (
+                  <div className="text-center py-8 text-gray-500">
+                    검색 결과가 없습니다.
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    검색어를 입력하세요.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderMarketing = () => {
     return (
       <div className="space-y-6">
@@ -11148,6 +11587,8 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
         return renderSettings();
       case 'marketing':
         return renderMarketing();
+      case 'popularity':
+        return renderPopularityManagement();
       default:
         return renderDashboard();
     }
@@ -11346,6 +11787,15 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
             <i className="ri-share-forward-line w-5 h-5"></i>
             <span className="text-sm md:text-base">마케팅 자동화</span>
           </button>
+
+          <button
+            onClick={() => handleMenuClick('popularity')}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-colors ${activeMenu === 'popularity' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+              }`}
+          >
+            <i className="ri-trophy-line w-5 h-5"></i>
+            <span className="text-sm md:text-base">인기곡 순위 관리</span>
+          </button>
         </nav>
 
         <div className="p-3 md:p-4 border-t border-gray-200">
@@ -11387,7 +11837,8 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                                       activeMenu === 'copyright-report' ? '저작권 보고' :
                                         activeMenu === 'analytics' ? '분석' :
                                           activeMenu === 'settings' ? '설정' :
-                                            activeMenu === 'marketing' ? '마케팅 자동화' : '대시보드'}
+                                            activeMenu === 'marketing' ? '마케팅 자동화' :
+                                              activeMenu === 'popularity' ? '인기곡 순위 관리' : '대시보드'}
                 </h2>
               </div>
               <div className="flex items-center">
