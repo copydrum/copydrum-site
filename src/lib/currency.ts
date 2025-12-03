@@ -105,6 +105,8 @@ export function getSiteCurrency(hostname?: string, locale?: string): Currency {
     if (hostname) {
         if (hostname.includes('en.copydrum.com')) return 'USD';
         if (hostname.includes('jp.copydrum.com') || hostname.includes('ja.copydrum.com')) return 'JPY';
+        if (hostname.includes('zh-cn.copydrum.com') || hostname.includes('zhcn.copydrum.com')) return 'CNY';
+        if (hostname.includes('zh-tw.copydrum.com') || hostname.includes('zhtw.copydrum.com')) return 'TWD';
         if (hostname.includes('tr.copydrum.com')) {
             console.log(`[Currency] Hostname: ${hostname} → Currency: USD`);
             return 'USD';
@@ -115,6 +117,8 @@ export function getSiteCurrency(hostname?: string, locale?: string): Currency {
         }
         if (hostname.startsWith('en.')) return 'USD';
         if (hostname.startsWith('jp.') || hostname.startsWith('ja.')) return 'JPY';
+        if (hostname.startsWith('zh-cn.') || hostname.startsWith('zhcn.')) return 'CNY';
+        if (hostname.startsWith('zh-tw.') || hostname.startsWith('zhtw.')) return 'TWD';
         if (hostname.startsWith('tr.')) {
             console.log(`[Currency] Hostname: ${hostname} → Currency: USD`);
             return 'USD';

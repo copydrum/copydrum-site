@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { formatPrice } from '../../lib/priceFormatter';
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 
 interface BankTransferInfoModalProps {
   open: boolean;
@@ -34,7 +34,13 @@ export const BankTransferInfoModal = ({
 
   if (!open) return null;
 
-  const formatCurrency = (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted;
+  // 통화 결정 (locale 기반)
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+  const currency = getSiteCurrency(hostname, i18n.language);
+  const formatCurrency = (value: number) => {
+    const convertedAmount = convertFromKrw(value, currency);
+    return formatCurrencyUtil(convertedAmount, currency);
+  };
 
   const handleConfirm = () => {
     // 필수값 검증

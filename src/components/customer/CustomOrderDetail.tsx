@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { useTranslation } from 'react-i18next';
-import { formatPrice } from '../../lib/priceFormatter';
+import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 
 type StatusValue = 'pending' | 'quoted' | 'payment_confirmed' | 'in_progress' | 'completed';
 
@@ -81,9 +81,17 @@ const formatDateTime = (value: string | null | undefined) => {
 export default function CustomOrderDetail({ orderId }: CustomOrderDetailProps) {
   const { user } = useAuthStore();
   const { i18n } = useTranslation();
+  
+  // 통화 결정 (locale 기반)
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
+  const currency = useMemo(() => getSiteCurrency(hostname, i18n.language), [hostname, i18n.language]);
+  
   const formatCurrency = useCallback(
-    (value: number) => formatPrice({ amountKRW: value, language: i18n.language }).formatted,
-    [i18n.language],
+    (value: number) => {
+      const convertedAmount = convertFromKrw(value, currency);
+      return formatCurrencyUtil(convertedAmount, currency);
+    },
+    [currency],
   );
 
   const [order, setOrder] = useState<OrderDetail | null>(null);
