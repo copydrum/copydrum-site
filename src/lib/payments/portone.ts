@@ -310,9 +310,22 @@ export const requestPayPalPayment = async (
     // 모바일 디바이스 감지
     const isMobile = isMobileDevice();
     
-    // 🟢 windowType 결정 (V2 SDK는 문자열만 받음)
+    // 🟢 redirectUrl 확인 (REDIRECT 방식 필수 파라미터)
+    if (!returnUrl) {
+      console.error('[portone-paypal] ❌ redirectUrl이 없습니다! REDIRECT 방식 사용 불가');
+      return {
+        success: false,
+        error_msg: '결제 리다이렉트 URL이 설정되지 않았습니다.',
+      };
+    }
+    console.log('[portone-paypal] redirectUrl 확인:', returnUrl);
+    
+    // 🟢 windowType은 객체 형태로 설정 (V2 SDK 요구사항)
     // 모바일에서는 REDIRECT, PC에서는 POPUP 사용
-    const windowType = isMobile ? 'REDIRECT' : 'POPUP';
+    const windowType = {
+      pc: 'POPUP',
+      mobile: 'REDIRECT',
+    };
     
     // Request Data 구성
     const requestData: any = {
@@ -331,7 +344,7 @@ export const requestPayPalPayment = async (
         phoneNumber: params.buyerTel ?? undefined,
       },
       redirectUrl: returnUrl, // 🟢 리다이렉트 URL 필수 (REDIRECT 방식 필수)
-      windowType: windowType, // 🟢 문자열 값만 전달 (객체 아님)
+      windowType: windowType, // 🟢 객체 형태로 전달 (V2 SDK 요구사항)
       metadata: {
         supabaseOrderId: params.orderId,
       },
@@ -505,9 +518,22 @@ export const requestKakaoPayPayment = async (
     // 모바일 디바이스 감지
     const isMobile = isMobileDevice();
     
-    // 🟢 windowType 결정 (V2 SDK는 문자열만 받음)
+    // 🟢 redirectUrl 확인 (REDIRECT 방식 필수 파라미터)
+    if (!returnUrl) {
+      console.error('[portone-kakaopay] ❌ redirectUrl이 없습니다! REDIRECT 방식 사용 불가');
+      return {
+        success: false,
+        error_msg: '결제 리다이렉트 URL이 설정되지 않았습니다.',
+      };
+    }
+    console.log('[portone-kakaopay] redirectUrl 확인:', returnUrl);
+    
+    // 🟢 windowType은 객체 형태로 설정 (V2 SDK 요구사항)
     // 카카오페이: 모바일은 REDIRECTION, PC는 IFRAME
-    const windowType = isMobile ? 'REDIRECTION' : 'IFRAME';
+    const windowType = {
+      pc: 'IFRAME',
+      mobile: 'REDIRECTION',
+    };
     
     // PortOne V2 문서에 따르면 카카오페이는 requestPayment를 사용해야 함
     // loadPaymentUI는 UI 타입이 필요한데, 카카오페이는 일반결제를 지원하지 않음
@@ -528,8 +554,8 @@ export const requestKakaoPayPayment = async (
         fullName: params.buyerName ?? undefined,
         phoneNumber: params.buyerTel ?? undefined,
       },
-      redirectUrl: returnUrl,
-      windowType: windowType, // 🟢 문자열 값만 전달 (객체 아님)
+      redirectUrl: returnUrl, // 🟢 리다이렉트 URL 필수 (REDIRECT 방식 필수)
+      windowType: windowType, // 🟢 객체 형태로 전달 (V2 SDK 요구사항)
       // ✅ 나중에 Webhook / REST 조회에서 다시 확인할 수 있도록 metadata에도 기록
       metadata: {
         supabaseOrderId: params.orderId, // Supabase orders.id
@@ -579,7 +605,7 @@ export const requestKakaoPayPayment = async (
       totalAmount: requestData.totalAmount,
       currency: requestData.currency,
       payMethod: requestData.payMethod, // 'EASY_PAY' (문자열) 확인
-      windowType: requestData.windowType, // 문자열 값 확인
+      windowType: requestData.windowType, // 객체 형태 확인
       locale: requestData.locale, // 'KO_KR' 확인
       redirectUrl: requestData.redirectUrl,
     });
