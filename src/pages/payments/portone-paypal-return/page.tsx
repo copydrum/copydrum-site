@@ -18,6 +18,25 @@ export default function PortOnePayPalReturnPage() {
   useEffect(() => {
     const processPaymentReturn = async () => {
       try {
+        // 🟢 세션 확인: 리다이렉트 후에도 로그인 상태가 유지되는지 확인
+        console.log('[portone-paypal-return] 세션 확인 시작');
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('[portone-paypal-return] 세션 확인 오류:', sessionError);
+        } else if (!session?.user) {
+          console.warn('[portone-paypal-return] 세션이 없습니다. 로그인 페이지로 리다이렉트합니다.');
+          // 세션이 없으면 로그인 페이지로 리다이렉트 (현재 URL을 저장하여 로그인 후 돌아올 수 있도록)
+          const currentUrl = window.location.pathname + window.location.search;
+          navigate(`/auth/login?from=${encodeURIComponent(currentUrl)}`);
+          return;
+        } else {
+          console.log('[portone-paypal-return] 세션 확인 성공:', {
+            userId: session.user.id,
+            email: session.user.email,
+          });
+        }
+
         // 포트원은 결제 완료 후 m_redirect_url로 리다이렉트
         // URL 파라미터에서 결제 결과 확인
         const imp_uid = searchParams.get('imp_uid') || '';

@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
+import { isMobileDevice } from '../../utils/device';
 
 interface PayPalPaymentModalProps {
     open: boolean;
@@ -39,6 +40,9 @@ export default function PayPalPaymentModal({
     const loadPayPalButtons = useCallback(async () => {
         if (!open || initializedRef.current) return;
 
+        // 모바일 디바이스 감지
+        const isMobile = isMobileDevice();
+
         // 초기화 시작 즉시 플래그 설정하여 중복 호출 방지
         initializedRef.current = true;
         setLoading(true);
@@ -52,8 +56,21 @@ export default function PayPalPaymentModal({
                 amount,
                 orderTitle,
                 open,
+                isMobile,
             });
 
+            // 모바일에서 REDIRECT 방식 사용 시
+            if (isMobile) {
+                console.log('[PayPalPaymentModal] 모바일 REDIRECT 방식 - 모달을 닫고 리다이렉트합니다');
+                // 모달을 먼저 닫음 (리다이렉트가 곧 일어나므로)
+                onClose();
+                // initiatePayment 호출하면 자동으로 리다이렉트됨
+                await initiatePayment(containerId);
+                // 리다이렉트되므로 여기서 함수 종료
+                return;
+            }
+
+            // PC에서 IFRAME 방식 사용 시
             const container = document.querySelector('.portone-ui-container');
             console.log('[PayPalPaymentModal] Container check:', {
                 containerId,
@@ -92,7 +109,7 @@ export default function PayPalPaymentModal({
             initializedRef.current = false;
             setLoading(false);
         }
-    }, [open, initiatePayment, onError, containerId]);
+    }, [open, initiatePayment, onError, containerId, onClose]);
 
     useEffect(() => {
         if (open) {

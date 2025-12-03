@@ -6,6 +6,7 @@ import { DEFAULT_USD_RATE } from '../priceFormatter';
 import { getLocaleFromHost } from '../../i18n/getLocaleFromHost';
 import { supabase } from '../../lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
+import { isMobileDevice } from '../../utils/device';
 
 // PortOne currency type
 type PortOneCurrency = 'CURRENCY_KRW' | 'CURRENCY_USD' | 'CURRENCY_JPY';
@@ -306,6 +307,9 @@ export const requestPayPalPayment = async (
       console.log('[portone-paypal] DB 업데이트 성공');
     }
 
+    // 모바일 디바이스 감지
+    const isMobile = isMobileDevice();
+    
     // Request Data 구성
     const requestData: any = {
       uiType: 'PAYPAL_SPB',
@@ -326,16 +330,59 @@ export const requestPayPalPayment = async (
       metadata: {
         supabaseOrderId: params.orderId,
       },
+      // 🟢 모바일에서는 REDIRECT, PC에서는 IFRAME 사용
+      windowType: {
+        mobile: 'REDIRECT',
+        pc: 'IFRAME',
+      },
     };
 
-    if (params.elementId) {
-      requestData.element = params.elementId.startsWith('#') ? params.elementId : `#${params.elementId}`;
-    } else {
-      requestData.element = '#portone-ui-container';
+    // 모바일이 아닐 때만 element 설정 (REDIRECT 방식에서는 불필요)
+    if (!isMobile) {
+      if (params.elementId) {
+        requestData.element = params.elementId.startsWith('#') ? params.elementId : `#${params.elementId}`;
+      } else {
+        requestData.element = '#portone-ui-container';
+      }
     }
 
-    console.log('[portone-paypal] loadPaymentUI 호출', requestData);
+    console.log('[portone-paypal] loadPaymentUI 호출', {
+      ...requestData,
+      isMobile,
+      windowType: requestData.windowType,
+    });
 
+    // 모바일에서 REDIRECT 방식 사용 시
+    if (isMobile) {
+      // REDIRECT 방식에서는 콜백이 실행되지 않으므로, 
+      // 리다이렉트 페이지에서 결제 완료 처리를 해야 함
+      console.log('[portone-paypal] 모바일 REDIRECT 방식 사용 - 리다이렉트 페이지에서 처리됨');
+      
+      // loadPaymentUI를 호출하면 자동으로 리다이렉트됨
+      await PortOne.loadPaymentUI(requestData, {
+        onPaymentSuccess: async (paymentResult: any) => {
+          // REDIRECT 방식에서는 이 콜백이 실행되지 않지만, 
+          // 혹시 모를 경우를 대비해 남겨둠
+          console.log('[portone-paypal] onPaymentSuccess 콜백 실행 (REDIRECT에서는 일반적으로 실행되지 않음)', paymentResult);
+        },
+        onPaymentFail: (error: any) => {
+          console.error('[portone-paypal] onPaymentFail', error);
+          if (params.onError) {
+            params.onError(error);
+          }
+        },
+      });
+      
+      // REDIRECT 방식에서는 여기서 반환 (실제 결제는 리다이렉트 페이지에서 처리)
+      return {
+        success: true,
+        merchant_uid: params.orderId,
+        paymentId: newPaymentId,
+        error_msg: 'PayPal 결제가 시작되었습니다. 리다이렉트됩니다.',
+      };
+    }
+
+    // PC에서 IFRAME 방식 사용 시
     // 포트원 V2 SDK로 PayPal 결제 UI 로드
     await PortOne.loadPaymentUI(requestData, {
       onPaymentSuccess: async (paymentResult: any) => {

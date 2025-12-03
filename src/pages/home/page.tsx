@@ -127,7 +127,7 @@ export default function Home() {
         return;
       }
 
-      // 2. 최근 7일 날짜 계산
+      // 2. 날짜 계산 (최근 7일과 전체 기간)
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       const sevenDaysAgoISO = sevenDaysAgo.toISOString();
@@ -135,7 +135,7 @@ export default function Home() {
       // 3. 악보 ID 목록 추출
       const sheetIds = sheets.map(sheet => sheet.id);
 
-      // 4. 배치로 최근 7일 구매수 가져오기 (모든 악보에 대해 한 번에)
+      // 4. 전체 기간 구매수 가져오기 (모든 악보에 대해 한 번에)
       const { data: allOrderItems, error: orderItemsError } = await supabase
         .from('order_items')
         .select(`
@@ -148,34 +148,44 @@ export default function Home() {
           )
         `)
         .in('drum_sheet_id', sheetIds)
-        .gte('created_at', sevenDaysAgoISO)
         .eq('orders.status', 'completed');
 
-      // 5. 배치로 최근 7일 조회수 가져오기 (모든 악보에 대해 한 번에)
+      // 5. 전체 기간 조회수 가져오기 (모든 악보에 대해 한 번에)
       // page_views에서 /sheet-detail/{id} 패턴이 포함된 모든 레코드 가져오기
       const { data: allPageViews, error: pageViewsError } = await supabase
         .from('page_views')
         .select('page_url, created_at')
-        .gte('created_at', sevenDaysAgoISO)
         .ilike('page_url', '%/sheet-detail/%');
 
       // 6. 클라이언트에서 그룹핑하여 각 악보의 구매수와 조회수 계산
-      const purchaseCountMap = new Map<string, number>();
-      const viewCountMap = new Map<string, number>();
+      const purchaseCountMap = new Map<string, number>(); // 전체 기간 구매수
+      const recentPurchaseCountMap = new Map<string, number>(); // 최근 7일 구매수
+      const viewCountMap = new Map<string, number>(); // 전체 기간 조회수
+      const recentViewCountMap = new Map<string, number>(); // 최근 7일 조회수
 
-      // 구매수 집계
+      // 구매수 집계 (전체 기간 + 최근 7일)
       if (allOrderItems && !orderItemsError) {
         allOrderItems.forEach(item => {
           if (item.drum_sheet_id) {
+            // 전체 기간 구매수
             purchaseCountMap.set(
               item.drum_sheet_id,
               (purchaseCountMap.get(item.drum_sheet_id) || 0) + 1
             );
+
+            // 최근 7일 구매수
+            const itemDate = new Date(item.created_at);
+            if (itemDate >= sevenDaysAgo) {
+              recentPurchaseCountMap.set(
+                item.drum_sheet_id,
+                (recentPurchaseCountMap.get(item.drum_sheet_id) || 0) + 1
+              );
+            }
           }
         });
       }
 
-      // 조회수 집계
+      // 조회수 집계 (전체 기간 + 최근 7일)
       if (allPageViews && !pageViewsError) {
         allPageViews.forEach(view => {
           // URL에서 악보 ID 추출: /sheet-detail/{id} 패턴
@@ -183,42 +193,93 @@ export default function Home() {
           if (match && match[1]) {
             const sheetId = match[1];
             if (sheetIds.includes(sheetId)) {
+              // 전체 기간 조회수
               viewCountMap.set(
                 sheetId,
                 (viewCountMap.get(sheetId) || 0) + 1
               );
+
+              // 최근 7일 조회수
+              const viewDate = new Date(view.created_at);
+              if (viewDate >= sevenDaysAgo) {
+                recentViewCountMap.set(
+                  sheetId,
+                  (recentViewCountMap.get(sheetId) || 0) + 1
+                );
+              }
             }
           }
         });
       }
 
       // 7. 각 악보에 점수 계산
-      const purchaseWeight = 1.0;
-      const viewWeight = 0.1;
+      // 가중치: 최근 7일 구매수 2.0, 전체 구매수 1.0, 최근 7일 조회수 0.2, 전체 조회수 0.1
+      const recentPurchaseWeight = 2.0;
+      const totalPurchaseWeight = 1.0;
+      const recentViewWeight = 0.2;
+      const totalViewWeight = 0.1;
+
       const sheetsWithScores = sheets.map(sheet => {
-        const purchaseCount = purchaseCountMap.get(sheet.id) || 0;
-        const viewCount = viewCountMap.get(sheet.id) || 0;
-        const score = (purchaseCount * purchaseWeight) + (viewCount * viewWeight);
+        const totalPurchaseCount = purchaseCountMap.get(sheet.id) || 0;
+        const recentPurchaseCount = recentPurchaseCountMap.get(sheet.id) || 0;
+        const totalViewCount = viewCountMap.get(sheet.id) || 0;
+        const recentViewCount = recentViewCountMap.get(sheet.id) || 0;
+
+        // 인기도 점수 계산: 최근 데이터에 더 높은 가중치 부여
+        const score = 
+          (recentPurchaseCount * recentPurchaseWeight) +
+          (totalPurchaseCount * totalPurchaseWeight) +
+          (recentViewCount * recentViewWeight) +
+          (totalViewCount * totalViewWeight);
 
         return {
           ...sheet,
-          purchaseCount,
-          viewCount,
+          totalPurchaseCount,
+          recentPurchaseCount,
+          totalViewCount,
+          recentViewCount,
           score
         };
       });
 
-      // 8. 점수 기준으로 정렬 (내림차순), 동점일 경우 최신순
+      // 8. 점수 기준으로 정렬 (내림차순)
+      // 동점일 경우: 최근 구매수 > 전체 구매수 > 최근 조회수 > 전체 조회수 > 최신순
       sheetsWithScores.sort((a, b) => {
-        if (b.score !== a.score) {
+        // 점수가 다르면 점수 기준으로 정렬
+        if (Math.abs(b.score - a.score) > 0.001) {
           return b.score - a.score;
         }
-        // 동점일 경우 created_at 최신순
+
+        // 동점일 경우 보조 기준 사용
+        // 1. 최근 구매수 비교
+        if (b.recentPurchaseCount !== a.recentPurchaseCount) {
+          return b.recentPurchaseCount - a.recentPurchaseCount;
+        }
+        // 2. 전체 구매수 비교
+        if (b.totalPurchaseCount !== a.totalPurchaseCount) {
+          return b.totalPurchaseCount - a.totalPurchaseCount;
+        }
+        // 3. 최근 조회수 비교
+        if (b.recentViewCount !== a.recentViewCount) {
+          return b.recentViewCount - a.recentViewCount;
+        }
+        // 4. 전체 조회수 비교
+        if (b.totalViewCount !== a.totalViewCount) {
+          return b.totalViewCount - a.totalViewCount;
+        }
+        // 5. 모든 지표가 같으면 최신순
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
 
       // 9. 상위 10개만 선택
-      const topSheets = sheetsWithScores.slice(0, 10).map(({ purchaseCount, viewCount, score, ...sheet }) => sheet);
+      const topSheets = sheetsWithScores.slice(0, 10).map(({ 
+        totalPurchaseCount, 
+        recentPurchaseCount, 
+        totalViewCount, 
+        recentViewCount, 
+        score, 
+        ...sheet 
+      }) => sheet);
 
       setPopularSheets(topSheets);
     } catch (error) {
