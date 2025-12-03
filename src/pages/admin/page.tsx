@@ -11251,6 +11251,36 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
       setPopularityHasChanges(true);
     };
 
+    // 순위 위로 이동 (1위는 위로 이동 불가)
+    const handleMoveUp = (rank: number) => {
+      if (rank <= 1) return;
+
+      const newRanks = new Map(popularityRanks);
+      const currentSheet = newRanks.get(rank);
+      const upperSheet = newRanks.get(rank - 1);
+
+      // 위 순위와 교체
+      newRanks.set(rank - 1, currentSheet);
+      newRanks.set(rank, upperSheet);
+      setPopularityRanks(newRanks);
+      setPopularityHasChanges(true);
+    };
+
+    // 순위 아래로 이동 (10위는 아래로 이동 불가)
+    const handleMoveDown = (rank: number) => {
+      if (rank >= 10) return;
+
+      const newRanks = new Map(popularityRanks);
+      const currentSheet = newRanks.get(rank);
+      const lowerSheet = newRanks.get(rank + 1);
+
+      // 아래 순위와 교체
+      newRanks.set(rank + 1, currentSheet);
+      newRanks.set(rank, lowerSheet);
+      setPopularityRanks(newRanks);
+      setPopularityHasChanges(true);
+    };
+
     // 순위 저장
     const handleSaveRanks = async () => {
       if (!popularitySelectedGenre) return;
@@ -11388,15 +11418,38 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-bold text-gray-900">{rank}위</span>
-                    {sheet && (
-                      <button
-                        onClick={() => handleRemoveSheet(rank)}
-                        className="text-red-500 hover:text-red-700 transition-colors"
-                        title="순위 제거"
-                      >
-                        <i className="ri-close-line text-xl"></i>
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {/* 위로 이동 버튼 */}
+                      {sheet && rank > 1 && (
+                        <button
+                          onClick={() => handleMoveUp(rank)}
+                          className="text-blue-500 hover:text-blue-700 transition-colors"
+                          title="위로 이동"
+                        >
+                          <i className="ri-arrow-up-line text-lg"></i>
+                        </button>
+                      )}
+                      {/* 아래로 이동 버튼 */}
+                      {sheet && rank < 10 && (
+                        <button
+                          onClick={() => handleMoveDown(rank)}
+                          className="text-blue-500 hover:text-blue-700 transition-colors"
+                          title="아래로 이동"
+                        >
+                          <i className="ri-arrow-down-line text-lg"></i>
+                        </button>
+                      )}
+                      {/* 제거 버튼 */}
+                      {sheet && (
+                        <button
+                          onClick={() => handleRemoveSheet(rank)}
+                          className="text-red-500 hover:text-red-700 transition-colors"
+                          title="순위 제거"
+                        >
+                          <i className="ri-close-line text-xl"></i>
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {sheet ? (
