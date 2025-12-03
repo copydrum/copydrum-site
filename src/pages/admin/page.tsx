@@ -11108,32 +11108,18 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
   const [popularityHasChanges, setPopularityHasChanges] = useState(false);
   const [popularityOriginalRanks, setPopularityOriginalRanks] = useState<Map<number, DrumSheet | null>>(new Map());
 
-  // 인기곡 순위 관리: 장르 목록 로드
+  // 인기곡 순위 관리: 카테고리 목록 로드
   useEffect(() => {
     if (activeMenu !== 'popularity') return;
 
-    const loadGenres = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('categories')
-          .select('id, name')
-          .order('name');
-
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          // 첫 번째 장르를 기본 선택
-          if (!popularitySelectedGenre) {
-            setPopularitySelectedGenre(data[0].id);
-          }
-        }
-      } catch (error) {
-        console.error('장르 로드 실패:', error);
-      }
-    };
-
-    loadGenres();
-  }, [activeMenu, popularitySelectedGenre]);
+    // categories가 비어있으면 로드
+    if (categories.length === 0) {
+      loadCategories();
+    } else if (!popularitySelectedGenre && categories.length > 0) {
+      // categories가 있지만 선택된 장르가 없으면 첫 번째 장르 선택
+      setPopularitySelectedGenre(categories[0].id);
+    }
+  }, [activeMenu, categories, popularitySelectedGenre]);
 
   // 인기곡 순위 관리: 선택된 장르의 순위 로드
   useEffect(() => {
@@ -11182,14 +11168,16 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
 
     // 장르 목록 가져오기
     const genreOrder = ['가요', '팝', '락', 'CCM', '트로트/성인가요', '재즈', 'J-POP', 'OST', '드럼솔로', '드럼커버'];
-    const sortedCategories = [...categories].sort((a, b) => {
-      const indexA = genreOrder.indexOf(a.name);
-      const indexB = genreOrder.indexOf(b.name);
-      if (indexA === -1 && indexB === -1) return 0;
-      if (indexA === -1) return 1;
-      if (indexB === -1) return -1;
-      return indexA - indexB;
-    });
+    const sortedCategories = categories.length > 0 
+      ? [...categories].sort((a, b) => {
+          const indexA = genreOrder.indexOf(a.name);
+          const indexB = genreOrder.indexOf(b.name);
+          if (indexA === -1 && indexB === -1) return 0;
+          if (indexA === -1) return 1;
+          if (indexB === -1) return -1;
+          return indexA - indexB;
+        })
+      : [];
 
     // 악보 검색
     const handleSearchSheets = async (searchTerm: string) => {
@@ -11328,24 +11316,31 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
 
         {/* 장르 탭 */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="flex flex-wrap gap-2">
-            {sortedCategories.map((category) => (
-              <button
-                key={category.id}
-                onClick={() => {
-                  setPopularitySelectedGenre(category.id);
-                  setPopularityHasChanges(false);
-                }}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  popularitySelectedGenre === category.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {category.name}
-              </button>
-            ))}
-          </div>
+          {sortedCategories.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {sortedCategories.map((category) => (
+                <button
+                  key={category.id}
+                  onClick={() => {
+                    setPopularitySelectedGenre(category.id);
+                    setPopularityHasChanges(false);
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    popularitySelectedGenre === category.id
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {category.name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-4 text-gray-500">
+              <i className="ri-loader-4-line animate-spin text-2xl mb-2 block"></i>
+              <p>장르 목록을 불러오는 중...</p>
+            </div>
+          )}
         </div>
 
         {/* 저장/초기화 버튼 */}
