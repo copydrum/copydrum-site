@@ -310,6 +310,10 @@ export const requestPayPalPayment = async (
     // 모바일 디바이스 감지
     const isMobile = isMobileDevice();
     
+    // 🟢 windowType 결정 (V2 SDK는 문자열만 받음)
+    // 모바일에서는 REDIRECT, PC에서는 POPUP 사용
+    const windowType = isMobile ? 'REDIRECT' : 'POPUP';
+    
     // Request Data 구성
     const requestData: any = {
       uiType: 'PAYPAL_SPB',
@@ -326,14 +330,10 @@ export const requestPayPalPayment = async (
         fullName: params.buyerName ?? undefined,
         phoneNumber: params.buyerTel ?? undefined,
       },
-      redirectUrl: returnUrl, // 🟢 리다이렉트 URL 필수
+      redirectUrl: returnUrl, // 🟢 리다이렉트 URL 필수 (REDIRECT 방식 필수)
+      windowType: windowType, // 🟢 문자열 값만 전달 (객체 아님)
       metadata: {
         supabaseOrderId: params.orderId,
-      },
-      // 🟢 모바일에서는 REDIRECT, PC에서는 IFRAME 사용
-      windowType: {
-        mobile: 'REDIRECT',
-        pc: 'IFRAME',
       },
     };
 
@@ -502,6 +502,13 @@ export const requestKakaoPayPayment = async (
     // 이렇게 하면 같은 주문으로 재결제 시도 시에도 중복 오류가 발생하지 않음
     const newPaymentId = `pay_${uuidv4()}`;
 
+    // 모바일 디바이스 감지
+    const isMobile = isMobileDevice();
+    
+    // 🟢 windowType 결정 (V2 SDK는 문자열만 받음)
+    // 카카오페이: 모바일은 REDIRECTION, PC는 IFRAME
+    const windowType = isMobile ? 'REDIRECTION' : 'IFRAME';
+    
     // PortOne V2 문서에 따르면 카카오페이는 requestPayment를 사용해야 함
     // loadPaymentUI는 UI 타입이 필요한데, 카카오페이는 일반결제를 지원하지 않음
     // 참고: https://developers.portone.io/opi/ko/integration/pg/v2/kakaopay?v=v2
@@ -522,16 +529,12 @@ export const requestKakaoPayPayment = async (
         phoneNumber: params.buyerTel ?? undefined,
       },
       redirectUrl: returnUrl,
+      windowType: windowType, // 🟢 문자열 값만 전달 (객체 아님)
       // ✅ 나중에 Webhook / REST 조회에서 다시 확인할 수 있도록 metadata에도 기록
       metadata: {
         supabaseOrderId: params.orderId, // Supabase orders.id
         supabaseOrderNumber: params.orderNumber || null, // Supabase orders.order_number
         // 필요시 추가 메타데이터도 포함 가능
-      },
-      // 카카오페이 특화 설정
-      windowType: {
-        pc: 'IFRAME', // PC는 IFRAME만 지원
-        mobile: 'REDIRECTION', // 모바일은 REDIRECTION만 지원
       },
       locale: 'KO_KR', // 카카오페이는 KO_KR만 지원
     };
@@ -576,7 +579,7 @@ export const requestKakaoPayPayment = async (
       totalAmount: requestData.totalAmount,
       currency: requestData.currency,
       payMethod: requestData.payMethod, // 'EASY_PAY' (문자열) 확인
-      windowType: requestData.windowType, // { pc: 'IFRAME', mobile: 'REDIRECTION' } 확인
+      windowType: requestData.windowType, // 문자열 값 확인
       locale: requestData.locale, // 'KO_KR' 확인
       redirectUrl: requestData.redirectUrl,
     });
