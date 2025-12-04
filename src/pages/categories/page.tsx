@@ -657,7 +657,8 @@ const CategoriesPage: React.FC = () => {
       {/* Mobile Layout */}
       <div className="md:hidden">
         {/* 모바일 장르 탭 - 헤더 바로 아래 */}
-        <div className="sticky top-[76px] z-40 bg-white border-b border-gray-200 overflow-x-auto">
+        {/* 수정됨: 한국어(ko)일 경우 top 값을 76px에서 165px로 조정하여 헤더 가림 방지 */}
+        <div className={`sticky ${i18n.language === 'ko' ? 'top-[165px]' : 'top-[76px]'} z-40 bg-white border-b border-gray-200 overflow-x-auto`}>
           <div className="flex gap-2 px-4 py-3">
             {genreList.map((genreKo) => {
               const category = categories.find((cat) => cat.name === genreKo);
