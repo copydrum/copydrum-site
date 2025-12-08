@@ -545,7 +545,15 @@ export default function PointChargeModal({
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
-                            <i className={`${method.icon} ${method.color} text-lg mr-2`}></i>
+                            {method.id === 'kakaopay' && currency === 'KRW' ? (
+                              <img 
+                                src="/payment_icon_yellow_medium.png" 
+                                alt="카카오페이" 
+                                className="h-5 w-auto object-contain mr-2"
+                              />
+                            ) : (
+                              <i className={`${method.icon} ${method.color} text-lg mr-2`}></i>
+                            )}
                             <span className="text-sm font-medium">
                               {method.id === 'card'
                                 ? t('sidebar.creditCard')

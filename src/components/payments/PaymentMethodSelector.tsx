@@ -215,7 +215,15 @@ export const PaymentMethodSelector = ({
                     }`}
                 >
                   <div className="flex items-center space-x-3">
-                    <i className={`${option.icon} ${option.color} text-xl`}></i>
+                    {option.id === 'kakaopay' && isKoreanSite ? (
+                      <img 
+                        src="/payment_icon_yellow_medium.png" 
+                        alt="카카오페이" 
+                        className="h-6 w-auto object-contain"
+                      />
+                    ) : (
+                      <i className={`${option.icon} ${option.color} text-xl`}></i>
+                    )}
                     <div>
                       <p className="text-sm font-semibold text-gray-900">{option.name}</p>
                       {option.description ? (
