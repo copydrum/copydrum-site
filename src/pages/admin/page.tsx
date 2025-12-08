@@ -6882,6 +6882,18 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   </div>
                 </div>
 
+                {/* 앨범명 입력 필드 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">앨범명 (선택)</label>
+                  <input
+                    type="text"
+                    value={newSheet.album_name || ''}
+                    onChange={(e) => setNewSheet({ ...newSheet, album_name: e.target.value })}
+                    placeholder="앨범명을 입력하세요"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
                 {/* Spotify 정보 표시 */}
                 {(newSheet.thumbnail_url || newSheet.album_name) && (
                   <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
