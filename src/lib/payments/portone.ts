@@ -796,9 +796,9 @@ export const requestInicisPayment = async (
     }
     console.log('[portone-inicis] redirectUrl 확인:', returnUrl);
 
-    // windowType 설정
+    // windowType 설정 (KG이니시스는 PC에서 POPUP을 지원하지 않으므로 IFRAME 사용)
     const windowType = {
-      pc: 'POPUP',
+      pc: 'IFRAME',
       mobile: 'REDIRECTION',
     };
 
@@ -818,6 +818,7 @@ export const requestInicisPayment = async (
     }
 
     // Request Data 구성
+    // KG이니시스는 PC에서 POPUP을 지원하지 않으므로 IFRAME 방식 필수
     const requestData: any = {
       storeId,
       channelKey,
@@ -830,11 +831,14 @@ export const requestInicisPayment = async (
       customer: {
         customerId: params.userId ?? undefined,
         email: params.buyerEmail ?? undefined,
-        fullName: params.buyerName ?? undefined,
-        phoneNumber: params.buyerTel ?? undefined,
+        fullName: params.buyerName ?? '고객', // 이름이 없으면 임시값 사용
+        phoneNumber: params.buyerTel ?? '010-0000-0000', // KG이니시스 필수값이므로 임시 번호 전달
       },
       redirectUrl: returnUrl,
-      windowType: windowType,
+      windowType: {
+        pc: 'IFRAME',      // PC에서는 iframe(레이어) 방식 강제 (KG이니시스 필수)
+        mobile: 'REDIRECTION', // 모바일은 REDIRECTION 사용
+      },
       metadata: {
         supabaseOrderId: params.orderId,
         supabaseOrderNumber: params.orderNumber || null,
