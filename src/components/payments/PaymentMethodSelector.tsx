@@ -95,8 +95,8 @@ function getAvailablePaymentMethods(
     // KG이니시스 결제 추가 (한국 사용자 전용)
     methods.push({
       id: 'inicis',
-      name: t('payment.inicis') || 'KG이니시스',
-      description: t('payment.inicisDescription') || '신용카드, 가상계좌, 실시간계좌이체',
+      name: 'KG이니시스',
+      description: '신용카드, 가상계좌, 실시간계좌이체',
       icon: 'ri-bank-card-2-line',
       color: 'text-blue-600',
       disabled: false,
