@@ -65,6 +65,7 @@ export const startSheetPurchase = async ({
   elementId,
   onSuccess,
   onError,
+  inicisPayMethod,
 }: StartSheetPurchaseParams): Promise<StartSheetPurchaseResult> => {
   const trimmedDepositorName = depositorName?.trim();
 
@@ -203,7 +204,7 @@ export const startSheetPurchase = async ({
 
   if (paymentMethod === 'inicis') {
     // PortOne V2 SDK를 통한 KG이니시스 결제 처리
-    if (!params.inicisPayMethod) {
+    if (!inicisPayMethod) {
       throw new Error('KG이니시스 결제 수단을 선택해주세요.');
     }
 
@@ -217,7 +218,7 @@ export const startSheetPurchase = async ({
         buyerName: buyerName ?? undefined,
         buyerTel: buyerTel ?? undefined,
         description,
-        payMethod: params.inicisPayMethod,
+        payMethod: inicisPayMethod,
         returnUrl: returnUrl, // returnUrl이 없으면 requestInicisPayment 내부에서 자동 생성
         onSuccess: (response) => {
           console.log('[productPurchase] KG이니시스 결제 성공 콜백', response);
