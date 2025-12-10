@@ -6,6 +6,7 @@ import { hasPurchasedSheet } from '../lib/purchaseCheck';
 import { buySheetNow, startSheetPurchase } from '../lib/payments';
 import type { VirtualAccountInfo } from '../lib/payments';
 import type { PaymentMethod } from '../components/payments';
+import type { InicisPayMethod } from '../components/payments/InicisPaymentMethodSelector';
 import { processCashPurchase } from '../lib/cashPurchases';
 
 export interface SheetForBuyNow {
@@ -19,7 +20,10 @@ export interface UseBuyNowReturn {
   showPaymentSelector: boolean;
   showBankTransferModal: boolean;
   showPayPalModal: boolean;
+  showInicisMethodSelector: boolean;
+  showVirtualAccountModal: boolean;
   bankTransferInfo: VirtualAccountInfo | null;
+  virtualAccountInfo: VirtualAccountInfo | null;
   paymentProcessing: boolean;
   pendingSheet: SheetForBuyNow | null;
 
@@ -28,11 +32,14 @@ export interface UseBuyNowReturn {
   handlePaymentMethodSelect: (method: PaymentMethod) => void;
   handleBankTransferConfirm: (depositorName: string) => Promise<void>;
   handlePayPalInitiate: (elementId: string) => Promise<void>;
+  handleInicisPayMethodSelect: (payMethod: 'CARD' | 'VIRTUAL_ACCOUNT' | 'TRANSFER') => Promise<void>;
 
   // Setters for closing modals
   closePaymentSelector: () => void;
   closeBankTransferModal: () => void;
   closePayPalModal: () => void;
+  closeInicisMethodSelector: () => void;
+  closeVirtualAccountModal: () => void;
 }
 
 /**
@@ -46,7 +53,10 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
   const [showPaymentSelector, setShowPaymentSelector] = useState(false);
   const [showBankTransferModal, setShowBankTransferModal] = useState(false);
   const [showPayPalModal, setShowPayPalModal] = useState(false);
+  const [showInicisMethodSelector, setShowInicisMethodSelector] = useState(false);
+  const [showVirtualAccountModal, setShowVirtualAccountModal] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
+  const [virtualAccountInfo, setVirtualAccountInfo] = useState<VirtualAccountInfo | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [pendingSheet, setPendingSheet] = useState<SheetForBuyNow | null>(null);
 
@@ -155,6 +165,12 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
           setPaymentProcessing(false);
           setPendingSheet(null);
         }
+        return;
+      }
+
+      if (method === 'inicis') {
+        // KG이니시스 결제 수단 선택 모달 열기
+        setShowInicisMethodSelector(true);
         return;
       }
 
@@ -316,8 +332,99 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
     }
   }, [bankTransferInfo]);
 
+  const handleInicisPayMethodSelect = useCallback(
+    async (payMethod: InicisPayMethod) => {
+      if (!user || !pendingSheet) return;
+
+      setShowInicisMethodSelector(false);
+      setPaymentProcessing(true);
+
+      const price = Math.max(0, pendingSheet.price ?? 0);
+      if (price <= 0) {
+        alert('결제 금액이 올바르지 않습니다.');
+        setPaymentProcessing(false);
+        return;
+      }
+
+      try {
+        const result = await startSheetPurchase({
+          userId: user.id,
+          items: [
+            {
+              sheetId: pendingSheet.id,
+              sheetTitle: pendingSheet.title,
+              price,
+            },
+          ],
+          amount: price,
+          paymentMethod: 'inicis',
+          inicisPayMethod: payMethod,
+          description: t('categoriesPage.purchaseDescription', { title: pendingSheet.title }),
+          buyerName: user.email ?? null,
+          buyerEmail: user.email ?? null,
+          onSuccess: (response) => {
+            console.log('[useBuyNow] KG이니시스 결제 성공 콜백', response);
+            
+            // 가상계좌인 경우 안내 모달 표시
+            if (payMethod === 'VIRTUAL_ACCOUNT' && response.virtualAccountInfo) {
+              setVirtualAccountInfo({
+                bankName: response.virtualAccountInfo.bankName,
+                accountNumber: response.virtualAccountInfo.accountNumber,
+                accountHolder: response.virtualAccountInfo.accountHolder,
+                depositor: response.virtualAccountInfo.accountHolder,
+                amount: price,
+                expiresAt: response.virtualAccountInfo.expiresAt,
+              });
+              setShowVirtualAccountModal(true);
+            }
+            
+            setPaymentProcessing(false);
+            // 가상계좌가 아닌 경우 pendingSheet 초기화 (가상계좌는 모달 닫을 때 초기화)
+            if (payMethod !== 'VIRTUAL_ACCOUNT') {
+              setPendingSheet(null);
+            }
+          },
+          onError: (error) => {
+            console.error('[useBuyNow] KG이니시스 결제 실패 콜백', error);
+            setPaymentProcessing(false);
+            setPendingSheet(null);
+            alert(
+              error instanceof Error
+                ? error.message
+                : t('categoriesPage.purchaseError') || '결제 중 오류가 발생했습니다.'
+            );
+          },
+        });
+
+        // 결제 요청 완료 (실제 결제 완료는 콜백에서 처리)
+        console.log('[useBuyNow] KG이니시스 결제 요청 완료', result);
+      } catch (error) {
+        console.error('[useBuyNow] KG이니시스 결제 오류:', error);
+        alert(
+          error instanceof Error
+            ? error.message
+            : t('categoriesPage.purchaseError') || '결제 중 오류가 발생했습니다.'
+        );
+        setPaymentProcessing(false);
+        setPendingSheet(null);
+      }
+    },
+    [user, pendingSheet, t]
+  );
+
   const closePayPalModal = useCallback(() => {
     setShowPayPalModal(false);
+    setPendingSheet(null);
+  }, []);
+
+  const closeInicisMethodSelector = useCallback(() => {
+    setShowInicisMethodSelector(false);
+    setShowPaymentSelector(true);
+  }, []);
+
+  const closeVirtualAccountModal = useCallback(() => {
+    setShowVirtualAccountModal(false);
+    setVirtualAccountInfo(null);
     setPendingSheet(null);
   }, []);
 
@@ -326,7 +433,10 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
     showPaymentSelector,
     showBankTransferModal,
     showPayPalModal,
+    showInicisMethodSelector,
+    showVirtualAccountModal,
     bankTransferInfo,
+    virtualAccountInfo,
     paymentProcessing,
     pendingSheet,
 
@@ -335,11 +445,14 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
     handlePaymentMethodSelect,
     handleBankTransferConfirm,
     handlePayPalInitiate,
+    handleInicisPayMethodSelect,
 
     // Setters
     closePaymentSelector,
     closeBankTransferModal,
     closePayPalModal,
+    closeInicisMethodSelector,
+    closeVirtualAccountModal,
   };
 }
 

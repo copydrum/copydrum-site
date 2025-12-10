@@ -730,6 +730,292 @@ export const requestKakaoPayPayment = async (
   }
 };
 
+// KG이니시스 결제 요청 함수
+export const requestInicisPayment = async (
+  params: RequestInicisPaymentParams,
+): Promise<RequestInicisPaymentResult> => {
+  // 한국어 사이트에서만 동작
+  if (typeof window === 'undefined') {
+    return {
+      success: false,
+      error_msg: 'KG이니시스 결제는 브라우저 환경에서만 사용할 수 있습니다.',
+    };
+  }
+
+  const hostname = window.location.hostname;
+  const isKoreanSite = isKoreanSiteHost(hostname);
+
+  if (!isKoreanSite) {
+    console.warn('[portone-inicis] 한국어 사이트가 아닙니다.', { hostname });
+    return {
+      success: false,
+      error_msg: 'KG이니시스 결제는 한국어 사이트에서만 사용할 수 있습니다.',
+    };
+  }
+
+  console.log('[portone-inicis] KG이니시스 결제 요청 시작', {
+    orderId: params.orderId,
+    amount: params.amount,
+    payMethod: params.payMethod,
+    customer: {
+      userId: params.userId,
+      email: params.buyerEmail,
+      name: params.buyerName,
+      tel: params.buyerTel,
+    },
+  });
+
+  const storeId = import.meta.env.VITE_PORTONE_STORE_ID || 'store-21731740-b1df-492c-832a-8f38448d0ebd';
+  const channelKey = import.meta.env.VITE_PORTONE_CHANNEL_KEY_INICIS;
+
+  if (!storeId || !channelKey) {
+    console.error('[portone-inicis] 환경변수 설정 오류', { storeId, channelKey });
+    return {
+      success: false,
+      error_msg: 'KG이니시스 결제 설정이 올바르지 않습니다. VITE_PORTONE_CHANNEL_KEY_INICIS 환경 변수를 확인해주세요.',
+    };
+  }
+
+  try {
+    // 리턴 URL 설정
+    const returnUrl = params.returnUrl || getPortOneReturnUrl();
+
+    // paymentId 생성
+    const newPaymentId = `pay_${uuidv4()}`;
+
+    // 모바일 디바이스 감지
+    const isMobile = isMobileDevice();
+
+    // redirectUrl 확인
+    if (!returnUrl) {
+      console.error('[portone-inicis] ❌ redirectUrl이 없습니다!');
+      return {
+        success: false,
+        error_msg: '결제 리다이렉트 URL이 설정되지 않았습니다.',
+      };
+    }
+    console.log('[portone-inicis] redirectUrl 확인:', returnUrl);
+
+    // windowType 설정
+    const windowType = {
+      pc: 'POPUP',
+      mobile: 'REDIRECTION',
+    };
+
+    // payMethod를 PortOne 형식으로 변환
+    let portOnePayMethod: 'CARD' | 'VIRTUAL_ACCOUNT' | 'TRANSFER';
+    if (params.payMethod === 'CARD') {
+      portOnePayMethod = 'CARD';
+    } else if (params.payMethod === 'VIRTUAL_ACCOUNT') {
+      portOnePayMethod = 'VIRTUAL_ACCOUNT';
+    } else if (params.payMethod === 'TRANSFER') {
+      portOnePayMethod = 'TRANSFER';
+    } else {
+      return {
+        success: false,
+        error_msg: '지원하지 않는 결제 수단입니다.',
+      };
+    }
+
+    // Request Data 구성
+    const requestData: any = {
+      storeId,
+      channelKey,
+      paymentId: newPaymentId,
+      orderId: params.orderId,
+      orderName: params.description,
+      totalAmount: params.amount, // KRW 정수 금액
+      currency: 'CURRENCY_KRW' as const,
+      payMethod: portOnePayMethod,
+      customer: {
+        customerId: params.userId ?? undefined,
+        email: params.buyerEmail ?? undefined,
+        fullName: params.buyerName ?? undefined,
+        phoneNumber: params.buyerTel ?? undefined,
+      },
+      redirectUrl: returnUrl,
+      windowType: windowType,
+      metadata: {
+        supabaseOrderId: params.orderId,
+        supabaseOrderNumber: params.orderNumber || null,
+      },
+      locale: 'KO_KR',
+    };
+
+    // 주문에 transaction_id(paymentId) 저장 (결제 요청 전에 미리 저장)
+    console.log('[portone-inicis] 결제 요청 전 transaction_id 저장 시도', {
+      orderId: params.orderId,
+      paymentId: newPaymentId,
+    });
+
+    const { data: updateData, error: updateError } = await supabase
+      .from('orders')
+      .update({ transaction_id: newPaymentId })
+      .eq('id', params.orderId)
+      .select('id, transaction_id')
+      .single();
+
+    if (updateError) {
+      console.error('[portone-inicis] 주문 transaction_id 업데이트 실패:', {
+        orderId: params.orderId,
+        paymentId: newPaymentId,
+        error: updateError,
+      });
+    } else {
+      console.log('[portone-inicis] 주문 transaction_id 저장 성공 (결제 요청 전)', {
+        orderId: params.orderId,
+        paymentId: newPaymentId,
+        updatedOrder: updateData,
+      });
+    }
+
+    // 디버그 로그
+    console.log('[portone-inicis] requestPayment requestData', {
+      orderId: params.orderId,
+      paymentId: newPaymentId,
+      storeId: requestData.storeId,
+      channelKey: requestData.channelKey ? requestData.channelKey.substring(0, 20) + '...' : undefined,
+      orderName: requestData.orderName,
+      totalAmount: requestData.totalAmount,
+      currency: requestData.currency,
+      payMethod: requestData.payMethod,
+      windowType: requestData.windowType,
+      locale: requestData.locale,
+      redirectUrl: requestData.redirectUrl,
+    });
+
+    // 포트원 V2 SDK로 KG이니시스 결제 요청
+    await PortOne.requestPayment(requestData, {
+      onPaymentSuccess: async (paymentResult: any) => {
+        console.log('[portone-inicis] onPaymentSuccess 전체 응답', JSON.stringify(paymentResult, null, 2));
+
+        // 결제 성공 시 orders.transaction_id 업데이트
+        const portonePaymentId = paymentResult.paymentId || 
+                                  paymentResult.txId || 
+                                  paymentResult.tx_id ||
+                                  paymentResult.id || 
+                                  paymentResult.payment_id ||
+                                  newPaymentId;
+
+        console.log('[portone-inicis] paymentResult에서 추출한 paymentId', {
+          paymentId: portonePaymentId,
+          paymentResultKeys: Object.keys(paymentResult || {}),
+          fallbackUsed: portonePaymentId === newPaymentId,
+        });
+
+        if (portonePaymentId && params.orderId) {
+          try {
+            const { data: updateData, error: updateError } = await supabase
+              .from('orders')
+              .update({ transaction_id: portonePaymentId })
+              .eq('id', params.orderId)
+              .select('id, transaction_id, payment_status')
+              .single();
+
+            if (updateError) {
+              console.error('[portone-inicis] onPaymentSuccess에서 orders.transaction_id 업데이트 실패:', {
+                orderId: params.orderId,
+                paymentId: portonePaymentId,
+                error: updateError,
+              });
+            } else {
+              console.log('[portone-inicis] onPaymentSuccess에서 orders.transaction_id 업데이트 성공', {
+                orderId: params.orderId,
+                paymentId: portonePaymentId,
+                updatedOrder: updateData,
+              });
+            }
+          } catch (error) {
+            console.error('[portone-inicis] onPaymentSuccess에서 orders.transaction_id 업데이트 중 오류:', {
+              orderId: params.orderId,
+              paymentId: portonePaymentId,
+              error,
+            });
+          }
+        }
+
+        // 가상계좌 정보 추출 (가상계좌 결제인 경우)
+        let virtualAccountInfo = null;
+        if (params.payMethod === 'VIRTUAL_ACCOUNT' && paymentResult.virtualAccount) {
+          virtualAccountInfo = {
+            bankName: paymentResult.virtualAccount.bankName || paymentResult.virtualAccount.bank_name,
+            accountNumber: paymentResult.virtualAccount.accountNumber || paymentResult.virtualAccount.account_number,
+            accountHolder: paymentResult.virtualAccount.accountHolder || paymentResult.virtualAccount.account_holder,
+            expiresAt: paymentResult.virtualAccount.expiresAt || paymentResult.virtualAccount.expires_at || null,
+          };
+        }
+
+        // 사용자 정의 성공 콜백 호출
+        if (params.onSuccess) {
+          params.onSuccess({
+            ...paymentResult,
+            virtualAccountInfo,
+          });
+        }
+
+        // 가상계좌가 아닌 경우에만 리다이렉트 (가상계좌는 안내 모달 표시 후 처리)
+        if (params.payMethod !== 'VIRTUAL_ACCOUNT' && returnUrl) {
+          console.log('[portone-inicis] 결제 완료 후 리다이렉트', { returnUrl });
+          setTimeout(() => {
+            window.location.href = returnUrl;
+          }, 500);
+        }
+      },
+      onPaymentFail: (error: any) => {
+        console.error('[portone-inicis] onPaymentFail', error);
+        if (params.onError) {
+          params.onError(error);
+        }
+      },
+    });
+
+    return {
+      success: true,
+      merchant_uid: params.orderId,
+      paymentId: newPaymentId,
+      error_msg: 'KG이니시스 결제창이 열렸습니다.',
+    };
+  } catch (error) {
+    console.error('[portone-inicis] KG이니시스 결제 요청 오류', error);
+    return {
+      success: false,
+      error_msg: error instanceof Error ? error.message : 'KG이니시스 결제 요청 중 오류가 발생했습니다.',
+    };
+  }
+};
+
+// KG이니시스 결제 요청 인터페이스
+export interface RequestInicisPaymentParams {
+  userId: string; // 사용자 ID (필수)
+  amount: number; // KRW 금액
+  orderId: string; // 주문 ID
+  orderNumber?: string | null; // 주문번호 (metadata에 추가)
+  buyerEmail?: string;
+  buyerName?: string;
+  buyerTel?: string;
+  description: string; // 상품명
+  payMethod: 'CARD' | 'VIRTUAL_ACCOUNT' | 'TRANSFER'; // 결제 수단
+  returnUrl?: string; // 결제 완료 후 리다이렉트 URL
+  onSuccess?: (response: any) => void; // 결제 성공 콜백
+  onError?: (error: any) => void; // 결제 실패 콜백
+}
+
+export interface RequestInicisPaymentResult {
+  success: boolean;
+  imp_uid?: string;
+  merchant_uid?: string;
+  paid_amount?: number;
+  error_code?: string;
+  error_msg?: string;
+  paymentId?: string; // PortOne paymentId (transaction_id로 사용)
+  virtualAccountInfo?: {
+    bankName?: string;
+    accountNumber?: string;
+    accountHolder?: string;
+    expiresAt?: string | null;
+  } | null;
+}
+
 // PortOne 카드 결제용 인터페이스
 export interface PortOnePaymentArgs {
   amount: number; // KRW 금액

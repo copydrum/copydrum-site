@@ -10,6 +10,8 @@ import Footer from '../../components/common/Footer';
 import { isFavorite, toggleFavorite } from '../../lib/favorites';
 import { hasPurchasedSheet } from '../../lib/purchaseCheck';
 import { BankTransferInfoModal, PaymentMethodSelector, PayPalPaymentModal } from '../../components/payments';
+import { InicisPaymentMethodSelector } from '../../components/payments/InicisPaymentMethodSelector';
+import { VirtualAccountInfoModal } from '../../components/payments/VirtualAccountInfoModal';
 import type { PaymentMethod } from '../../components/payments';
 import { startSheetPurchase, buySheetNow } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
@@ -1053,6 +1055,20 @@ export default function SheetDetailPage() {
           initiatePayment={buyNow.handlePayPalInitiate}
         />
       )}
+
+      <InicisPaymentMethodSelector
+        open={buyNow.showInicisMethodSelector}
+        amount={buyNow.pendingSheet ? buyNow.pendingSheet.price : 0}
+        onSelect={buyNow.handleInicisPayMethodSelect}
+        onClose={buyNow.closeInicisMethodSelector}
+      />
+
+      <VirtualAccountInfoModal
+        open={buyNow.showVirtualAccountModal}
+        amount={buyNow.pendingSheet ? buyNow.pendingSheet.price : 0}
+        virtualAccountInfo={buyNow.virtualAccountInfo}
+        onClose={buyNow.closeVirtualAccountModal}
+      />
 
       {showPaymentSelector && (
         <PaymentMethodSelector

@@ -12,11 +12,11 @@ import { createOrderWithItems } from './orderUtils';
 //   getPayPalReturnUrl,
 //   getPayPalCancelUrl,
 // } from './paypal';
-import { requestPayPalPayment, requestKakaoPayPayment } from './portone';
+import { requestPayPalPayment, requestKakaoPayPayment, requestInicisPayment } from './portone';
 import { updateOrderPaymentStatus } from './paymentService';
 import type { VirtualAccountInfo, PaymentIntentResponse } from './types';
 
-type PurchaseMethod = 'card' | 'bank_transfer' | 'paypal' | 'kakaopay';
+type PurchaseMethod = 'card' | 'bank_transfer' | 'paypal' | 'kakaopay' | 'inicis';
 
 export interface PurchaseItem {
   sheetId: string;
@@ -38,6 +38,8 @@ interface StartSheetPurchaseParams {
   elementId?: string; // PayPal SPB 렌더링을 위한 컨테이너 ID
   onSuccess?: (response: any) => void; // 결제 성공 콜백 (카카오페이용)
   onError?: (error: any) => void; // 결제 실패 콜백 (카카오페이용)
+  // KG이니시스 전용 파라미터
+  inicisPayMethod?: 'CARD' | 'VIRTUAL_ACCOUNT' | 'TRANSFER'; // KG이니시스 결제 수단
 }
 
 export interface StartSheetPurchaseResult {
@@ -195,6 +197,68 @@ export const startSheetPurchase = async ({
       }
     } catch (error) {
       console.error('[productPurchase] KakaoPay 결제 오류', error);
+      throw error;
+    }
+  }
+
+  if (paymentMethod === 'inicis') {
+    // PortOne V2 SDK를 통한 KG이니시스 결제 처리
+    if (!params.inicisPayMethod) {
+      throw new Error('KG이니시스 결제 수단을 선택해주세요.');
+    }
+
+    try {
+      const result = await requestInicisPayment({
+        userId,
+        amount,
+        orderId,
+        orderNumber, // order_number도 전달
+        buyerEmail: buyerEmail ?? undefined,
+        buyerName: buyerName ?? undefined,
+        buyerTel: buyerTel ?? undefined,
+        description,
+        payMethod: params.inicisPayMethod,
+        returnUrl: returnUrl, // returnUrl이 없으면 requestInicisPayment 내부에서 자동 생성
+        onSuccess: (response) => {
+          console.log('[productPurchase] KG이니시스 결제 성공 콜백', response);
+          // 전달받은 콜백 호출
+          if (onSuccess) {
+            onSuccess(response);
+          }
+        },
+        onError: (error) => {
+          console.error('[productPurchase] KG이니시스 결제 실패 콜백', error);
+          // 전달받은 콜백 호출
+          if (onError) {
+            onError(error);
+          }
+        },
+      });
+
+      if (result.success) {
+        // KG이니시스 결제창이 열림
+        // 실제 결제 완료는 Webhook 또는 return 페이지에서 처리
+        // 가상계좌인 경우 virtualAccountInfo 반환
+        return {
+          orderId,
+          orderNumber,
+          amount,
+          paymentMethod,
+          virtualAccountInfo: result.virtualAccountInfo ? {
+            bankName: result.virtualAccountInfo.bankName,
+            accountNumber: result.virtualAccountInfo.accountNumber,
+            accountHolder: result.virtualAccountInfo.accountHolder,
+            depositor: result.virtualAccountInfo.accountHolder,
+            amount,
+            expiresAt: result.virtualAccountInfo.expiresAt,
+          } : null,
+        };
+      } else {
+        // 결제 실패
+        throw new Error(result.error_msg || 'KG이니시스 결제가 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('[productPurchase] KG이니시스 결제 오류', error);
       throw error;
     }
   }
