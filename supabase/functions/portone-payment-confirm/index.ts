@@ -32,6 +32,7 @@ interface PortOnePaymentResponse {
   orderId?: string;
   transactionId?: string;
   metadata?: Record<string, unknown>;
+  virtualAccount?: any;
 }
 
 async function getPortOneAccessToken(apiSecret: string): Promise<string> {
@@ -87,7 +88,8 @@ async function getPortOnePayment(
       status: tx.status,
       amount: tx.amount,
       orderId: rawResult.payment.order_name,
-      metadata: tx.metadata || {}
+      metadata: tx.metadata || {},
+      virtualAccount: tx.virtual_account || rawResult.payment.virtual_account
     };
   }
 
@@ -170,33 +172,82 @@ serve(async (req) => {
        return buildResponse({ success: false, error: { message: "Amount mismatch" } }, 400, origin);
     }
     
-    if (portonePayment.status !== "PAID") {
-       console.warn("결제 상태가 PAID가 아님", portonePayment.status);
-       return buildResponse({ success: false, error: { message: `Payment status is ${portonePayment.status}` } }, 400, origin);
+    const paymentStatus = portonePayment.status;
+    const isVirtualAccountIssued = paymentStatus === "VIRTUAL_ACCOUNT_ISSUED";
+    const isPaid = paymentStatus === "PAID";
+
+    // 가상계좌 발급 상태(VIRTUAL_ACCOUNT_ISSUED)는 정상 진행 상태로 인정
+    if (!isPaid && !isVirtualAccountIssued) {
+       console.warn("결제 상태가 PAID/VIRTUAL_ACCOUNT_ISSUED가 아님", paymentStatus);
+       return buildResponse({ success: false, error: { message: `Payment status is ${paymentStatus}` } }, 400, origin);
     }
 
     if (order.payment_status === "paid") {
-       return buildResponse({ success: true, message: "Already processed" }, 200, origin);
+       return buildResponse({ success: true, message: "Already processed", data: order }, 200, origin);
     }
 
-    // 🟢 [수정 완료] DB 제약조건에 맞춰 status를 'completed'로 설정
-    const { error: updateError } = await supabase
+    // 가상계좌 정보 추출 (있을 경우 저장 및 응답에 포함)
+    const va = portonePayment.virtualAccount || portonePayment.virtual_account || null;
+    const virtualAccountInfo = va ? {
+      bankName: va.bankName ?? va.bank_name ?? null,
+      accountNumber: va.accountNumber ?? va.account_number ?? null,
+      accountHolder: va.accountHolder ?? va.account_holder ?? null,
+      expiresAt: va.expiresAt ?? va.expires_at ?? null,
+    } : null;
+
+    // 상태별 업데이트 값 결정
+    const nowIso = new Date().toISOString();
+    const updatePayload: Record<string, unknown> = {
+      transaction_id: paymentId,
+      payment_provider: "portone",
+      payment_confirmed_at: nowIso,
+      metadata: {
+        ...(order.metadata || {}),
+        portone_status: paymentStatus,
+        portone_payment_id: paymentId,
+      },
+    };
+
+    if (isPaid) {
+      updatePayload.payment_status = "paid";
+      updatePayload.status = "completed";
+    } else if (isVirtualAccountIssued) {
+      updatePayload.payment_status = "awaiting_deposit";
+      updatePayload.status = "pending";
+      if (virtualAccountInfo) {
+        updatePayload.virtual_account_info = virtualAccountInfo;
+      }
+    }
+
+    const { error: updateError, data: updatedOrder } = await supabase
       .from("orders")
-      .update({ 
-        payment_status: "paid",  // payment_status는 제약조건이 없다면 'paid' 유지
-        status: "completed",     // ⭐️ 여기가 핵심! 'completed'로 변경
-        transaction_id: paymentId,
-        payment_confirmed_at: new Date().toISOString()
-      })
-      .eq("id", order.id);
+      .update(updatePayload)
+      .eq("id", order.id)
+      .select()
+      .maybeSingle();
 
     if (updateError) {
       console.error("[portone-payment-confirm] DB 업데이트 실패:", updateError);
       throw updateError;
     }
 
-    console.log("[portone-payment-confirm] 결제 처리 완료:", order.id);
-    return buildResponse({ success: true, data: order }, 200, origin);
+    const responseOrder = updatedOrder || order;
+    console.log("[portone-payment-confirm] 결제 처리 완료:", {
+      orderId: responseOrder.id,
+      paymentStatus,
+      isVirtualAccountIssued,
+      hasVirtualAccountInfo: !!virtualAccountInfo,
+    });
+
+    return buildResponse({
+      success: true,
+      data: {
+        order: responseOrder,
+        status: paymentStatus,
+        paymentId,
+        virtualAccountInfo,
+      },
+    }, 200, origin);
 
   } catch (error) {
     console.error("[portone-payment-confirm] Error:", error);

@@ -1,9 +1,9 @@
-import { useCallback, useMemo, useEffect } from 'react';
+import { useCallback, useMemo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import { isKoreanSiteHost } from '../../config/hostType';
 
-type PaymentMethod = 'cash' | 'card' | 'bank' | 'paypal' | 'kakaopay' | 'inicis';
+type PaymentMethod = 'cash' | 'card' | 'bank' | 'paypal' | 'kakaopay' | 'inicis' | 'virtual_account' | 'transfer';
 
 type PaymentContext = 'buyNow' | 'cashCharge';
 
@@ -15,20 +15,24 @@ interface PaymentMethodOption {
   color: string;
   badge?: string;
   disabled?: boolean;
+  // 결제 처리에 필요한 메타데이터
+  channelKey?: string;
+  payMethod?: 'CARD' | 'VIRTUAL_ACCOUNT' | 'TRANSFER' | 'EASY_PAY';
+  pg?: string;
 }
 
 interface PaymentMethodSelectorProps {
   open: boolean;
   amount: number;
   onClose: () => void;
-  onSelect: (method: PaymentMethod) => void;
+  onSelect: (method: PaymentMethod, option?: PaymentMethodOption) => void;
   allowCash?: boolean;
   disabledMethods?: PaymentMethod[];
   context?: PaymentContext; // 'buyNow' (바로구매) 또는 'cashCharge' (캐시 충전)
   userCredits?: number; // 사용자 포인트 잔액 (한국어 사이트에서 포인트 결제 옵션 표시용)
 }
 
-export type { PaymentMethod, PaymentContext };
+export type { PaymentMethod, PaymentContext, PaymentMethodOption };
 
 /**
  * 도메인과 컨텍스트에 따라 사용 가능한 결제수단 목록을 반환합니다.
@@ -59,17 +63,22 @@ function getAvailablePaymentMethods(
     ];
   }
 
-  // 한국어 사이트: 무통장입금 + 카카오페이 + 포인트 결제 (포인트가 있을 때만)
+  // 한국어 사이트: 통합 리스트 형태로 5가지 결제 수단 제공
   if (siteType === 'ko') {
     const methods: PaymentMethodOption[] = [
+      // 1. 신용카드 (KG이니시스)
       {
-        id: 'bank',
-        name: t('payment.bank'),
-        description: t('payment.bankDescription'),
-        icon: 'ri-bank-line',
-        color: 'text-green-600',
+        id: 'card',
+        name: '신용카드',
+        description: '신용카드로 결제',
+        icon: 'ri-bank-card-line',
+        color: 'text-blue-600',
         disabled: false,
+        channelKey: import.meta.env.VITE_PORTONE_CHANNEL_KEY_INICIS,
+        payMethod: 'CARD',
+        pg: 'KG이니시스',
       },
+      // 2. 카카오페이
       {
         id: 'kakaopay',
         name: t('payment.kakaopay') || '카카오페이',
@@ -77,10 +86,37 @@ function getAvailablePaymentMethods(
         icon: 'ri-kakao-talk-line',
         color: 'text-yellow-500',
         disabled: false,
+        channelKey: import.meta.env.VITE_PORTONE_CHANNEL_KEY_KAKAOPAY,
+        payMethod: 'EASY_PAY',
+        pg: '카카오페이',
+      },
+      // 3. 무통장입금 (가상계좌) - KG이니시스
+      {
+        id: 'virtual_account',
+        name: '무통장입금 (가상계좌)',
+        description: '가상계좌로 입금',
+        icon: 'ri-bank-line',
+        color: 'text-green-600',
+        disabled: false,
+        channelKey: import.meta.env.VITE_PORTONE_CHANNEL_KEY_INICIS,
+        payMethod: 'VIRTUAL_ACCOUNT',
+        pg: 'KG이니시스',
+      },
+      // 4. 실시간 계좌이체 - KG이니시스
+      {
+        id: 'transfer',
+        name: '실시간 계좌이체',
+        description: '실시간 계좌이체로 결제',
+        icon: 'ri-exchange-line',
+        color: 'text-purple-600',
+        disabled: false,
+        channelKey: import.meta.env.VITE_PORTONE_CHANNEL_KEY_INICIS,
+        payMethod: 'TRANSFER',
+        pg: 'KG이니시스',
       },
     ];
 
-    // 포인트 결제 옵션 추가 (포인트가 있을 때만)
+    // 5. 캐시 잔액 (포인트가 있을 때만 표시)
     if (userCredits > 0 && context === 'buyNow') {
       methods.push({
         id: 'cash',
@@ -88,30 +124,6 @@ function getAvailablePaymentMethods(
         description: t('payment.cashDescription'),
         icon: 'ri-coins-line',
         color: 'text-yellow-600',
-        disabled: false,
-      });
-    }
-
-    // KG이니시스 결제 추가 (한국 사용자 전용)
-    methods.push({
-      id: 'inicis',
-      name: 'KG이니시스',
-      description: '신용카드, 가상계좌, 실시간계좌이체',
-      icon: 'ri-bank-card-2-line',
-      color: 'text-blue-600',
-      disabled: false,
-    });
-
-    // Feature flag: 향후 PG 심사 완료 후 카드/간편결제를 다시 노출할 수 있도록
-    const enableCardInKR = import.meta.env.VITE_ENABLE_CARD_IN_KR === 'true';
-    if (enableCardInKR) {
-      // 카드 결제 추가 (향후 사용)
-      methods.push({
-        id: 'card',
-        name: t('payment.card'),
-        description: t('payment.cardDescription'),
-        icon: 'ri-bank-card-line',
-        color: 'text-blue-600',
         disabled: false,
       });
     }
@@ -190,6 +202,22 @@ export const PaymentMethodSelector = ({
     return getAvailablePaymentMethods(siteType, context, t, userCredits);
   }, [siteType, context, t, userCredits]);
 
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
+  const [selectedOption, setSelectedOption] = useState<PaymentMethodOption | null>(null);
+
+  // 모달이 열릴 때 선택 상태 초기화
+  useEffect(() => {
+    if (open) {
+      setSelectedMethod(null);
+      setSelectedOption(null);
+    }
+  }, [open]);
+
+  const handleConfirm = () => {
+    if (selectedMethod && selectedOption) {
+      onSelect(selectedMethod, selectedOption);
+    }
+  };
 
   if (!open) return null;
 
@@ -211,30 +239,40 @@ export const PaymentMethodSelector = ({
               const isDisabled =
                 option.disabled || disabledMethods.includes(option.id);
               return (
-                <button
+                <label
                   key={option.id}
-                  type="button"
-                  onClick={() => {
-                    if (isDisabled) return;
-                    onSelect(option.id);
-                  }}
-                  disabled={isDisabled}
-                  className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition-colors ${isDisabled
-                    ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400'
-                    : 'cursor-pointer border-gray-200 hover:border-blue-500 hover:bg-blue-50'
-                    }`}
+                  className={`flex w-full cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
+                    isDisabled
+                      ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400'
+                      : selectedMethod === option.id
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'cursor-pointer border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'
+                  }`}
                 >
-                  <div className="flex items-center space-x-3">
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value={option.id}
+                    checked={selectedMethod === option.id}
+                    onChange={() => {
+                      if (isDisabled) return;
+                      setSelectedMethod(option.id);
+                      setSelectedOption(option);
+                    }}
+                    disabled={isDisabled}
+                    className="h-4 w-4 shrink-0 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div className="flex flex-1 items-center gap-3">
                     {option.id === 'kakaopay' && isKoreanSite ? (
                       <img 
                         src="/payment_icon_yellow_medium.png" 
                         alt="카카오페이" 
-                        className="h-6 w-auto object-contain"
+                        className="h-6 w-auto shrink-0 object-contain"
                       />
                     ) : (
-                      <i className={`${option.icon} ${option.color} text-xl`}></i>
+                      <i className={`${option.icon} ${option.color} shrink-0 text-xl`}></i>
                     )}
-                    <div>
+                    <div className="flex-1 text-left">
                       <p className="text-sm font-semibold text-gray-900">{option.name}</p>
                       {option.description ? (
                         <p className="text-xs text-gray-500">{option.description}</p>
@@ -242,11 +280,11 @@ export const PaymentMethodSelector = ({
                     </div>
                   </div>
                   {option.badge ? (
-                    <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-700">
+                    <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-700">
                       {option.badge}
                     </span>
                   ) : null}
-                </button>
+                </label>
               );
             })}
           </div>
@@ -258,6 +296,14 @@ export const PaymentMethodSelector = ({
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               {t('button.cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={!selectedMethod}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
+            >
+              결제하기
             </button>
           </div>
         </div>

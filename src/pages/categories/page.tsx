@@ -11,7 +11,6 @@ import MainHeader from '../../components/common/MainHeader';
 import { processCashPurchase } from '../../lib/cashPurchases';
 import { hasPurchasedSheet } from '../../lib/purchaseCheck';
 import { BankTransferInfoModal, PaymentMethodSelector, InsufficientCashModal, PayPalPaymentModal } from '../../components/payments';
-import { InicisPaymentMethodSelector } from '../../components/payments/InicisPaymentMethodSelector';
 import { VirtualAccountInfoModal } from '../../components/payments/VirtualAccountInfoModal';
 import type { PaymentMethod } from '../../components/payments';
 import { startSheetPurchase, buySheetNow } from '../../lib/payments';
@@ -1484,12 +1483,6 @@ const CategoriesPage: React.FC = () => {
         />
       )}
 
-      <InicisPaymentMethodSelector
-        open={buyNow.showInicisMethodSelector}
-        amount={buyNow.pendingSheet ? buyNow.pendingSheet.price : 0}
-        onSelect={buyNow.handleInicisPayMethodSelect}
-        onClose={buyNow.closeInicisMethodSelector}
-      />
 
       <VirtualAccountInfoModal
         open={buyNow.showVirtualAccountModal}

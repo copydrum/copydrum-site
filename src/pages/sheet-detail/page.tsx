@@ -10,9 +10,8 @@ import Footer from '../../components/common/Footer';
 import { isFavorite, toggleFavorite } from '../../lib/favorites';
 import { hasPurchasedSheet } from '../../lib/purchaseCheck';
 import { BankTransferInfoModal, PaymentMethodSelector, PayPalPaymentModal } from '../../components/payments';
-import { InicisPaymentMethodSelector } from '../../components/payments/InicisPaymentMethodSelector';
 import { VirtualAccountInfoModal } from '../../components/payments/VirtualAccountInfoModal';
-import type { PaymentMethod } from '../../components/payments';
+import type { PaymentMethod, PaymentMethodOption } from '../../components/payments';
 import { startSheetPurchase, buySheetNow } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
@@ -58,6 +57,8 @@ export default function SheetDetailPage() {
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
   const [showBankTransferModal, setShowBankTransferModal] = useState(false);
+  const [virtualAccountInfo, setVirtualAccountInfo] = useState<VirtualAccountInfo | null>(null);
+  const [showVirtualAccountModal, setShowVirtualAccountModal] = useState(false);
   const { i18n, t } = useTranslation();
   const { isKoreanSite } = useSiteLanguage();
 
@@ -379,33 +380,32 @@ export default function SheetDetailPage() {
     });
   };
 
-  const handlePaymentMethodSelect = async (method: PaymentMethod) => {
+  const handlePaymentMethodSelect = async (method: PaymentMethod, option?: PaymentMethodOption) => {
     if (!user || !sheet) return;
 
     setShowPaymentSelector(false);
 
-    if (method === 'bank') {
+    const price = getSheetPrice();
+
+    // 무통장입금 (수동) - 기존 로직 유지
+    if (method === 'bank_transfer') {
       setShowBankTransferModal(true);
+      return;
+    }
+
+    // PayPal - 기존 로직 유지
+    if (method === 'paypal') {
+      setShowPayPalModal(true);
       return;
     }
 
     setPurchasing(true);
     setPaymentProcessing(true);
 
-    const price = getSheetPrice();
-
     try {
-      if (method === 'paypal') {
-        setShowPayPalModal(true);
-        return;
-      }
-
+      // 카카오페이 - 기존 로직 유지
       if (method === 'kakaopay') {
-        setPurchasing(true);
-        setPaymentProcessing(true);
-
         try {
-          // 주문 생성 및 카카오페이 결제 시작
           const orderResult = await startSheetPurchase({
             userId: user.id,
             items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
@@ -448,9 +448,65 @@ export default function SheetDetailPage() {
         return;
       }
 
-      if (method === 'card') {
-        await completeOnlinePurchase('card');
+      // 신용카드, 무통장입금(가상계좌), 실시간 계좌이체 - KG이니시스
+      if (method === 'card' || method === 'virtual_account' || method === 'transfer') {
+        if (!option || !option.payMethod) {
+          alert('결제 수단 정보가 올바르지 않습니다.');
+          setPurchasing(false);
+          setPaymentProcessing(false);
+          return;
+        }
+
+        try {
+          const result = await startSheetPurchase({
+            userId: user.id,
+            items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
+            amount: price,
+            paymentMethod: 'inicis',
+            inicisPayMethod: option.payMethod as 'CARD' | 'VIRTUAL_ACCOUNT' | 'TRANSFER',
+            description: t('sheetDetail.purchaseDescription', { title: sheet.title }),
+            buyerName: user.email ?? null,
+            buyerEmail: user.email ?? null,
+            onSuccess: (response) => {
+              console.log('[sheet-detail] KG이니시스 결제 성공', response);
+              
+              // 가상계좌인 경우 안내 모달 표시
+              if (option.payMethod === 'VIRTUAL_ACCOUNT' && response.virtualAccountInfo) {
+                setVirtualAccountInfo({
+                  bankName: response.virtualAccountInfo.bankName,
+                  accountNumber: response.virtualAccountInfo.accountNumber,
+                  accountHolder: response.virtualAccountInfo.accountHolder,
+                  depositor: response.virtualAccountInfo.accountHolder,
+                  amount: price,
+                  expiresAt: response.virtualAccountInfo.expiresAt,
+                });
+                setShowVirtualAccountModal(true);
+              }
+              
+              setPurchasing(false);
+              setPaymentProcessing(false);
+              // 가상계좌가 아닌 경우는 결제 완료 처리
+              if (option.payMethod !== 'VIRTUAL_ACCOUNT') {
+                alert(t('sheetDetail.paymentWindowOpen') || '결제창이 열렸습니다.');
+              }
+            },
+            onError: (error) => {
+              console.error('[sheet-detail] KG이니시스 결제 실패', error);
+              setPurchasing(false);
+              setPaymentProcessing(false);
+              alert(error instanceof Error ? error.message : t('sheetDetail.purchaseError'));
+            },
+          });
+        } catch (error) {
+          console.error('KG이니시스 결제 오류:', error);
+          alert(error instanceof Error ? error.message : t('sheetDetail.purchaseError'));
+          setPurchasing(false);
+          setPaymentProcessing(false);
+        }
+        return;
       }
+
+      // 캐시 잔액 결제는 useBuyNow 훅에서 처리하므로 여기서는 처리하지 않음
     } catch (error) {
       console.error('구매 오류:', error);
       alert(error instanceof Error ? error.message : t('sheetDetail.purchaseError'));
@@ -1056,18 +1112,16 @@ export default function SheetDetailPage() {
         />
       )}
 
-      <InicisPaymentMethodSelector
-        open={buyNow.showInicisMethodSelector}
-        amount={buyNow.pendingSheet ? buyNow.pendingSheet.price : 0}
-        onSelect={buyNow.handleInicisPayMethodSelect}
-        onClose={buyNow.closeInicisMethodSelector}
-      />
 
       <VirtualAccountInfoModal
-        open={buyNow.showVirtualAccountModal}
-        amount={buyNow.pendingSheet ? buyNow.pendingSheet.price : 0}
-        virtualAccountInfo={buyNow.virtualAccountInfo}
-        onClose={buyNow.closeVirtualAccountModal}
+        open={showVirtualAccountModal || buyNow.showVirtualAccountModal}
+        amount={sheet ? sheet.price : 0}
+        virtualAccountInfo={virtualAccountInfo || buyNow.virtualAccountInfo}
+        onClose={() => {
+          setShowVirtualAccountModal(false);
+          setVirtualAccountInfo(null);
+          buyNow.closeVirtualAccountModal();
+        }}
       />
 
       {showPaymentSelector && (

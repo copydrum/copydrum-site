@@ -846,6 +846,17 @@ export const requestInicisPayment = async (
       locale: 'KO_KR',
     };
 
+    // 가상계좌 결제인 경우 virtualAccount 설정 추가 (포트원 SDK 필수 파라미터)
+    if (portOnePayMethod === 'VIRTUAL_ACCOUNT') {
+      requestData.virtualAccount = {
+        accountExpiry: {
+          validHours: 24, // 가상계좌 유효시간 (24시간)
+        },
+        cashReceiptType: 'ANONYMOUS', // 현금영수증 발급용
+      };
+      console.log('[portone-inicis] 가상계좌 설정 추가', requestData.virtualAccount);
+    }
+
     // 주문에 transaction_id(paymentId) 저장 (결제 요청 전에 미리 저장)
     console.log('[portone-inicis] 결제 요청 전 transaction_id 저장 시도', {
       orderId: params.orderId,
@@ -940,13 +951,43 @@ export const requestInicisPayment = async (
 
         // 가상계좌 정보 추출 (가상계좌 결제인 경우)
         let virtualAccountInfo = null;
-        if (params.payMethod === 'VIRTUAL_ACCOUNT' && paymentResult.virtualAccount) {
-          virtualAccountInfo = {
-            bankName: paymentResult.virtualAccount.bankName || paymentResult.virtualAccount.bank_name,
-            accountNumber: paymentResult.virtualAccount.accountNumber || paymentResult.virtualAccount.account_number,
-            accountHolder: paymentResult.virtualAccount.accountHolder || paymentResult.virtualAccount.account_holder,
-            expiresAt: paymentResult.virtualAccount.expiresAt || paymentResult.virtualAccount.expires_at || null,
-          };
+        if (params.payMethod === 'VIRTUAL_ACCOUNT') {
+          const va =
+            paymentResult.virtualAccount ||
+            paymentResult.virtual_account ||
+            paymentResult.virtualAccountInfo ||
+            paymentResult.virtual_account_info;
+
+          if (va) {
+            virtualAccountInfo = {
+              bankName: va.bankName || va.bank_name,
+              accountNumber: va.accountNumber || va.account_number,
+              accountHolder: va.accountHolder || va.account_holder,
+              expiresAt: va.expiresAt || va.expires_at || null,
+            };
+          }
+
+          // 서버에 저장된 가상계좌 정보로 2차 보강 (SDK 응답에 없을 때 대비)
+          if (!virtualAccountInfo && params.orderId) {
+            const { data: orderVaData, error: orderVaError } = await supabase
+              .from('orders')
+              .select('virtual_account_info')
+              .eq('id', params.orderId)
+              .maybeSingle();
+
+            if (!orderVaError && orderVaData?.virtual_account_info) {
+              const stored = orderVaData.virtual_account_info as any;
+              virtualAccountInfo = {
+                bankName: stored.bankName || stored.bank_name,
+                accountNumber: stored.accountNumber || stored.account_number,
+                accountHolder: stored.accountHolder || stored.account_holder,
+                expiresAt: stored.expiresAt || stored.expires_at || null,
+              };
+              console.log('[portone-inicis] orders.virtual_account_info로 가상계좌 정보 보강', virtualAccountInfo);
+            } else if (orderVaError) {
+              console.warn('[portone-inicis] 가상계좌 정보 보강 실패 (orders 조회)', { orderId: params.orderId, error: orderVaError });
+            }
+          }
         }
 
         // 사용자 정의 성공 콜백 호출
