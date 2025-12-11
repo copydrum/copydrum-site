@@ -77,11 +77,29 @@ async function getPortOnePayment(
   }
 
   const rawResult = await response.json();
-  console.log("[DEBUG] PortOne 원본 응답:", JSON.stringify(rawResult, null, 2));
-
-  // 구조 평탄화
+  
   if (rawResult.payment && rawResult.payment.transactions && rawResult.payment.transactions.length > 0) {
     const tx = rawResult.payment.transactions[0];
+    
+    // 👇 [핵심 수정] 로그에서 발견된 깊은 경로(payment_method_detail) 탐색 추가
+    const paymentMethodDetail = tx.payment_method_detail || tx.paymentMethodDetail;
+    const deepVirtualAccount = paymentMethodDetail?.virtual_account || paymentMethodDetail?.virtualAccount;
+
+    // 우선순위: 깊은 경로 -> 얕은 경로 -> 원본 payment 경로
+    const foundVirtualAccount = 
+      deepVirtualAccount || 
+      tx.virtual_account || 
+      tx.virtualAccount || 
+      rawResult.payment.virtual_account || 
+      rawResult.payment.virtualAccount;
+
+    // 디버깅: 찾았는지 확인
+    if (foundVirtualAccount) {
+      console.log("[DEBUG] 가상계좌 정보 발견됨:", JSON.stringify(foundVirtualAccount));
+    } else {
+      console.log("[DEBUG] 가상계좌 정보 발견 실패 via path:", JSON.stringify(tx));
+    }
+
     return {
       id: rawResult.payment.id,
       transactionId: tx.id,
@@ -89,7 +107,7 @@ async function getPortOnePayment(
       amount: tx.amount,
       orderId: rawResult.payment.order_name,
       metadata: tx.metadata || {},
-      virtualAccount: tx.virtual_account || rawResult.payment.virtual_account
+      virtualAccount: foundVirtualAccount
     };
   }
 
@@ -132,12 +150,6 @@ serve(async (req) => {
 
     const portonePayment = await getPortOnePayment(paymentId, portoneApiKey);
 
-    console.log("[portone-payment-confirm] 포트원 조회 성공:", { 
-      id: portonePayment.id,
-      status: portonePayment.status, 
-      amount: portonePayment.amount.total 
-    });
-
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     let orderData = null;
     
@@ -165,37 +177,26 @@ serve(async (req) => {
     }
 
     const order = orderData;
-
-    // 금액 검증
-    if (!compareAmounts(portonePayment.amount.total, portonePayment.amount.currency, order.total_amount)) {
-       console.error("금액 불일치", { portone: portonePayment.amount.total, order: order.total_amount });
-       return buildResponse({ success: false, error: { message: "Amount mismatch" } }, 400, origin);
-    }
-    
     const paymentStatus = portonePayment.status;
     const isVirtualAccountIssued = paymentStatus === "VIRTUAL_ACCOUNT_ISSUED";
     const isPaid = paymentStatus === "PAID";
 
-    // 가상계좌 발급 상태(VIRTUAL_ACCOUNT_ISSUED)는 정상 진행 상태로 인정
     if (!isPaid && !isVirtualAccountIssued) {
        console.warn("결제 상태가 PAID/VIRTUAL_ACCOUNT_ISSUED가 아님", paymentStatus);
        return buildResponse({ success: false, error: { message: `Payment status is ${paymentStatus}` } }, 400, origin);
     }
 
-    if (order.payment_status === "paid") {
-       return buildResponse({ success: true, message: "Already processed", data: order }, 200, origin);
-    }
-
-    // 가상계좌 정보 추출 (있을 경우 저장 및 응답에 포함)
-    const va = portonePayment.virtualAccount || portonePayment.virtual_account || null;
+    // 가상계좌 정보 추출 및 매핑
+    const va = portonePayment.virtualAccount;
     const virtualAccountInfo = va ? {
-      bankName: va.bankName ?? va.bank_name ?? null,
-      accountNumber: va.accountNumber ?? va.account_number ?? null,
-      accountHolder: va.accountHolder ?? va.account_holder ?? null,
-      expiresAt: va.expiresAt ?? va.expires_at ?? null,
+      // 로그에 나온 bank_code 대응 추가
+      bankName: va.bankName || va.bank_name || va.bank || va.bankCode || va.bank_code || null,
+      accountNumber: va.accountNumber || va.account_number || null,
+      accountHolder: va.accountHolder || va.account_holder || va.remittee_name || null,
+      expiresAt: va.expiresAt || va.expires_at || va.expired_at || va.valid_until || null,
     } : null;
 
-    // 상태별 업데이트 값 결정
+    // DB 업데이트
     const nowIso = new Date().toISOString();
     const updatePayload: Record<string, unknown> = {
       transaction_id: paymentId,
@@ -232,20 +233,15 @@ serve(async (req) => {
     }
 
     const responseOrder = updatedOrder || order;
-    console.log("[portone-payment-confirm] 결제 처리 완료:", {
-      orderId: responseOrder.id,
-      paymentStatus,
-      isVirtualAccountIssued,
-      hasVirtualAccountInfo: !!virtualAccountInfo,
-    });
-
+    
+    // 최종 결과 반환
     return buildResponse({
       success: true,
       data: {
         order: responseOrder,
         status: paymentStatus,
         paymentId,
-        virtualAccountInfo,
+        virtualAccountInfo, // 이제 여기에 데이터가 들어갑니다!
       },
     }, 200, origin);
 

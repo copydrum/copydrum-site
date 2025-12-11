@@ -1,14 +1,15 @@
 /**
  * 결제수단 타입
  * 
- * - bank_transfer: 무통장 입금 (한국 사이트 전용)
+ * - bank_transfer: 무통장 입금 (한국 사이트 전용, 수동)
  * - paypal: PayPal 결제 (영문 사이트 전용)
- * - card: 신용카드 결제 (포트원 심사 진행 중, 현재 비활성화)
- * - kakaopay: 카카오페이 (포트원 심사 진행 중, 현재 비활성화)
- * - virtual_account: 가상계좌 (legacy, 현재 미사용)
+ * - card: 신용카드 결제 (KG이니시스)
+ * - kakaopay: 카카오페이
+ * - virtual_account: 무통장입금 (가상계좌, KG이니시스)
+ * - transfer: 실시간 계좌이체 (KG이니시스)
  * - cash: 보유 캐시로 결제
  */
-export type PaymentMethod = 'card' | 'kakaopay' | 'bank_transfer' | 'virtual_account' | 'cash' | 'paypal';
+export type PaymentMethod = 'card' | 'kakaopay' | 'bank_transfer' | 'virtual_account' | 'cash' | 'paypal' | 'transfer';
 
 /**
  * 결제 제공자 타입

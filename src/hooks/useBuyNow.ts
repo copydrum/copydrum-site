@@ -7,6 +7,36 @@ import { buySheetNow, startSheetPurchase } from '../lib/payments';
 import type { VirtualAccountInfo } from '../lib/payments';
 import type { PaymentMethod, PaymentMethodOption } from '../components/payments';
 import { processCashPurchase } from '../lib/cashPurchases';
+import { supabase } from '../lib/supabase'; // ✅ DB 직접 조회용
+
+// 은행 코드 한글 변환 맵
+const BANK_CODE_MAP: Record<string, string> = {
+  'NH_NONGHYUP_BANK': 'NH농협은행',
+  'KB_BANK': 'KB국민은행',
+  'KOOKMIN_BANK': 'KB국민은행', 
+  'SHINHAN_BANK': '신한은행',
+  'WOORI_BANK': '우리은행',
+  'IBK_BANK': 'IBK기업은행',
+  'HANA_BANK': '하나은행',
+  'KEB_HANA_BANK': '하나은행',
+  'KAKAO_BANK': '카카오뱅크',
+  'K_BANK': '케이뱅크',
+  'BUSAN_BANK': '부산은행',
+  'DAEGU_BANK': 'iM뱅크(대구은행)',
+  'POST_OFFICE': '우체국',
+  'SC_BANK': 'SC제일은행',
+  'SUHYUP_BANK': 'Sh수협은행',
+  'GYEONGNAM_BANK': '경남은행',
+  'JEONBUK_BANK': '전북은행',
+  'JEJU_BANK': '제주은행',
+  'CITI_BANK': '한국씨티은행',
+  'SAEMAUL_GEUMGO': '새마을금고',
+  'SHINHYUP_BANK': '신협',
+  'SAVING_BANK': '저축은행',
+  'SANLIM_BANK': '산림조합',
+  'TOSS_BANK': '토스뱅크',
+  'NONGHYUP_BANK': 'NH농협은행',
+};
 
 export interface SheetForBuyNow {
   id: string;
@@ -15,7 +45,6 @@ export interface SheetForBuyNow {
 }
 
 export interface UseBuyNowReturn {
-  // State
   showPaymentSelector: boolean;
   showBankTransferModal: boolean;
   showPayPalModal: boolean;
@@ -24,24 +53,16 @@ export interface UseBuyNowReturn {
   virtualAccountInfo: VirtualAccountInfo | null;
   paymentProcessing: boolean;
   pendingSheet: SheetForBuyNow | null;
-
-  // Actions
   handleBuyNow: (sheet: SheetForBuyNow) => Promise<void>;
   handlePaymentMethodSelect: (method: PaymentMethod, option?: PaymentMethodOption) => void;
   handleBankTransferConfirm: (depositorName: string) => Promise<void>;
   handlePayPalInitiate: (elementId: string) => Promise<void>;
-
-  // Setters for closing modals
   closePaymentSelector: () => void;
   closeBankTransferModal: () => void;
   closePayPalModal: () => void;
   closeVirtualAccountModal: () => void;
 }
 
-/**
- * 공유 "Buy Now" 훅
- * Sheet Detail Page와 Categories Page에서 동일한 로직을 사용하도록 함
- */
 export function useBuyNow(user: User | null): UseBuyNowReturn {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -62,7 +83,6 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
         navigate(`/auth/login?redirect=${encodeURIComponent(redirectPath)}`);
         return;
       }
-
       try {
         const alreadyPurchased = await hasPurchasedSheet(user.id, sheet.id);
         if (alreadyPurchased) {
@@ -74,9 +94,6 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
         alert(t('categoriesPage.purchaseCheckError'));
         return;
       }
-
-      // 모든 사이트에서 결제수단 선택 모달 열기
-      // PaymentMethodSelector가 사이트 타입에 따라 적절한 결제수단만 표시
       setPendingSheet(sheet);
       setShowPaymentSelector(true);
     },
@@ -86,166 +103,171 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
   const handlePaymentMethodSelect = useCallback(
     async (method: PaymentMethod, option?: PaymentMethodOption) => {
       if (!user || !pendingSheet) return;
-
       setShowPaymentSelector(false);
-
       const price = Math.max(0, pendingSheet.price ?? 0);
-      if (price <= 0) {
-        alert('결제 금액이 올바르지 않습니다.');
-        return;
-      }
 
-      // 무통장입금 (수동) - 기존 로직 유지
       if (method === 'bank_transfer') {
         setShowBankTransferModal(true);
         return;
       }
-
-      // PayPal - 기존 로직 유지
       if (method === 'paypal') {
         setShowPayPalModal(true);
         return;
       }
 
-      // 카카오페이 - 기존 로직 유지
       if (method === 'kakaopay') {
         setPaymentProcessing(true);
-
         try {
           await startSheetPurchase({
             userId: user.id,
-            items: [
-              {
-                sheetId: pendingSheet.id,
-                sheetTitle: pendingSheet.title,
-                price,
-              },
-            ],
+            items: [{ sheetId: pendingSheet.id, sheetTitle: pendingSheet.title, price }],
             amount: price,
             paymentMethod: 'kakaopay',
             description: t('categoriesPage.purchaseDescription', { title: pendingSheet.title }),
             buyerName: user.email ?? null,
             buyerEmail: user.email ?? null,
             onSuccess: (response) => {
-              console.log('[useBuyNow] KakaoPay 결제 성공 콜백', response);
+              console.log('[useBuyNow] KakaoPay 결제 성공', response);
               setPaymentProcessing(false);
               setPendingSheet(null);
             },
             onError: (error) => {
-              console.error('[useBuyNow] KakaoPay 결제 실패 콜백', error);
+              console.error('[useBuyNow] KakaoPay 실패', error);
               setPaymentProcessing(false);
               setPendingSheet(null);
-              alert(
-                error instanceof Error
-                  ? error.message
-                  : t('categoriesPage.purchaseError') || '결제 중 오류가 발생했습니다.'
-              );
+              alert('결제 중 오류가 발생했습니다.');
             },
           });
         } catch (error) {
-          console.error('[useBuyNow] KakaoPay 결제 오류:', error);
-          alert(
-            error instanceof Error
-              ? error.message
-              : t('categoriesPage.purchaseError') || '결제 중 오류가 발생했습니다.'
-          );
           setPaymentProcessing(false);
           setPendingSheet(null);
         }
         return;
       }
 
-      // 신용카드, 무통장입금(가상계좌), 실시간 계좌이체 - KG이니시스
       if (method === 'card' || method === 'virtual_account' || method === 'transfer') {
         if (!option || !option.payMethod) {
           alert('결제 수단 정보가 올바르지 않습니다.');
           return;
         }
-
         setPaymentProcessing(true);
 
         try {
-          const result = await startSheetPurchase({
+          await startSheetPurchase({
             userId: user.id,
-            items: [
-              {
-                sheetId: pendingSheet.id,
-                sheetTitle: pendingSheet.title,
-                price,
-              },
-            ],
+            items: [{ sheetId: pendingSheet.id, sheetTitle: pendingSheet.title, price }],
             amount: price,
             paymentMethod: 'inicis',
             inicisPayMethod: option.payMethod as 'CARD' | 'VIRTUAL_ACCOUNT' | 'TRANSFER',
             description: t('categoriesPage.purchaseDescription', { title: pendingSheet.title }),
             buyerName: user.email ?? null,
             buyerEmail: user.email ?? null,
-            onSuccess: (response) => {
-              console.log('[useBuyNow] KG이니시스 결제 성공 콜백', response);
-              
-              // 가상계좌인 경우 안내 모달 표시
-              if (option.payMethod === 'VIRTUAL_ACCOUNT' && response.virtualAccountInfo) {
-                setVirtualAccountInfo({
-                  bankName: response.virtualAccountInfo.bankName,
-                  accountNumber: response.virtualAccountInfo.accountNumber,
-                  accountHolder: response.virtualAccountInfo.accountHolder,
-                  depositor: response.virtualAccountInfo.accountHolder,
-                  amount: price,
-                  expiresAt: response.virtualAccountInfo.expiresAt,
-                });
-                setShowVirtualAccountModal(true);
+            onSuccess: async (response) => {
+              console.log('[useBuyNow] 결제 성공 응답:', response);
+
+              if (option.payMethod === 'VIRTUAL_ACCOUNT') {
+                let vaInfo = response.virtualAccountInfo;
+                
+                // 🔥 [필살기] SDK 정보가 없으면, 내 최신 주문 내역을 뒤져서 찾아냅니다.
+                // ID 매칭 실패 가능성을 원천 차단합니다.
+                if (!vaInfo) {
+                  console.log(`[useBuyNow] 계좌정보 대기중... (사용자 최신 주문 조회)`);
+                  
+                  // 최대 5초간 반복 확인
+                  for (let i = 0; i < 5; i++) {
+                    await new Promise((r) => setTimeout(r, 1000)); // 1초 대기
+                    
+                    const { data } = await supabase
+                      .from('orders')
+                      .select('virtual_account_info, created_at')
+                      .eq('user_id', user.id) // 내 주문 중에서
+                      .not('virtual_account_info', 'is', null) // 계좌정보가 있는 것만
+                      .order('created_at', { ascending: false }) // 가장 최신순으로
+                      .limit(1) // 딱 1개만
+                      .maybeSingle();
+
+                    if (data?.virtual_account_info) {
+                      // 혹시나 너무 옛날 주문이 걸리지 않게, 최근 5분 내 주문인지 확인
+                      const orderTime = new Date(data.created_at).getTime();
+                      const now = new Date().getTime();
+                      if (now - orderTime > 5 * 60 * 1000) {
+                         console.log(`[useBuyNow] 찾은 주문이 너무 오래됨. (5분 경과) 패스.`);
+                         continue;
+                      }
+
+                      const dbVa = data.virtual_account_info as any;
+                      console.log('[useBuyNow] ✨ DB에서 최신 계좌정보 확보 성공!', dbVa);
+                      vaInfo = {
+                        bankName: dbVa.bankName || dbVa.bank_code,
+                        accountNumber: dbVa.accountNumber || dbVa.account_number,
+                        accountHolder: dbVa.accountHolder || dbVa.remittee_name,
+                        expiresAt: dbVa.expiresAt || dbVa.expired_at || dbVa.valid_until,
+                      };
+                      break; // 찾았으면 루프 종료
+                    } else {
+                        console.log(`[useBuyNow] ${i+1}초 경과: 아직 최신 주문 정보 없음...`);
+                    }
+                  }
+                }
+
+                if (vaInfo) {
+                  const rawBankName = vaInfo.bankName || '';
+                  const koreanBankName = BANK_CODE_MAP[rawBankName] || rawBankName;
+                  const accNum = vaInfo.accountNumber || '';
+                  
+                  // 🔥 확실한 알림창
+                  alert(`[가상계좌 발급 완료]\n\n은행: ${koreanBankName}\n계좌번호: ${accNum}\n예금주: ${vaInfo.accountHolder || '카피드럼'}\n\n이 메시지를 확인(OK) 하시면 상세 화면이 뜹니다.`);
+
+                  setVirtualAccountInfo({
+                    bankName: koreanBankName,
+                    accountNumber: accNum,
+                    accountHolder: vaInfo.accountHolder,
+                    depositor: vaInfo.accountHolder,
+                    amount: price,
+                    expiresAt: vaInfo.expiresAt,
+                  });
+                  setShowVirtualAccountModal(true);
+                } else {
+                  console.error('[useBuyNow] 계좌정보 확보 실패. Response:', response);
+                  alert('가상계좌 발급이 완료되었습니다.\n[마이페이지 > 구매내역]에서 계좌번호를 확인해주세요.');
+                }
               }
-              
+
               setPaymentProcessing(false);
-              // 가상계좌가 아닌 경우 pendingSheet 초기화
               if (option.payMethod !== 'VIRTUAL_ACCOUNT') {
                 setPendingSheet(null);
               }
             },
             onError: (error) => {
-              console.error('[useBuyNow] KG이니시스 결제 실패 콜백', error);
+              console.error('[useBuyNow] 결제 실패', error);
               setPaymentProcessing(false);
               setPendingSheet(null);
-              alert(
-                error instanceof Error
-                  ? error.message
-                  : t('categoriesPage.purchaseError') || '결제 중 오류가 발생했습니다.'
-              );
+              alert('결제 중 오류가 발생했습니다.');
             },
           });
         } catch (error) {
-          console.error('[useBuyNow] KG이니시스 결제 오류:', error);
-          alert(
-            error instanceof Error
-              ? error.message
-              : t('categoriesPage.purchaseError') || '결제 중 오류가 발생했습니다.'
-          );
+          console.error('[useBuyNow] 오류', error);
           setPaymentProcessing(false);
           setPendingSheet(null);
+          alert('결제 중 오류가 발생했습니다.');
         }
         return;
       }
 
-      // 캐시 잔액 결제 - 기존 로직 유지
+      // 캐시 결제 등 기존 로직...
       if (method === 'cash') {
-        setPaymentProcessing(true);
-
+         setPaymentProcessing(true);
         try {
           const result = await processCashPurchase({
             userId: user.id,
             totalPrice: price,
             description: t('categoriesPage.purchaseDescription', { title: pendingSheet.title }),
             items: [
-              {
-                sheetId: pendingSheet.id,
-                sheetTitle: pendingSheet.title,
-                price,
-              },
+              { sheetId: pendingSheet.id, sheetTitle: pendingSheet.title, price },
             ],
             sheetIdForTransaction: pendingSheet.id,
             paymentMethod: 'cash',
           });
-
           if (result.success) {
             alert(t('categoriesPage.purchaseSuccess') || '구매가 완료되었습니다.');
             window.location.reload();
@@ -257,11 +279,7 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
           }
         } catch (error) {
           console.error('[useBuyNow] 포인트 결제 오류:', error);
-          alert(
-            error instanceof Error
-              ? error.message
-              : t('categoriesPage.purchaseError') || '결제 중 오류가 발생했습니다.'
-          );
+          alert(error instanceof Error ? error.message : t('categoriesPage.purchaseError'));
         } finally {
           setPaymentProcessing(false);
           setPendingSheet(null);
@@ -273,61 +291,29 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
 
   const handleBankTransferConfirm = useCallback(
     async (depositorName: string) => {
-      if (!user || !pendingSheet) {
+       if (!user || !pendingSheet) {
         alert('로그인이 필요합니다.');
         return;
       }
-
-      // 필수값 검증
       const trimmedDepositorName = depositorName?.trim();
       if (!trimmedDepositorName) {
         alert('입금자명을 입력해 주세요.');
         return;
       }
-
       const price = Math.max(0, pendingSheet.price ?? 0);
-      if (price <= 0) {
-        alert('결제 금액이 올바르지 않습니다.');
-        return;
-      }
-
       setPaymentProcessing(true);
-
       try {
         const result = await buySheetNow({
           user,
-          sheet: {
-            id: pendingSheet.id,
-            title: pendingSheet.title,
-            price,
-          },
+          sheet: { id: pendingSheet.id, title: pendingSheet.title, price },
           description: t('categoriesPage.purchaseDescription', { title: pendingSheet.title }),
           depositorName: trimmedDepositorName,
         });
-
         if (result.paymentMethod === 'bank_transfer') {
-          // 주문 생성 성공 - 모달의 성공 상태로 전환
           setBankTransferInfo(result.virtualAccountInfo ?? null);
-
-          console.log('[useBuyNow] 무통장입금 주문 생성 성공:', {
-            orderId: result.orderId,
-            orderNumber: result.orderNumber,
-            amount: result.amount,
-            depositorName: trimmedDepositorName,
-          });
         }
       } catch (error) {
-        console.error('[useBuyNow] 무통장입금 주문 처리 오류:', error);
-
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : t('categoriesPage.purchaseError') ||
-            '주문 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
-
-        alert(errorMessage);
-
-        // 에러 발생 시 모달 닫기
+        alert('주문 생성 중 오류가 발생했습니다.');
         setShowBankTransferModal(false);
         setBankTransferInfo(null);
       } finally {
@@ -339,13 +325,9 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
 
   const handlePayPalInitiate = useCallback(
     async (elementId: string) => {
-      if (!user || !pendingSheet) return;
-
+       if (!user || !pendingSheet) return;
       const sheet = pendingSheet;
       const price = Math.max(0, sheet.price ?? 0);
-
-      // ✅ PayPal의 경우 startSheetPurchase를 직접 호출
-      // buySheetNow는 무통장입금용이므로 PayPal에는 사용하지 않음
       await startSheetPurchase({
         userId: user.id,
         items: [{ sheetId: sheet.id, sheetTitle: sheet.title, price }],
@@ -354,7 +336,7 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
         description: t('categoriesPage.purchaseDescription', { title: sheet.title }),
         buyerName: user.email ?? null,
         buyerEmail: user.email ?? null,
-        elementId, // PayPal SPB 렌더링을 위한 컨테이너 ID 전달
+        elementId,
       });
     },
     [user, pendingSheet, t]
@@ -368,21 +350,17 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
   const closeBankTransferModal = useCallback(() => {
     setShowBankTransferModal(false);
     if (!bankTransferInfo) {
-      // 주문이 생성되지 않았으면 결제수단 선택 모달로 돌아가기
       setShowPaymentSelector(true);
     } else {
-      // 주문이 생성되었으면 상태 초기화
       setPendingSheet(null);
       setBankTransferInfo(null);
     }
   }, [bankTransferInfo]);
 
-
   const closePayPalModal = useCallback(() => {
     setShowPayPalModal(false);
     setPendingSheet(null);
   }, []);
-
 
   const closeVirtualAccountModal = useCallback(() => {
     setShowVirtualAccountModal(false);
@@ -391,7 +369,6 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
   }, []);
 
   return {
-    // State
     showPaymentSelector,
     showBankTransferModal,
     showPayPalModal,
@@ -400,18 +377,13 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
     virtualAccountInfo,
     paymentProcessing,
     pendingSheet,
-
-    // Actions
     handleBuyNow,
     handlePaymentMethodSelect,
     handleBankTransferConfirm,
     handlePayPalInitiate,
-
-    // Setters
     closePaymentSelector,
     closeBankTransferModal,
     closePayPalModal,
     closeVirtualAccountModal,
   };
 }
-

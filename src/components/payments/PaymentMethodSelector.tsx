@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import { isKoreanSiteHost } from '../../config/hostType';
 
-type PaymentMethod = 'cash' | 'card' | 'bank' | 'paypal' | 'kakaopay' | 'inicis' | 'virtual_account' | 'transfer';
+// 'bank_transfer' (수동) 추가, 'virtual_account' 삭제
+type PaymentMethod = 'cash' | 'card' | 'bank' | 'paypal' | 'kakaopay' | 'inicis' | 'bank_transfer' | 'transfer';
 
 type PaymentContext = 'buyNow' | 'cashCharge';
 
@@ -15,7 +16,6 @@ interface PaymentMethodOption {
   color: string;
   badge?: string;
   disabled?: boolean;
-  // 결제 처리에 필요한 메타데이터
   channelKey?: string;
   payMethod?: 'CARD' | 'VIRTUAL_ACCOUNT' | 'TRANSFER' | 'EASY_PAY';
   pg?: string;
@@ -28,28 +28,18 @@ interface PaymentMethodSelectorProps {
   onSelect: (method: PaymentMethod, option?: PaymentMethodOption) => void;
   allowCash?: boolean;
   disabledMethods?: PaymentMethod[];
-  context?: PaymentContext; // 'buyNow' (바로구매) 또는 'cashCharge' (캐시 충전)
-  userCredits?: number; // 사용자 포인트 잔액 (한국어 사이트에서 포인트 결제 옵션 표시용)
+  context?: PaymentContext;
+  userCredits?: number;
 }
 
 export type { PaymentMethod, PaymentContext, PaymentMethodOption };
 
-/**
- * 도메인과 컨텍스트에 따라 사용 가능한 결제수단 목록을 반환합니다.
- * 
- * @param siteType - 'ko' (한국어 사이트) 또는 'global' (글로벌 사이트)
- * @param context - 'buyNow' (바로구매) 또는 'cashCharge' (캐시 충전)
- * @param t - i18n 번역 함수
- * @param userCredits - 사용자 포인트 잔액 (한국어 사이트에서 포인트 결제 옵션 표시용)
- * @returns 사용 가능한 결제수단 옵션 배열
- */
 function getAvailablePaymentMethods(
   siteType: 'ko' | 'global',
   context: PaymentContext,
   t: (key: string) => string,
   userCredits: number = 0,
 ): PaymentMethodOption[] {
-  // 글로벌 사이트: PayPal만 표시
   if (siteType === 'global') {
     return [
       {
@@ -63,10 +53,19 @@ function getAvailablePaymentMethods(
     ];
   }
 
-  // 한국어 사이트: 통합 리스트 형태로 5가지 결제 수단 제공
+  // 한국어 사이트
   if (siteType === 'ko') {
     const methods: PaymentMethodOption[] = [
-      // 1. 신용카드 (KG이니시스)
+      // 1. 무통장입금 (기존 카카오뱅크 수동 입금 복구)
+      {
+        id: 'bank_transfer', // useBuyNow.ts에서 이 ID를 수동 모달로 인식함
+        name: '무통장입금',
+        description: '입금 확인 후 관리자가 수동으로 구매를 완료합니다.',
+        icon: 'ri-bank-line',
+        color: 'text-green-600',
+        disabled: false,
+      },
+      // 2. 신용카드 (KG이니시스 유지)
       {
         id: 'card',
         name: '신용카드',
@@ -78,7 +77,7 @@ function getAvailablePaymentMethods(
         payMethod: 'CARD',
         pg: 'KG이니시스',
       },
-      // 2. 카카오페이
+      // 3. 카카오페이 (유지)
       {
         id: 'kakaopay',
         name: t('payment.kakaopay') || '카카오페이',
@@ -90,19 +89,7 @@ function getAvailablePaymentMethods(
         payMethod: 'EASY_PAY',
         pg: '카카오페이',
       },
-      // 3. 무통장입금 (가상계좌) - KG이니시스
-      {
-        id: 'virtual_account',
-        name: '무통장입금 (가상계좌)',
-        description: '가상계좌로 입금',
-        icon: 'ri-bank-line',
-        color: 'text-green-600',
-        disabled: false,
-        channelKey: import.meta.env.VITE_PORTONE_CHANNEL_KEY_INICIS,
-        payMethod: 'VIRTUAL_ACCOUNT',
-        pg: 'KG이니시스',
-      },
-      // 4. 실시간 계좌이체 - KG이니시스
+      // 4. 실시간 계좌이체 (필요 없으시면 삭제 가능)
       {
         id: 'transfer',
         name: '실시간 계좌이체',
@@ -116,7 +103,6 @@ function getAvailablePaymentMethods(
       },
     ];
 
-    // 5. 캐시 잔액 (포인트가 있을 때만 표시)
     if (userCredits > 0 && context === 'buyNow') {
       methods.push({
         id: 'cash',
@@ -131,7 +117,6 @@ function getAvailablePaymentMethods(
     return methods;
   }
 
-  // 기본값: 무통장입금만
   return [
     {
       id: 'bank',
@@ -151,39 +136,14 @@ export const PaymentMethodSelector = ({
   onSelect,
   allowCash = true,
   disabledMethods = [],
-  context = 'buyNow', // 기본값은 바로구매
-  userCredits = 0, // 사용자 포인트 잔액
+  context = 'buyNow',
+  userCredits = 0,
 }: PaymentMethodSelectorProps) => {
   const { t, i18n: i18nInstance } = useTranslation();
 
-  // payment 번역 키가 로딩되었는지 보장
-  // 현재 구조에서는 모든 번역이 하나의 리소스에 평탄화되어 있지만,
-  // 안전을 위해 번역 키 존재 여부를 확인
-  useEffect(() => {
-    if (open) {
-      // 번역 키가 없으면 경고 (개발 환경에서만)
-      if (process.env.NODE_ENV === 'development') {
-        const keys = [
-          'payment.selectMethod',
-          'payment.amount',
-          'payment.bankDescription',
-          'payment.cash',
-          'payment.cashDescription',
-        ];
-        keys.forEach((key) => {
-          if (!i18nInstance.exists(key)) {
-            console.warn(`[PaymentMethodSelector] 번역 키 누락: ${key}`);
-          }
-        });
-      }
-    }
-  }, [open, i18nInstance]);
-
-  // 통합 통화 로직 적용 (locale 기반)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
   const currency = useMemo(() => getSiteCurrency(hostname, i18nInstance.language), [hostname, i18nInstance.language]);
   const isKoreanSite = isKoreanSiteHost(hostname);
-  // 한국 사이트가 아니면 모두 글로벌 사이트로 처리
   const isGlobalSite = !isKoreanSite;
 
   const formatCurrency = useCallback(
@@ -205,7 +165,6 @@ export const PaymentMethodSelector = ({
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [selectedOption, setSelectedOption] = useState<PaymentMethodOption | null>(null);
 
-  // 모달이 열릴 때 선택 상태 초기화
   useEffect(() => {
     if (open) {
       setSelectedMethod(null);
@@ -241,13 +200,12 @@ export const PaymentMethodSelector = ({
               return (
                 <label
                   key={option.id}
-                  className={`flex w-full cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
-                    isDisabled
+                  className={`flex w-full cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${isDisabled
                       ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400'
                       : selectedMethod === option.id
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'cursor-pointer border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'
-                  }`}
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'cursor-pointer border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'
+                    }`}
                 >
                   <input
                     type="radio"
@@ -264,9 +222,9 @@ export const PaymentMethodSelector = ({
                   />
                   <div className="flex flex-1 items-center gap-3">
                     {option.id === 'kakaopay' && isKoreanSite ? (
-                      <img 
-                        src="/payment_icon_yellow_medium.png" 
-                        alt="카카오페이" 
+                      <img
+                        src="/payment_icon_yellow_medium.png"
+                        alt="카카오페이"
                         className="h-6 w-auto shrink-0 object-contain"
                       />
                     ) : (
@@ -279,11 +237,6 @@ export const PaymentMethodSelector = ({
                       ) : null}
                     </div>
                   </div>
-                  {option.badge ? (
-                    <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-700">
-                      {option.badge}
-                    </span>
-                  ) : null}
                 </label>
               );
             })}
@@ -311,5 +264,3 @@ export const PaymentMethodSelector = ({
     </div>
   );
 };
-
-

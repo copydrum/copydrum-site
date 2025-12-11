@@ -309,7 +309,7 @@ export const requestPayPalPayment = async (
 
     // 모바일 디바이스 감지
     const isMobile = isMobileDevice();
-    
+
     // 🟢 redirectUrl 확인 (REDIRECT 방식 필수 파라미터)
     if (!returnUrl) {
       console.error('[portone-paypal] ❌ redirectUrl이 없습니다! REDIRECT 방식 사용 불가');
@@ -319,7 +319,7 @@ export const requestPayPalPayment = async (
       };
     }
     console.log('[portone-paypal] redirectUrl 확인:', returnUrl);
-    
+
     // 🟢 windowType은 객체 형태로 설정 (V2 SDK 요구사항)
     // 모바일: REDIRECTION 사용 (팝업창 크기 문제 해결)
     // PC: POPUP 사용
@@ -327,7 +327,7 @@ export const requestPayPalPayment = async (
       pc: 'POPUP',
       mobile: 'REDIRECTION', // 모바일에서 팝업창 크기 문제를 피하기 위해 REDIRECTION 사용
     };
-    
+
     // Request Data 구성
     const requestData: any = {
       uiType: 'PAYPAL_SPB',
@@ -368,14 +368,14 @@ export const requestPayPalPayment = async (
     // 모바일에서 REDIRECTION 방식 사용 시
     if (isMobile) {
       console.log('[portone-paypal] 모바일 REDIRECTION 방식 - 버튼 클릭 시 수동 리다이렉트');
-      
+
       // loadPaymentUI로 버튼 렌더링
       await PortOne.loadPaymentUI(requestData, {
         onPaymentSuccess: async (paymentResult: any) => {
           // 모바일 REDIRECTION에서는 이 콜백이 실행되지 않을 수 있음
           // 리다이렉트 페이지에서 처리됨
           console.log('[portone-paypal] onPaymentSuccess 콜백 실행 (REDIRECTION에서는 일반적으로 실행되지 않음)', paymentResult);
-          
+
           // 혹시 콜백이 실행되면 리다이렉트
           if (returnUrl) {
             window.location.href = returnUrl;
@@ -388,7 +388,7 @@ export const requestPayPalPayment = async (
           }
         },
       });
-      
+
       // 모바일 REDIRECTION: 버튼이 렌더링되면, 버튼 클릭 시 PayPal로 리다이렉트됨
       // PortOne SDK가 자동으로 처리하지만, 혹시 모를 경우를 대비해 버튼 클릭 이벤트 리스너 추가
       setTimeout(() => {
@@ -401,7 +401,7 @@ export const requestPayPalPayment = async (
           }
         }
       }, 1000);
-      
+
       return {
         success: true,
         merchant_uid: params.orderId,
@@ -414,7 +414,7 @@ export const requestPayPalPayment = async (
     await PortOne.loadPaymentUI(requestData, {
       onPaymentSuccess: async (paymentResult: any) => {
         console.log('[portone-paypal] onPaymentSuccess 콜백 실행', paymentResult);
-        
+
         // 프론트엔드 콜백 호출
         if (params.onSuccess) {
           params.onSuccess(paymentResult);
@@ -422,8 +422,8 @@ export const requestPayPalPayment = async (
 
         // 명시적 리다이렉트 (안전장치)
         if (returnUrl) {
-           console.log('[portone-paypal] 리다이렉트 실행');
-           window.location.href = returnUrl;
+          console.log('[portone-paypal] 리다이렉트 실행');
+          window.location.href = returnUrl;
         }
       },
       onPaymentFail: (error: any) => {
@@ -530,7 +530,7 @@ export const requestKakaoPayPayment = async (
 
     // 모바일 디바이스 감지
     const isMobile = isMobileDevice();
-    
+
     // 🟢 redirectUrl 확인 (REDIRECT 방식 필수 파라미터)
     if (!returnUrl) {
       console.error('[portone-kakaopay] ❌ redirectUrl이 없습니다! REDIRECT 방식 사용 불가');
@@ -540,14 +540,14 @@ export const requestKakaoPayPayment = async (
       };
     }
     console.log('[portone-kakaopay] redirectUrl 확인:', returnUrl);
-    
+
     // 🟢 windowType은 객체 형태로 설정 (V2 SDK 요구사항)
     // 카카오페이: 모바일은 REDIRECTION, PC는 IFRAME
     const windowType = {
       pc: 'IFRAME',
       mobile: 'REDIRECTION',
     };
-    
+
     // PortOne V2 문서에 따르면 카카오페이는 requestPayment를 사용해야 함
     // loadPaymentUI는 UI 타입이 필요한데, 카카오페이는 일반결제를 지원하지 않음
     // 참고: https://developers.portone.io/opi/ko/integration/pg/v2/kakaopay?v=v2
@@ -585,7 +585,7 @@ export const requestKakaoPayPayment = async (
       orderId: params.orderId,
       paymentId: newPaymentId,
     });
-    
+
     const { data: updateData, error: updateError } = await supabase
       .from('orders')
       .update({ transaction_id: newPaymentId })
@@ -632,19 +632,19 @@ export const requestKakaoPayPayment = async (
         // PortOne paymentId를 orders.transaction_id에 저장하여 웹훅에서 주문을 찾을 수 있도록 함
         // paymentResult에서 paymentId 또는 txId 추출
         // PortOne V2 SDK 응답 구조에 따라 다양한 필드명을 시도
-        const portonePaymentId = paymentResult.paymentId || 
-                                  paymentResult.txId || 
-                                  paymentResult.tx_id ||
-                                  paymentResult.id || 
-                                  paymentResult.payment_id ||
-                                  newPaymentId; // fallback to requestData의 paymentId
-        
+        const portonePaymentId = paymentResult.paymentId ||
+          paymentResult.txId ||
+          paymentResult.tx_id ||
+          paymentResult.id ||
+          paymentResult.payment_id ||
+          newPaymentId; // fallback to requestData의 paymentId
+
         console.log('[portone-kakaopay] paymentResult에서 추출한 paymentId', {
           paymentId: portonePaymentId,
           paymentResultKeys: Object.keys(paymentResult || {}),
           fallbackUsed: portonePaymentId === newPaymentId,
         });
-        
+
         if (portonePaymentId && params.orderId) {
           try {
             console.log('[portone-kakaopay] onPaymentSuccess에서 orders.transaction_id 업데이트 시도', {
@@ -652,14 +652,14 @@ export const requestKakaoPayPayment = async (
               paymentId: portonePaymentId,
               note: '결제 요청 전에도 저장했지만, onPaymentSuccess에서도 확실히 업데이트',
             });
-            
+
             const { data: updateData, error: updateError } = await supabase
               .from('orders')
               .update({ transaction_id: portonePaymentId })
               .eq('id', params.orderId)
               .select('id, transaction_id, payment_status')
               .single();
-            
+
             if (updateError) {
               console.error('[portone-kakaopay] onPaymentSuccess에서 orders.transaction_id 업데이트 실패:', {
                 orderId: params.orderId,
@@ -690,7 +690,7 @@ export const requestKakaoPayPayment = async (
             reason: !portonePaymentId ? 'paymentId 없음' : 'orderId 없음',
           });
         }
-        
+
         // 사용자 정의 성공 콜백 호출
         if (params.onSuccess) {
           params.onSuccess(paymentResult);
@@ -730,336 +730,143 @@ export const requestKakaoPayPayment = async (
   }
 };
 
-// KG이니시스 결제 요청 함수
+export interface RequestInicisPaymentParams {
+  userId: string;
+  amount: number;
+  orderId: string;
+  orderNumber?: string | null;
+  buyerEmail?: string;
+  buyerName?: string;
+  buyerTel?: string;
+  description: string;
+  payMethod: 'CARD' | 'VIRTUAL_ACCOUNT' | 'TRANSFER';
+  returnUrl?: string;
+  onSuccess?: (response: any) => void;
+  onError?: (error: any) => void;
+}
+
+export interface RequestInicisPaymentResult {
+  success: boolean;
+  paymentId?: string;
+  error_msg?: string;
+  virtualAccountInfo?: any;
+}
+
 export const requestInicisPayment = async (
   params: RequestInicisPaymentParams,
 ): Promise<RequestInicisPaymentResult> => {
-  // 한국어 사이트에서만 동작
   if (typeof window === 'undefined') {
-    return {
-      success: false,
-      error_msg: 'KG이니시스 결제는 브라우저 환경에서만 사용할 수 있습니다.',
-    };
+    return { success: false, error_msg: '브라우저 환경에서만 가능합니다.' };
   }
 
-  const hostname = window.location.hostname;
-  const isKoreanSite = isKoreanSiteHost(hostname);
-
-  if (!isKoreanSite) {
-    console.warn('[portone-inicis] 한국어 사이트가 아닙니다.', { hostname });
-    return {
-      success: false,
-      error_msg: 'KG이니시스 결제는 한국어 사이트에서만 사용할 수 있습니다.',
-    };
-  }
-
-  console.log('[portone-inicis] KG이니시스 결제 요청 시작', {
-    orderId: params.orderId,
-    amount: params.amount,
-    payMethod: params.payMethod,
-    customer: {
-      userId: params.userId,
-      email: params.buyerEmail,
-      name: params.buyerName,
-      tel: params.buyerTel,
-    },
-  });
-
-  const storeId = import.meta.env.VITE_PORTONE_STORE_ID || 'store-21731740-b1df-492c-832a-8f38448d0ebd';
+  const storeId = import.meta.env.VITE_PORTONE_STORE_ID;
   const channelKey = import.meta.env.VITE_PORTONE_CHANNEL_KEY_INICIS;
 
   if (!storeId || !channelKey) {
-    console.error('[portone-inicis] 환경변수 설정 오류', { storeId, channelKey });
-    return {
-      success: false,
-      error_msg: 'KG이니시스 결제 설정이 올바르지 않습니다. VITE_PORTONE_CHANNEL_KEY_INICIS 환경 변수를 확인해주세요.',
-    };
+    console.error('[portone-inicis] 환경변수 누락');
+    return { success: false, error_msg: 'KG이니시스 설정 오류 (환경변수 확인 필요)' };
   }
 
   try {
-    // 리턴 URL 설정
-    const returnUrl = params.returnUrl || getPortOneReturnUrl();
+    const returnUrl = params.returnUrl || window.location.origin + '/payments/portone/return';
+    const newPaymentId = `pay_${uuidv4()}`; // 결제 고유번호 생성
 
-    // paymentId 생성
-    const newPaymentId = `pay_${uuidv4()}`;
+    // KG이니시스 PC는 IFRAME 필수
+    const windowType = { pc: 'IFRAME', mobile: 'REDIRECTION' };
 
-    // 모바일 디바이스 감지
-    const isMobile = isMobileDevice();
+    let portOnePayMethod = 'CARD';
+    if (params.payMethod === 'VIRTUAL_ACCOUNT') portOnePayMethod = 'VIRTUAL_ACCOUNT';
+    else if (params.payMethod === 'TRANSFER') portOnePayMethod = 'TRANSFER';
 
-    // redirectUrl 확인
-    if (!returnUrl) {
-      console.error('[portone-inicis] ❌ redirectUrl이 없습니다!');
-      return {
-        success: false,
-        error_msg: '결제 리다이렉트 URL이 설정되지 않았습니다.',
-      };
-    }
-    console.log('[portone-inicis] redirectUrl 확인:', returnUrl);
-
-    // windowType 설정 (KG이니시스는 PC에서 POPUP을 지원하지 않으므로 IFRAME 사용)
-    const windowType = {
-      pc: 'IFRAME',
-      mobile: 'REDIRECTION',
-    };
-
-    // payMethod를 PortOne 형식으로 변환
-    let portOnePayMethod: 'CARD' | 'VIRTUAL_ACCOUNT' | 'TRANSFER';
-    if (params.payMethod === 'CARD') {
-      portOnePayMethod = 'CARD';
-    } else if (params.payMethod === 'VIRTUAL_ACCOUNT') {
-      portOnePayMethod = 'VIRTUAL_ACCOUNT';
-    } else if (params.payMethod === 'TRANSFER') {
-      portOnePayMethod = 'TRANSFER';
-    } else {
-      return {
-        success: false,
-        error_msg: '지원하지 않는 결제 수단입니다.',
-      };
-    }
-
-    // Request Data 구성
-    // KG이니시스는 PC에서 POPUP을 지원하지 않으므로 IFRAME 방식 필수
     const requestData: any = {
       storeId,
       channelKey,
       paymentId: newPaymentId,
       orderId: params.orderId,
       orderName: params.description,
-      totalAmount: params.amount, // KRW 정수 금액
-      currency: 'CURRENCY_KRW' as const,
+      totalAmount: params.amount,
+      currency: 'CURRENCY_KRW',
       payMethod: portOnePayMethod,
       customer: {
-        customerId: params.userId ?? undefined,
-        email: params.buyerEmail ?? undefined,
-        fullName: params.buyerName ?? '고객', // 이름이 없으면 임시값 사용
-        phoneNumber: params.buyerTel ?? '010-0000-0000', // KG이니시스 필수값이므로 임시 번호 전달
+        customerId: params.userId,
+        email: params.buyerEmail,
+        fullName: params.buyerName || '고객',
+        phoneNumber: params.buyerTel || '010-0000-0000',
       },
       redirectUrl: returnUrl,
-      windowType: {
-        pc: 'IFRAME',      // PC에서는 iframe(레이어) 방식 강제 (KG이니시스 필수)
-        mobile: 'REDIRECTION', // 모바일은 REDIRECTION 사용
-      },
-      metadata: {
-        supabaseOrderId: params.orderId,
-        supabaseOrderNumber: params.orderNumber || null,
-      },
+      windowType,
+      metadata: { supabaseOrderId: params.orderId },
       locale: 'KO_KR',
     };
 
-    // 가상계좌 결제인 경우 virtualAccount 설정 추가 (포트원 SDK 필수 파라미터)
     if (portOnePayMethod === 'VIRTUAL_ACCOUNT') {
       requestData.virtualAccount = {
-        accountExpiry: {
-          validHours: 24, // 가상계좌 유효시간 (24시간)
-        },
-        cashReceiptType: 'ANONYMOUS', // 현금영수증 발급용
+        accountExpiry: { validHours: 24 },
+        cashReceiptType: 'ANONYMOUS',
       };
-      console.log('[portone-inicis] 가상계좌 설정 추가', requestData.virtualAccount);
     }
 
-    // 주문에 transaction_id(paymentId) 저장 (결제 요청 전에 미리 저장)
-    console.log('[portone-inicis] 결제 요청 전 transaction_id 저장 시도', {
-      orderId: params.orderId,
-      paymentId: newPaymentId,
-    });
+    // 결제 전 DB에 transaction_id 저장
+    await supabase.from('orders').update({ transaction_id: newPaymentId }).eq('id', params.orderId);
 
-    const { data: updateData, error: updateError } = await supabase
-      .from('orders')
-      .update({ transaction_id: newPaymentId })
-      .eq('id', params.orderId)
-      .select('id, transaction_id')
-      .single();
+    console.log('[portone-inicis] 결제 요청 시작:', requestData);
 
-    if (updateError) {
-      console.error('[portone-inicis] 주문 transaction_id 업데이트 실패:', {
-        orderId: params.orderId,
-        paymentId: newPaymentId,
-        error: updateError,
-      });
-    } else {
-      console.log('[portone-inicis] 주문 transaction_id 저장 성공 (결제 요청 전)', {
-        orderId: params.orderId,
-        paymentId: newPaymentId,
-        updatedOrder: updateData,
-      });
-    }
-
-    // 디버그 로그
-    console.log('[portone-inicis] requestPayment requestData', {
-      orderId: params.orderId,
-      paymentId: newPaymentId,
-      storeId: requestData.storeId,
-      channelKey: requestData.channelKey ? requestData.channelKey.substring(0, 20) + '...' : undefined,
-      orderName: requestData.orderName,
-      totalAmount: requestData.totalAmount,
-      currency: requestData.currency,
-      payMethod: requestData.payMethod,
-      windowType: requestData.windowType,
-      locale: requestData.locale,
-      redirectUrl: requestData.redirectUrl,
-    });
-
-    // 포트원 V2 SDK로 KG이니시스 결제 요청
     await PortOne.requestPayment(requestData, {
       onPaymentSuccess: async (paymentResult: any) => {
-        console.log('[portone-inicis] onPaymentSuccess 전체 응답', JSON.stringify(paymentResult, null, 2));
+        console.log('[portone-inicis] SDK 결제 성공 응답:', paymentResult);
 
-        // 결제 성공 시 orders.transaction_id 업데이트
-        const portonePaymentId = paymentResult.paymentId || 
-                                  paymentResult.txId || 
-                                  paymentResult.tx_id ||
-                                  paymentResult.id || 
-                                  paymentResult.payment_id ||
-                                  newPaymentId;
+        // ✅ [핵심 해결책] 결제 성공 직후, 우리 서버(Edge Function)를 직접 호출해서 데이터를 받아옵니다.
+        // 기다릴 필요도, DB를 뒤질 필요도 없습니다. 서버가 바로 답을 줍니다.
+        let serverVaInfo = null;
 
-        console.log('[portone-inicis] paymentResult에서 추출한 paymentId', {
-          paymentId: portonePaymentId,
-          paymentResultKeys: Object.keys(paymentResult || {}),
-          fallbackUsed: portonePaymentId === newPaymentId,
-        });
-
-        if (portonePaymentId && params.orderId) {
-          try {
-            const { data: updateData, error: updateError } = await supabase
-              .from('orders')
-              .update({ transaction_id: portonePaymentId })
-              .eq('id', params.orderId)
-              .select('id, transaction_id, payment_status')
-              .single();
-
-            if (updateError) {
-              console.error('[portone-inicis] onPaymentSuccess에서 orders.transaction_id 업데이트 실패:', {
-                orderId: params.orderId,
-                paymentId: portonePaymentId,
-                error: updateError,
-              });
-            } else {
-              console.log('[portone-inicis] onPaymentSuccess에서 orders.transaction_id 업데이트 성공', {
-                orderId: params.orderId,
-                paymentId: portonePaymentId,
-                updatedOrder: updateData,
-              });
-            }
-          } catch (error) {
-            console.error('[portone-inicis] onPaymentSuccess에서 orders.transaction_id 업데이트 중 오류:', {
-              orderId: params.orderId,
-              paymentId: portonePaymentId,
-              error,
-            });
-          }
-        }
-
-        // 가상계좌 정보 추출 (가상계좌 결제인 경우)
-        let virtualAccountInfo = null;
         if (params.payMethod === 'VIRTUAL_ACCOUNT') {
-          const va =
-            paymentResult.virtualAccount ||
-            paymentResult.virtual_account ||
-            paymentResult.virtualAccountInfo ||
-            paymentResult.virtual_account_info;
+          try {
+            console.log('[portone-inicis] 서버에 계좌정보 요청 중...');
 
-          if (va) {
-            virtualAccountInfo = {
-              bankName: va.bankName || va.bank_name,
-              accountNumber: va.accountNumber || va.account_number,
-              accountHolder: va.accountHolder || va.account_holder,
-              expiresAt: va.expiresAt || va.expires_at || null,
-            };
-          }
+            const { data: confirmData, error: confirmError } = await supabase.functions.invoke('portone-payment-confirm', {
+              body: { paymentId: newPaymentId, orderId: params.orderId }
+            });
 
-          // 서버에 저장된 가상계좌 정보로 2차 보강 (SDK 응답에 없을 때 대비)
-          if (!virtualAccountInfo && params.orderId) {
-            const { data: orderVaData, error: orderVaError } = await supabase
-              .from('orders')
-              .select('virtual_account_info')
-              .eq('id', params.orderId)
-              .maybeSingle();
-
-            if (!orderVaError && orderVaData?.virtual_account_info) {
-              const stored = orderVaData.virtual_account_info as any;
-              virtualAccountInfo = {
-                bankName: stored.bankName || stored.bank_name,
-                accountNumber: stored.accountNumber || stored.account_number,
-                accountHolder: stored.accountHolder || stored.account_holder,
-                expiresAt: stored.expiresAt || stored.expires_at || null,
-              };
-              console.log('[portone-inicis] orders.virtual_account_info로 가상계좌 정보 보강', virtualAccountInfo);
-            } else if (orderVaError) {
-              console.warn('[portone-inicis] 가상계좌 정보 보강 실패 (orders 조회)', { orderId: params.orderId, error: orderVaError });
+            if (confirmError) {
+              console.error('[portone-inicis] 서버 요청 실패:', confirmError);
+            } else if (confirmData?.data?.virtualAccountInfo) {
+              console.log('[portone-inicis] ✨ 서버에서 계좌정보 수신 성공!', confirmData.data.virtualAccountInfo);
+              serverVaInfo = confirmData.data.virtualAccountInfo;
+            } else {
+              console.log('[portone-inicis] 서버 응답에 계좌정보 없음:', confirmData);
             }
+          } catch (e) {
+            console.error('[portone-inicis] 서버 통신 중 에러:', e);
           }
         }
 
-        // 사용자 정의 성공 콜백 호출
+        // 받아온 정보를 담아서 useBuyNow로 전달
         if (params.onSuccess) {
           params.onSuccess({
             ...paymentResult,
-            virtualAccountInfo,
+            paymentId: newPaymentId,
+            virtualAccountInfo: serverVaInfo // 👈 여기에 서버에서 받은 확실한 정보가 들어갑니다!
           });
         }
 
-        // 가상계좌가 아닌 경우에만 리다이렉트 (가상계좌는 안내 모달 표시 후 처리)
         if (params.payMethod !== 'VIRTUAL_ACCOUNT' && returnUrl) {
-          console.log('[portone-inicis] 결제 완료 후 리다이렉트', { returnUrl });
-          setTimeout(() => {
-            window.location.href = returnUrl;
-          }, 500);
+          setTimeout(() => window.location.href = returnUrl, 500);
         }
       },
       onPaymentFail: (error: any) => {
-        console.error('[portone-inicis] onPaymentFail', error);
-        if (params.onError) {
-          params.onError(error);
-        }
+        console.error('[portone-inicis] 결제 실패:', error);
+        if (params.onError) params.onError(error);
       },
     });
 
-    return {
-      success: true,
-      merchant_uid: params.orderId,
-      paymentId: newPaymentId,
-      error_msg: 'KG이니시스 결제창이 열렸습니다.',
-    };
+    return { success: true, paymentId: newPaymentId };
   } catch (error) {
-    console.error('[portone-inicis] KG이니시스 결제 요청 오류', error);
-    return {
-      success: false,
-      error_msg: error instanceof Error ? error.message : 'KG이니시스 결제 요청 중 오류가 발생했습니다.',
-    };
+    console.error(error);
+    return { success: false, error_msg: '결제 요청 중 오류 발생' };
   }
 };
 
-// KG이니시스 결제 요청 인터페이스
-export interface RequestInicisPaymentParams {
-  userId: string; // 사용자 ID (필수)
-  amount: number; // KRW 금액
-  orderId: string; // 주문 ID
-  orderNumber?: string | null; // 주문번호 (metadata에 추가)
-  buyerEmail?: string;
-  buyerName?: string;
-  buyerTel?: string;
-  description: string; // 상품명
-  payMethod: 'CARD' | 'VIRTUAL_ACCOUNT' | 'TRANSFER'; // 결제 수단
-  returnUrl?: string; // 결제 완료 후 리다이렉트 URL
-  onSuccess?: (response: any) => void; // 결제 성공 콜백
-  onError?: (error: any) => void; // 결제 실패 콜백
-}
 
-export interface RequestInicisPaymentResult {
-  success: boolean;
-  imp_uid?: string;
-  merchant_uid?: string;
-  paid_amount?: number;
-  error_code?: string;
-  error_msg?: string;
-  paymentId?: string; // PortOne paymentId (transaction_id로 사용)
-  virtualAccountInfo?: {
-    bankName?: string;
-    accountNumber?: string;
-    accountHolder?: string;
-    expiresAt?: string | null;
-  } | null;
-}
 
 // PortOne 카드 결제용 인터페이스
 export interface PortOnePaymentArgs {
