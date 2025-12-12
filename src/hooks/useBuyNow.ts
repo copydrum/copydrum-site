@@ -128,6 +128,8 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
             buyerEmail: user.email ?? null,
             onSuccess: (response) => {
               console.log('[useBuyNow] KakaoPay 결제 성공', response);
+              // ✅ 카카오페이 성공 시 -> 구매내역으로 이동
+              navigate('/purchases');
               setPaymentProcessing(false);
               setPendingSheet(null);
             },
@@ -231,6 +233,9 @@ export function useBuyNow(user: User | null): UseBuyNowReturn {
                   console.error('[useBuyNow] 계좌정보 확보 실패. Response:', response);
                   alert('가상계좌 발급이 완료되었습니다.\n[마이페이지 > 구매내역]에서 계좌번호를 확인해주세요.');
                 }
+              } else {
+                // ✅ [추가] 카드/실시간계좌이체 성공 시 -> 구매내역으로 이동
+                navigate('/purchases');
               }
 
               setPaymentProcessing(false);

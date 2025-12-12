@@ -29,6 +29,7 @@ const InicisClosePage = lazy(() => import('../pages/payments/inicis-close/page')
 const PayPalReturnPage = lazy(() => import('../pages/payments/paypal-return/page'));
 const PayPalCancelPage = lazy(() => import('../pages/payments/paypal-cancel/page'));
 const PortOnePayPalReturnPage = lazy(() => import('../pages/payments/portone-paypal-return/page'));
+const PortOneReturnPage = lazy(() => import('../pages/PortOneReturn'));
 const PortonePaypalTestPage = lazy(() => import('../pages/dev/PortonePaypalTest'));
 const RefundPolicyPage = lazy(() => import('../pages/policy/RefundPolicyPage'));
 
@@ -280,6 +281,14 @@ const routes: RouteObject[] = [
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <PortOnePayPalReturnPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/payments/portone/return',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <PortOneReturnPage />
       </Suspense>
     ),
   },
