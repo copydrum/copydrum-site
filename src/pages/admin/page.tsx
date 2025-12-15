@@ -69,6 +69,7 @@ interface DrumSheet {
   category_id: string;
   created_at: string;
   is_active: boolean;
+  category_ids?: string[]; // drum_sheet_categories 관계에서 가져온 추가 카테고리
 }
 
 interface Category {
@@ -1798,6 +1799,40 @@ const AdminPage: React.FC = () => {
         console.warn(`⚠️ 난이도가 없는 악보 (최대 5개):`, sheetsWithoutDifficulty.map((s: any) => ({ id: s.id, title: s.title })));
       }
 
+      // drum_sheet_categories 관계 조회하여 category_ids 추가
+      if (allSheets.length > 0) {
+        const sheetIds = allSheets.map((sheet: any) => sheet.id);
+        const categoryMap = new Map<string, string[]>();
+
+        const batchSize = 100;
+        for (let i = 0; i < sheetIds.length; i += batchSize) {
+          const batch = sheetIds.slice(i, i + batchSize);
+          const { data: categoryRelations, error: relationError } = await supabase
+            .from('drum_sheet_categories')
+            .select('sheet_id, category_id')
+            .in('sheet_id', batch);
+
+          if (relationError) {
+            console.error('카테고리 관계 조회 오류:', relationError);
+          } else if (categoryRelations) {
+            categoryRelations.forEach((relation: any) => {
+              if (relation.sheet_id && relation.category_id) {
+                const existing = categoryMap.get(relation.sheet_id) || [];
+                if (!existing.includes(relation.category_id)) {
+                  existing.push(relation.category_id);
+                  categoryMap.set(relation.sheet_id, existing);
+                }
+              }
+            });
+          }
+        }
+
+        allSheets = allSheets.map((sheet: any) => ({
+          ...sheet,
+          category_ids: categoryMap.get(sheet.id) || [],
+        }));
+      }
+
       setSheets(allSheets);
       console.log(`🎉 최종 로드 완료: 총 ${allSheets.length}개의 악보를 로드했습니다. (예상: ${totalCount}개)`);
 
@@ -2012,6 +2047,7 @@ const AdminPage: React.FC = () => {
       difficulty: '초급', // 기본값
       price: 3000, // 기본 판매가 설정 (필요시 수정)
       category_id: '', // 카테고리는 직접 선택하도록 비워둠
+      category_ids: [],
       thumbnail_url: '',
       album_name: '',
       page_count: 0,
@@ -4998,7 +5034,10 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
       sheet.artist.toLowerCase().includes(sheetSearchTerm.toLowerCase());
 
     // 카테고리 필터
-    const matchesCategory = sheetCategoryFilter === 'all' || sheet.category_id === sheetCategoryFilter;
+    const matchesCategory =
+      sheetCategoryFilter === 'all' ||
+      sheet.category_id === sheetCategoryFilter ||
+      (sheet.category_ids && sheet.category_ids.includes(sheetCategoryFilter));
 
     return matchesSearch && matchesCategory;
   });
@@ -7510,6 +7549,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
 
                     // drum_sheet_categories 테이블 업데이트
                     // 기존 관계 삭제
+                    console.log('기존 카테고리 관계 삭제 시작:', editingSheet.id);
                     const { error: deleteError } = await supabase
                       .from('drum_sheet_categories')
                       .delete()
@@ -7517,6 +7557,8 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
 
                     if (deleteError) {
                       console.error('기존 카테고리 관계 삭제 오류:', deleteError);
+                    } else {
+                      console.log('기존 카테고리 관계 삭제 완료');
                     }
 
                     // 새로운 관계 추가
@@ -7526,15 +7568,21 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                         category_id: categoryId
                       }));
 
-                      const { error: insertError } = await supabase
+                      console.log('새 카테고리 관계 추가 시작:', categoryRelations);
+                      const { error: insertError, data: insertData } = await supabase
                         .from('drum_sheet_categories')
-                        .insert(categoryRelations);
+                        .insert(categoryRelations)
+                        .select();
 
                       if (insertError) {
                         console.error('카테고리 관계 추가 오류:', insertError);
                         // 경고만 표시하고 계속 진행
                         alert('악보는 수정되었지만 카테고리 관계 업데이트 중 오류가 발생했습니다.');
+                      } else {
+                        console.log('카테고리 관계 추가 완료:', insertData);
                       }
+                    } else {
+                      console.warn('category_ids가 비어있습니다.');
                     }
 
                     alert('악보가 수정되었습니다.');

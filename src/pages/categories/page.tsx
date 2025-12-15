@@ -351,6 +351,8 @@ const CategoriesPage: React.FC = () => {
         const sheetIds = allSheets.map(sheet => sheet.id);
         const categoryMap = new Map<string, string[]>();
 
+        console.log(`카테고리 관계 조회 시작: ${sheetIds.length}개 악보`);
+        
         // 100개씩 나눠서 조회 (Supabase의 in 쿼리 제한 고려)
         const batchSize = 100;
         for (let i = 0; i < sheetIds.length; i += batchSize) {
@@ -364,6 +366,7 @@ const CategoriesPage: React.FC = () => {
           if (relationError) {
             console.error('카테고리 관계 조회 오류:', relationError);
           } else if (categoryRelations) {
+            console.log(`카테고리 관계 조회 결과 (배치 ${i / batchSize + 1}):`, categoryRelations.length, '개');
             categoryRelations.forEach((relation: any) => {
               if (relation.sheet_id && relation.category_id) {
                 const existing = categoryMap.get(relation.sheet_id) || [];
@@ -375,6 +378,8 @@ const CategoriesPage: React.FC = () => {
             });
           }
         }
+
+        console.log('카테고리 관계 맵:', Array.from(categoryMap.entries()).slice(0, 5));
 
         // 각 악보에 추가 카테고리 ID 목록 추가
         allSheets = allSheets.map(sheet => ({
