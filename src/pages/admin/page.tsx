@@ -964,6 +964,7 @@ const AdminPage: React.FC = () => {
     difficulty: 'beginner',
     price: 0,
     category_id: '',
+    category_ids: [] as string[],
     thumbnail_url: '',
     album_name: '',
     page_count: 0,
@@ -982,6 +983,7 @@ const AdminPage: React.FC = () => {
     difficulty: 'beginner',
     price: 0,
     category_id: '',
+    category_ids: [] as string[],
     thumbnail_url: '',
     album_name: '',
     page_count: 0,
@@ -4032,7 +4034,7 @@ const AdminPage: React.FC = () => {
     }
   };
   const handleAddSheet = async () => {
-    if (!newSheet.title || !newSheet.artist || !newSheet.category_id) {
+    if (!newSheet.title || !newSheet.artist || newSheet.category_ids.length === 0) {
       alert('제목, 아티스트, 카테고리는 필수입니다.');
       return;
     }
@@ -4070,12 +4072,15 @@ const AdminPage: React.FC = () => {
         difficulty = '초급';
       }
 
+      // category_id는 첫 번째 선택된 카테고리로 설정 (하위 호환성)
+      const categoryId = newSheet.category_ids.length > 0 ? newSheet.category_ids[0] : '';
+
       const insertData: any = {
         title: newSheet.title.trim(),
         artist: newSheet.artist.trim(),
         difficulty: difficulty, // 정규화된 값 사용 (반드시 포함)
         price: Number(newSheet.price) || 0,
-        category_id: newSheet.category_id,
+        category_id: categoryId,
         pdf_url: newSheet.pdf_url, // 필수 필드
         is_active: true
       };
@@ -4158,6 +4163,26 @@ const AdminPage: React.FC = () => {
       }
 
       console.log('악보 추가 성공:', data);
+
+      // drum_sheet_categories 테이블에 관계 데이터 삽입
+      if (data && data.length > 0 && newSheet.category_ids.length > 0) {
+        const sheetId = data[0].id;
+        const categoryRelations = newSheet.category_ids.map(categoryId => ({
+          sheet_id: sheetId,
+          category_id: categoryId
+        }));
+
+        const { error: relationError } = await supabase
+          .from('drum_sheet_categories')
+          .insert(categoryRelations);
+
+        if (relationError) {
+          console.error('카테고리 관계 추가 오류:', relationError);
+          // 악보는 추가되었지만 카테고리 관계 추가 실패 시 경고만 표시
+          alert('악보가 추가되었지만 카테고리 관계 추가 중 오류가 발생했습니다.');
+        }
+      }
+
       alert('악보가 추가되었습니다.');
       setIsAddingSheet(false);
       setNewSheet({
@@ -4166,6 +4191,7 @@ const AdminPage: React.FC = () => {
         difficulty: '초급',
         price: 0,
         category_id: '',
+        category_ids: [],
         thumbnail_url: '',
         album_name: '',
         page_count: 0,
@@ -6597,14 +6623,32 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
                           <button
-                            onClick={() => {
+                            onClick={async () => {
                               setEditingSheet(sheet);
+                              
+                              // 기존 카테고리들을 drum_sheet_categories에서 불러오기
+                              const { data: categoryRelations, error: categoryError } = await supabase
+                                .from('drum_sheet_categories')
+                                .select('category_id')
+                                .eq('sheet_id', sheet.id);
+
+                              let categoryIds: string[] = [];
+                              if (!categoryError && categoryRelations) {
+                                categoryIds = categoryRelations.map(rel => rel.category_id);
+                              }
+                              
+                              // 기존 category_id가 있지만 categoryIds에 없으면 추가 (하위 호환성)
+                              if (sheet.category_id && !categoryIds.includes(sheet.category_id)) {
+                                categoryIds.push(sheet.category_id);
+                              }
+
                               setEditingSheetData({
                                 title: sheet.title,
                                 artist: sheet.artist,
                                 difficulty: sheet.difficulty,
                                 price: sheet.price,
-                                category_id: sheet.category_id,
+                                category_id: sheet.category_id || (categoryIds.length > 0 ? categoryIds[0] : ''),
+                                category_ids: categoryIds,
                                 thumbnail_url: (sheet as any).thumbnail_url || '',
                                 album_name: (sheet as any).album_name || '',
                                 page_count: (sheet as any).page_count || 0,
@@ -7100,17 +7144,46 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
 
                 {/* 카테고리 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
-                  <select
-                    value={newSheet.category_id}
-                    onChange={(e) => setNewSheet({ ...newSheet, category_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-8"
-                  >
-                    <option value="">카테고리 선택</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>{category.name}</option>
-                    ))}
-                  </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">카테고리 (중복 선택 가능) *</label>
+                  <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2 bg-gray-50">
+                    {categories.length === 0 ? (
+                      <p className="text-sm text-gray-500">카테고리가 없습니다.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {categories.map((category) => (
+                          <label key={category.id} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-1 rounded">
+                            <input
+                              type="checkbox"
+                              checked={newSheet.category_ids.includes(category.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setNewSheet({
+                                    ...newSheet,
+                                    category_ids: [...newSheet.category_ids, category.id],
+                                    category_id: category.id // 첫 번째 선택된 카테고리를 category_id에도 저장 (하위 호환성)
+                                  });
+                                } else {
+                                  const newCategoryIds = newSheet.category_ids.filter((id) => id !== category.id);
+                                  setNewSheet({
+                                    ...newSheet,
+                                    category_ids: newCategoryIds,
+                                    category_id: newCategoryIds.length > 0 ? newCategoryIds[0] : '' // 첫 번째 카테고리를 category_id에 저장
+                                  });
+                                }
+                              }}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-700">{category.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {newSheet.category_ids.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      선택됨: {newSheet.category_ids.length}개
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -7124,6 +7197,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                     difficulty: '초급',
                     price: 0,
                     category_id: '',
+                    category_ids: [],
                     thumbnail_url: '',
                     album_name: '',
                     page_count: 0,
@@ -7217,17 +7291,47 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">카테고리 *</label>
-                  <select
-                    value={editingSheetData.category_id}
-                    onChange={(e) => setEditingSheetData({ ...editingSheetData, category_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                  >
-                    <option value="">카테고리 선택</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>{category.name}</option>
-                    ))}
-                  </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">카테고리 (중복 선택 가능) *</label>
+                  <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2 bg-gray-50">
+                    {categories.length === 0 ? (
+                      <p className="text-sm text-gray-500">카테고리가 없습니다.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {categories.map((category) => (
+                          <label key={category.id} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-1 rounded">
+                            <input
+                              type="checkbox"
+                              checked={editingSheetData.category_ids.includes(category.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  const newCategoryIds = [...editingSheetData.category_ids, category.id];
+                                  setEditingSheetData({
+                                    ...editingSheetData,
+                                    category_ids: newCategoryIds,
+                                    category_id: category.id // 첫 번째 선택된 카테고리를 category_id에도 저장 (하위 호환성)
+                                  });
+                                } else {
+                                  const newCategoryIds = editingSheetData.category_ids.filter((id) => id !== category.id);
+                                  setEditingSheetData({
+                                    ...editingSheetData,
+                                    category_ids: newCategoryIds,
+                                    category_id: newCategoryIds.length > 0 ? newCategoryIds[0] : '' // 첫 번째 카테고리를 category_id에 저장
+                                  });
+                                }
+                              }}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-700">{category.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {editingSheetData.category_ids.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      선택됨: {editingSheetData.category_ids.length}개
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -7340,6 +7444,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                     difficulty: '초급',
                     price: 0,
                     category_id: '',
+                    category_ids: [],
                     thumbnail_url: '',
                     album_name: '',
                     page_count: 0,
@@ -7356,18 +7461,21 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                 onClick={async () => {
                   if (!editingSheet) return;
 
-                  if (!editingSheetData.title || !editingSheetData.artist || !editingSheetData.category_id) {
+                  if (!editingSheetData.title || !editingSheetData.artist || editingSheetData.category_ids.length === 0) {
                     alert('제목, 아티스트, 카테고리는 필수입니다.');
                     return;
                   }
 
                   try {
+                    // category_id는 첫 번째 선택된 카테고리로 설정 (하위 호환성)
+                    const categoryId = editingSheetData.category_ids.length > 0 ? editingSheetData.category_ids[0] : '';
+
                     const updateData: any = {
                       title: editingSheetData.title,
                       artist: editingSheetData.artist,
                       difficulty: editingSheetData.difficulty,
                       price: editingSheetData.price,
-                      category_id: editingSheetData.category_id,
+                      category_id: categoryId,
                       is_active: editingSheetData.is_active
                     };
 
@@ -7400,6 +7508,35 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
 
                     if (error) throw error;
 
+                    // drum_sheet_categories 테이블 업데이트
+                    // 기존 관계 삭제
+                    const { error: deleteError } = await supabase
+                      .from('drum_sheet_categories')
+                      .delete()
+                      .eq('sheet_id', editingSheet.id);
+
+                    if (deleteError) {
+                      console.error('기존 카테고리 관계 삭제 오류:', deleteError);
+                    }
+
+                    // 새로운 관계 추가
+                    if (editingSheetData.category_ids.length > 0) {
+                      const categoryRelations = editingSheetData.category_ids.map(categoryId => ({
+                        sheet_id: editingSheet.id,
+                        category_id: categoryId
+                      }));
+
+                      const { error: insertError } = await supabase
+                        .from('drum_sheet_categories')
+                        .insert(categoryRelations);
+
+                      if (insertError) {
+                        console.error('카테고리 관계 추가 오류:', insertError);
+                        // 경고만 표시하고 계속 진행
+                        alert('악보는 수정되었지만 카테고리 관계 업데이트 중 오류가 발생했습니다.');
+                      }
+                    }
+
                     alert('악보가 수정되었습니다.');
                     setEditingSheet(null);
                     setEditingSheetData({
@@ -7408,6 +7545,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                       difficulty: '초급',
                       price: 0,
                       category_id: '',
+                      category_ids: [],
                       thumbnail_url: '',
                       album_name: '',
                       page_count: 0,

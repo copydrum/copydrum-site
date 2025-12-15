@@ -48,6 +48,7 @@ interface DrumSheet {
   album_name?: string;
   page_count?: number;
   youtube_url?: string | null;
+  category_ids?: string[]; // drum_sheet_categories에서 가져온 추가 카테고리 ID 목록
 }
 
 const CategoriesPage: React.FC = () => {
@@ -345,6 +346,43 @@ const CategoriesPage: React.FC = () => {
         }
       }
 
+      // drum_sheet_categories 테이블에서 추가 카테고리 관계 가져오기
+      if (allSheets.length > 0) {
+        const sheetIds = allSheets.map(sheet => sheet.id);
+        const categoryMap = new Map<string, string[]>();
+
+        // 100개씩 나눠서 조회 (Supabase의 in 쿼리 제한 고려)
+        const batchSize = 100;
+        for (let i = 0; i < sheetIds.length; i += batchSize) {
+          const batch = sheetIds.slice(i, i + batchSize);
+          
+          const { data: categoryRelations, error: relationError } = await supabase
+            .from('drum_sheet_categories')
+            .select('sheet_id, category_id')
+            .in('sheet_id', batch);
+
+          if (relationError) {
+            console.error('카테고리 관계 조회 오류:', relationError);
+          } else if (categoryRelations) {
+            categoryRelations.forEach((relation: any) => {
+              if (relation.sheet_id && relation.category_id) {
+                const existing = categoryMap.get(relation.sheet_id) || [];
+                if (!existing.includes(relation.category_id)) {
+                  existing.push(relation.category_id);
+                  categoryMap.set(relation.sheet_id, existing);
+                }
+              }
+            });
+          }
+        }
+
+        // 각 악보에 추가 카테고리 ID 목록 추가
+        allSheets = allSheets.map(sheet => ({
+          ...sheet,
+          category_ids: categoryMap.get(sheet.id) || []
+        }));
+      }
+
       setDrumSheets(allSheets);
       console.log(`🎉 최종 로드 완료: 총 ${allSheets.length}개의 악보를 로드했습니다. (예상: ${totalCount}개)`);
 
@@ -520,9 +558,12 @@ const CategoriesPage: React.FC = () => {
       });
     }
 
-    // Category filter
+    // Category filter - category_id 또는 category_ids 배열에서 확인
     if (selectedCategory) {
-      filtered = filtered.filter(sheet => sheet.category_id === selectedCategory);
+      filtered = filtered.filter(sheet => 
+        sheet.category_id === selectedCategory || 
+        (sheet.category_ids && sheet.category_ids.includes(selectedCategory))
+      );
     }
 
     // Artist filter

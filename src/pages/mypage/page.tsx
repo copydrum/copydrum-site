@@ -201,6 +201,7 @@ export default function MyPage() {
     subject: '',
     message: '',
   });
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -764,6 +765,54 @@ export default function MyPage() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (!user) {
+      alert(t('mypage.errors.loginRequired'));
+      return;
+    }
+
+    // 첫 번째 확인
+    const firstConfirm = confirm('정말로 회원탈퇴를 하시겠습니까?\n\n회원탈퇴 시 모든 데이터가 삭제되며 복구할 수 없습니다.');
+    if (!firstConfirm) return;
+
+    // 두 번째 확인 (이중 확인)
+    const secondConfirm = confirm('회원탈퇴를 최종 확인하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.');
+    if (!secondConfirm) return;
+
+    setDeletingAccount(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('세션이 만료되었습니다. 다시 로그인해주세요.');
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/delete-account`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || '회원탈퇴 중 오류가 발생했습니다.');
+      }
+
+      alert('회원탈퇴가 완료되었습니다.');
+      
+      // 로그아웃 및 홈으로 리다이렉트
+      await supabase.auth.signOut();
+      navigate('/');
+    } catch (error: any) {
+      console.error('회원탈퇴 오류:', error);
+      alert(error.message || '회원탈퇴 중 오류가 발생했습니다.');
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
   const toggleDownloadSelection = (item: DownloadableItem) => {
     if (!DOWNLOADABLE_STATUSES.includes((item.order_status ?? '').toLowerCase())) {
       return;
@@ -1254,6 +1303,27 @@ export default function MyPage() {
                           </button>
                         </div>
                       </form>
+
+                      {/* 회원탈퇴 섹션 */}
+                      <div className="mt-8 pt-8 border-t border-gray-200">
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+                          <h4 className="text-lg font-semibold text-red-900 mb-2">회원탈퇴</h4>
+                          <p className="text-sm text-red-700 mb-4">
+                            회원탈퇴 시 모든 개인정보, 주문 내역, 즐겨찾기 등 모든 데이터가 영구적으로 삭제되며 복구할 수 없습니다.
+                          </p>
+                          <button
+                            onClick={handleDeleteAccount}
+                            disabled={deletingAccount}
+                            className={`px-6 py-3 rounded-lg font-semibold text-white transition ${
+                              deletingAccount 
+                                ? 'bg-red-300 cursor-not-allowed' 
+                                : 'bg-red-600 hover:bg-red-700'
+                            }`}
+                          >
+                            {deletingAccount ? '처리 중...' : '회원탈퇴'}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
 
