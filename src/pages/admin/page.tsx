@@ -70,6 +70,7 @@ interface DrumSheet {
   created_at: string;
   is_active: boolean;
   category_ids?: string[]; // drum_sheet_categories 관계에서 가져온 추가 카테고리
+  thumbnail_url?: string | null; // 인기곡 순위 관리에서 사용
 }
 
 interface Category {
@@ -11325,8 +11326,14 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
 
     const loadPopularityRanks = async () => {
       try {
-        // per-category 순위를 위해 drum_sheet_categories.popularity_rank 사용
-        const { data, error } = await supabase
+        const ranksMap = new Map<number, DrumSheet | null>();
+        // 1-10위 초기화
+        for (let i = 1; i <= 10; i++) {
+          ranksMap.set(i, null);
+        }
+
+        // 1. 먼저 drum_sheet_categories에서 순위 로드 (최신 방식)
+        const { data: categoryRanks, error: categoryError } = await supabase
           .from('drum_sheet_categories')
           .select(`
             popularity_rank,
@@ -11342,23 +11349,54 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
           .not('popularity_rank', 'is', null)
           .order('popularity_rank', { ascending: true });
 
-        if (error) throw error;
-
-        const ranksMap = new Map<number, DrumSheet | null>();
-        // 1-10위 초기화
-        for (let i = 1; i <= 10; i++) {
-          ranksMap.set(i, null);
-        }
-
-        // 로드된 순위 데이터 매핑
-        if (data) {
-          data.forEach((row: any) => {
+        if (categoryError) {
+          console.warn('drum_sheet_categories 로드 실패:', categoryError);
+        } else if (categoryRanks && categoryRanks.length > 0) {
+          // drum_sheet_categories에서 데이터가 있으면 사용
+          categoryRanks.forEach((row: any) => {
             const rank = row.popularity_rank;
             const sheet = row.sheet;
             if (rank && sheet && rank >= 1 && rank <= 10) {
               ranksMap.set(rank, sheet as DrumSheet);
             }
           });
+        } else {
+          // 2. drum_sheet_categories에 데이터가 없으면 drum_sheets.popularity_rank를 fallback으로 사용
+          const { data: sheetRanks, error: sheetError } = await supabase
+            .from('drum_sheets')
+            .select('id, title, artist, thumbnail_url, category_id, popularity_rank')
+            .eq('category_id', popularitySelectedGenre)
+            .eq('is_active', true)
+            .not('popularity_rank', 'is', null)
+            .gte('popularity_rank', 1)
+            .lte('popularity_rank', 10)
+            .order('popularity_rank', { ascending: true });
+
+          if (sheetError) {
+            console.warn('drum_sheets.popularity_rank 로드 실패:', sheetError);
+          } else if (sheetRanks && sheetRanks.length > 0) {
+            // 기존 데이터를 drum_sheet_categories로 마이그레이션
+            sheetRanks.forEach((sheet: any) => {
+              const rank = sheet.popularity_rank;
+              if (rank && rank >= 1 && rank <= 10) {
+                ranksMap.set(rank, sheet as DrumSheet);
+                
+                // drum_sheet_categories에 자동 마이그레이션 (백그라운드)
+                supabase
+                  .from('drum_sheet_categories')
+                  .upsert({
+                    sheet_id: sheet.id,
+                    category_id: popularitySelectedGenre,
+                    popularity_rank: rank,
+                  }, { onConflict: 'sheet_id,category_id' })
+                  .then(({ error: migrateError }) => {
+                    if (migrateError) {
+                      console.warn('자동 마이그레이션 실패:', migrateError);
+                    }
+                  });
+              }
+            });
+          }
         }
 
         setPopularityRanks(ranksMap);
@@ -11397,7 +11435,8 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
 
       setPopularitySearchLoading(true);
       try {
-        const { data, error } = await supabase
+        // 1. 기본 category_id로 검색
+        const { data: basicResults, error: basicError } = await supabase
           .from('drum_sheets')
           .select('id, title, artist, thumbnail_url, category_id')
           .eq('category_id', popularitySelectedGenre)
@@ -11405,9 +11444,55 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
           .or(`title.ilike.%${searchTerm}%,artist.ilike.%${searchTerm}%`)
           .limit(20);
 
-        if (error) throw error;
+        if (basicError) throw basicError;
 
-        setPopularitySearchResults(data || []);
+        // 2. drum_sheet_categories를 통한 추가 카테고리 검색
+        const { data: categoryRelations, error: relationError } = await supabase
+          .from('drum_sheet_categories')
+          .select(`
+            sheet_id,
+            sheet:drum_sheets (
+              id,
+              title,
+              artist,
+              thumbnail_url,
+              category_id
+            )
+          `)
+          .eq('category_id', popularitySelectedGenre);
+
+        if (relationError) {
+          console.warn('추가 카테고리 검색 실패:', relationError);
+        }
+
+        // 3. 결과 병합 및 중복 제거
+        const resultMap = new Map<string, any>();
+        
+        // 기본 결과 추가
+        if (basicResults) {
+          basicResults.forEach(sheet => {
+            resultMap.set(sheet.id, sheet);
+          });
+        }
+
+        // 추가 카테고리 결과 추가 (검색어 필터링)
+        if (categoryRelations) {
+          categoryRelations.forEach((relation: any) => {
+            const sheet = relation.sheet;
+            if (sheet && !resultMap.has(sheet.id)) {
+              const searchLower = searchTerm.toLowerCase();
+              const titleMatch = sheet.title?.toLowerCase().includes(searchLower);
+              const artistMatch = sheet.artist?.toLowerCase().includes(searchLower);
+              
+              if (titleMatch || artistMatch) {
+                resultMap.set(sheet.id, sheet);
+              }
+            }
+          });
+        }
+
+        const mergedResults = Array.from(resultMap.values()).slice(0, 20);
+        setPopularitySearchResults(mergedResults);
       } catch (error) {
         console.error('악보 검색 실패:', error);
         alert('악보 검색에 실패했습니다.');
@@ -11465,8 +11550,8 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
       if (rank <= 1) return;
 
       const newRanks = new Map(popularityRanks);
-      const currentSheet = newRanks.get(rank);
-      const upperSheet = newRanks.get(rank - 1);
+      const currentSheet: DrumSheet | null = newRanks.get(rank) ?? null;
+      const upperSheet: DrumSheet | null = newRanks.get(rank - 1) ?? null;
 
       // 위 순위와 교체
       newRanks.set(rank - 1, currentSheet);
@@ -11480,8 +11565,8 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
       if (rank >= 10) return;
 
       const newRanks = new Map(popularityRanks);
-      const currentSheet = newRanks.get(rank);
-      const lowerSheet = newRanks.get(rank + 1);
+      const currentSheet: DrumSheet | null = newRanks.get(rank) ?? null;
+      const lowerSheet: DrumSheet | null = newRanks.get(rank + 1) ?? null;
 
       // 아래 순위와 교체
       newRanks.set(rank + 1, currentSheet);
@@ -11504,7 +11589,27 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
 
         if (clearError) throw clearError;
 
-        // 2) 새 순위 배정 (upsert: 관계가 없으면 생성)
+        // 2) drum_sheets.popularity_rank도 초기화 (선택된 장르의 기본 category_id를 가진 악보들)
+        const sheetIds: string[] = [];
+        popularityRanks.forEach((sheet) => {
+          if (sheet) {
+            sheetIds.push(sheet.id);
+          }
+        });
+
+        if (sheetIds.length > 0) {
+          // 선택된 장르의 기본 category_id를 가진 악보들의 popularity_rank 초기화
+          const { error: clearSheetsError } = await supabase
+            .from('drum_sheets')
+            .update({ popularity_rank: null })
+            .eq('category_id', popularitySelectedGenre);
+
+          if (clearSheetsError) {
+            console.warn('drum_sheets.popularity_rank 초기화 실패:', clearSheetsError);
+          }
+        }
+
+        // 3) 새 순위 배정 (drum_sheet_categories에 upsert)
         const updates: Array<{ sheet_id: string; category_id: string; popularity_rank: number }> = [];
         popularityRanks.forEach((sheet, rank) => {
           if (sheet) {
@@ -11522,6 +11627,34 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
             .upsert(updates, { onConflict: 'sheet_id,category_id' });
 
           if (upsertError) throw upsertError;
+
+          // 4) drum_sheets.popularity_rank도 동기화 (기본 category_id가 선택된 장르인 경우만)
+          const sheetUpdates = updates
+            .filter(update => {
+              // 해당 악보의 기본 category_id가 선택된 장르와 일치하는지 확인
+              const sheet = Array.from(popularityRanks.values()).find(s => s?.id === update.sheet_id);
+              return sheet && (sheet as any).category_id === popularitySelectedGenre;
+            })
+            .map(update => ({
+              id: update.sheet_id,
+              popularity_rank: update.popularity_rank,
+            }));
+
+          if (sheetUpdates.length > 0) {
+            // 배치 업데이트
+            const updatePromises = sheetUpdates.map(update =>
+              supabase
+                .from('drum_sheets')
+                .update({ popularity_rank: update.popularity_rank })
+                .eq('id', update.id)
+            );
+
+            const updateResults = await Promise.all(updatePromises);
+            const updateErrors = updateResults.filter(result => result.error);
+            if (updateErrors.length > 0) {
+              console.warn('drum_sheets.popularity_rank 동기화 일부 실패:', updateErrors);
+            }
+          }
         }
 
         setPopularityOriginalRanks(new Map(popularityRanks));

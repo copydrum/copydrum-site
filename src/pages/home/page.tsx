@@ -114,18 +114,59 @@ export default function Home() {
     }
 
     try {
-      // 1. 순위가 지정된 악보 먼저 가져오기 (popularity_rank가 1-10인 것들)
-      const { data: rankedSheets, error: rankedError } = await supabase
-        .from('drum_sheets')
-        .select('id, title, artist, price, thumbnail_url, youtube_url, category_id, created_at, popularity_rank')
-        .eq('is_active', true)
+      // 1. 순위가 지정된 악보 먼저 가져오기
+      // 우선 drum_sheet_categories에서 읽기 (최신 방식)
+      let rankedSheets: any[] = [];
+      
+      const { data: categoryRanks, error: categoryError } = await supabase
+        .from('drum_sheet_categories')
+        .select(`
+          popularity_rank,
+          sheet:drum_sheets (
+            id,
+            title,
+            artist,
+            price,
+            thumbnail_url,
+            youtube_url,
+            category_id,
+            created_at
+          )
+        `)
         .eq('category_id', selectedGenre)
         .not('popularity_rank', 'is', null)
         .gte('popularity_rank', 1)
         .lte('popularity_rank', 10)
         .order('popularity_rank', { ascending: true });
 
-      if (rankedError) throw rankedError;
+      if (categoryError) {
+        console.warn('drum_sheet_categories 로드 실패:', categoryError);
+      } else if (categoryRanks && categoryRanks.length > 0) {
+        // drum_sheet_categories에서 데이터가 있으면 사용
+        rankedSheets = categoryRanks
+          .map((row: any) => ({
+            ...row.sheet,
+            popularity_rank: row.popularity_rank,
+          }))
+          .filter((sheet: any) => sheet && sheet.id);
+      } else {
+        // drum_sheet_categories에 데이터가 없으면 drum_sheets.popularity_rank를 fallback으로 사용
+        const { data: sheetRanks, error: sheetError } = await supabase
+          .from('drum_sheets')
+          .select('id, title, artist, price, thumbnail_url, youtube_url, category_id, created_at, popularity_rank')
+          .eq('is_active', true)
+          .eq('category_id', selectedGenre)
+          .not('popularity_rank', 'is', null)
+          .gte('popularity_rank', 1)
+          .lte('popularity_rank', 10)
+          .order('popularity_rank', { ascending: true });
+
+        if (sheetError) {
+          console.warn('drum_sheets.popularity_rank 로드 실패:', sheetError);
+        } else if (sheetRanks) {
+          rankedSheets = sheetRanks;
+        }
+      }
 
       // 2. 순위가 지정된 악보가 10개 미만이면 나머지는 기존 방식으로 채움
       const rankedCount = rankedSheets?.length || 0;
