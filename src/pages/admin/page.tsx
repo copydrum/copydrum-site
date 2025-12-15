@@ -11325,11 +11325,20 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
 
     const loadPopularityRanks = async () => {
       try {
+        // per-category 순위를 위해 drum_sheet_categories.popularity_rank 사용
         const { data, error } = await supabase
-          .from('drum_sheets')
-          .select('id, title, artist, thumbnail_url, category_id, popularity_rank')
+          .from('drum_sheet_categories')
+          .select(`
+            popularity_rank,
+            sheet:drum_sheets (
+              id,
+              title,
+              artist,
+              thumbnail_url,
+              category_id
+            )
+          `)
           .eq('category_id', popularitySelectedGenre)
-          .eq('is_active', true)
           .not('popularity_rank', 'is', null)
           .order('popularity_rank', { ascending: true });
 
@@ -11343,9 +11352,11 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
 
         // 로드된 순위 데이터 매핑
         if (data) {
-          data.forEach((sheet) => {
-            if (sheet.popularity_rank && sheet.popularity_rank >= 1 && sheet.popularity_rank <= 10) {
-              ranksMap.set(sheet.popularity_rank, sheet as DrumSheet);
+          data.forEach((row: any) => {
+            const rank = row.popularity_rank;
+            const sheet = row.sheet;
+            if (rank && sheet && rank >= 1 && rank <= 10) {
+              ranksMap.set(rank, sheet as DrumSheet);
             }
           });
         }
@@ -11485,30 +11496,32 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
 
       setPopularitySaving(true);
       try {
-        // 먼저 해당 장르의 모든 순위를 NULL로 초기화
+        // 1) 선택된 장르의 기존 순위 초기화 (drum_sheet_categories)
         const { error: clearError } = await supabase
-          .from('drum_sheets')
+          .from('drum_sheet_categories')
           .update({ popularity_rank: null })
           .eq('category_id', popularitySelectedGenre);
 
         if (clearError) throw clearError;
 
-        // 새 순위 배정
-        const updates: Array<{ id: string; rank: number }> = [];
+        // 2) 새 순위 배정 (upsert: 관계가 없으면 생성)
+        const updates: Array<{ sheet_id: string; category_id: string; popularity_rank: number }> = [];
         popularityRanks.forEach((sheet, rank) => {
           if (sheet) {
-            updates.push({ id: sheet.id, rank });
+            updates.push({
+              sheet_id: sheet.id,
+              category_id: popularitySelectedGenre,
+              popularity_rank: rank,
+            });
           }
         });
 
-        // 배치 업데이트
-        for (const update of updates) {
-          const { error: updateError } = await supabase
-            .from('drum_sheets')
-            .update({ popularity_rank: update.rank })
-            .eq('id', update.id);
+        if (updates.length > 0) {
+          const { error: upsertError } = await supabase
+            .from('drum_sheet_categories')
+            .upsert(updates, { onConflict: 'sheet_id,category_id' });
 
-          if (updateError) throw updateError;
+          if (upsertError) throw upsertError;
         }
 
         setPopularityOriginalRanks(new Map(popularityRanks));
