@@ -63,6 +63,8 @@
   "favoriteRemove": "찜 해제",
   "total": "TOTAL",
   "loadingSheetsMessage": "🎧 악보를 불러오는 중입니다. 잠시만 기다려주세요!",
+  "paginationLimitTitle": "장르별 최신악보는 10페이지까지만 보여집니다.",
+  "paginationLimitDescription": "더 많은 악보정보는 검색을 이용해 주세요.",
   "categories": {
     "kpop": "K-POP",
     "pop": "팝",

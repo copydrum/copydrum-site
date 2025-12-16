@@ -63,6 +63,8 @@
   "favoriteRemove": "お気に入りから削除",
   "total": "合計",
   "loadingSheetsMessage": "🎧 楽譜を読み込み中。お待ちください！",
+  "paginationLimitTitle": "各ジャンルの最新スコアは10ページまで表示されます。",
+  "paginationLimitDescription": "さらに多くの楽譜情報は検索をご利用ください。",
   "categories": {
     "kpop": "K-POP",
     "pop": "Pop",

@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
@@ -77,7 +77,10 @@ const CategoriesPage: React.FC = () => {
     const pageParam = parseInt(searchParams.get('page') || '1', 10);
     return Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
   });
-  const [itemsPerPage] = useState<number>(20);
+  const ITEMS_PER_PAGE = 20;
+  const MAX_CATEGORY_PAGES = 10;
+  const CATEGORY_FETCH_LIMIT = ITEMS_PER_PAGE * MAX_CATEGORY_PAGES * 2;
+  const itemsPerPage = ITEMS_PER_PAGE;
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoriteLoadingIds, setFavoriteLoadingIds] = useState<Set<string>>(new Set());
   const [buyingSheetId, setBuyingSheetId] = useState<string | null>(null);
@@ -87,6 +90,7 @@ const CategoriesPage: React.FC = () => {
   const [showPayPalModal, setShowPayPalModal] = useState(false);
   const { i18n, t } = useTranslation();
   const { isKoreanSite } = useSiteLanguage();
+  const fetchIdRef = useRef(0);
 
   // 통합 통화 로직 적용 (locale 기반)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
@@ -157,8 +161,15 @@ const CategoriesPage: React.FC = () => {
 
   useEffect(() => {
     checkAuth();
-    loadData();
+    loadCategories();
   }, []);
+
+  useEffect(() => {
+    if (!searchTerm.trim() && !selectedCategory) {
+      return;
+    }
+    loadDrumSheets();
+  }, [selectedCategory, searchTerm]);
 
   useEffect(() => {
     const categoryParam = searchParams.get('category');
@@ -254,16 +265,6 @@ const CategoriesPage: React.FC = () => {
     }
   }, [user]);
 
-  const loadData = async () => {
-    try {
-      await Promise.all([loadCategories(), loadDrumSheets()]);
-    } catch (error) {
-      console.error('Data loading error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     loadFavorites();
   }, [loadFavorites]);
@@ -280,122 +281,95 @@ const CategoriesPage: React.FC = () => {
       setCategories(data ?? []);
     } catch (err) {
       console.error('Category loading error:', err);
+      setLoading(false);
     }
   };
 
+  const normalizeSheets = (data: any[]): DrumSheet[] => {
+    const sheetMap = new Map<string, DrumSheet>();
+
+    data.forEach((sheet: any) => {
+      const normalizedCategory =
+        Array.isArray(sheet?.categories) && sheet.categories.length > 0
+          ? sheet.categories[0]
+          : sheet?.categories ?? null;
+
+      const relationCategoryIds = Array.isArray(sheet?.drum_sheet_categories)
+        ? sheet.drum_sheet_categories
+            .map((relation: any) => relation?.category_id)
+            .filter((id: string | null | undefined): id is string => Boolean(id))
+        : [];
+
+      const existing = sheetMap.get(sheet.id);
+      const mergedCategoryIds = new Set<string>([
+        ...(existing?.category_ids || []),
+        ...relationCategoryIds,
+      ]);
+
+      sheetMap.set(sheet.id, {
+        ...existing,
+        ...sheet,
+        categories: normalizedCategory ? { name: normalizedCategory.name ?? '' } : null,
+        category_ids: Array.from(mergedCategoryIds),
+      } as DrumSheet);
+    });
+
+    return Array.from(sheetMap.values());
+  };
+
   const loadDrumSheets = async () => {
+    const trimmedSearch = searchTerm.trim();
+    if (!trimmedSearch && !selectedCategory) {
+      setDrumSheets([]);
+      setLoading(false);
+      return;
+    }
+
+    const fetchId = ++fetchIdRef.current;
+    setLoading(true);
+
+    const baseSelect =
+      'id, title, artist, difficulty, price, category_id, tempo, pdf_url, preview_image_url, youtube_url, is_featured, created_at, thumbnail_url, album_name, page_count, categories (name), drum_sheet_categories (category_id)';
+
     try {
-      // 먼저 총 개수 확인 (활성화된 악보만)
-      const { count: totalCount, error: countError } = await supabase
-        .from('drum_sheets')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_active', true);
-
-      if (countError) {
-        console.error('악보 개수 확인 오류:', countError);
-        throw countError;
-      }
-
-      console.log(`📊 총 악보 개수: ${totalCount}개`);
-
-      let allSheets: DrumSheet[] = [];
-      let from = 0;
-      const pageSize = 1000;
-      const totalPages = Math.ceil((totalCount || 0) / pageSize);
-
-      console.log(`악보 데이터 로드 시작... (총 ${totalPages}페이지 예상)`);
-
-      // 1000개씩 페이지네이션하여 모든 데이터 가져오기
-      for (let page = 0; page < totalPages; page++) {
-        const to = from + pageSize - 1;
-        console.log(`[${page + 1}/${totalPages}] 악보 데이터 로드 중: ${from} ~ ${to}`);
-
+      if (trimmedSearch) {
+        const searchPattern = `%${trimmedSearch.replace(/[%_]/g, (match) => `\\${match}`)}%`;
         const { data, error } = await supabase
           .from('drum_sheets')
-          .select('id, title, artist, difficulty, price, category_id, tempo, pdf_url, preview_image_url, youtube_url, is_featured, created_at, thumbnail_url, album_name, page_count, categories (name)')
+          .select(baseSelect)
           .eq('is_active', true)
-          .order('created_at', { ascending: false })
-          .range(from, to)
-          .limit(pageSize);
+          .or(`title.ilike.${searchPattern},artist.ilike.${searchPattern},album_name.ilike.${searchPattern}`)
+          .order('created_at', { ascending: false });
 
         if (error) {
-          console.error(`[${page + 1}/${totalPages}] 악보 데이터 로드 오류:`, error);
-          console.error('에러 상세:', JSON.stringify(error, null, 2));
           throw error;
         }
 
-        if (data && data.length > 0) {
-          const normalizedSheets = (data as any[]).map((sheet) => {
-            const normalizedCategory =
-              Array.isArray(sheet?.categories) && sheet.categories.length > 0
-                ? sheet.categories[0]
-                : sheet?.categories ?? null;
+        if (fetchId !== fetchIdRef.current) return;
+        setDrumSheets(normalizeSheets(data || []));
+      } else {
+        const { data, error } = await supabase
+          .from('drum_sheets')
+          .select(baseSelect)
+          .eq('is_active', true)
+          .eq('category_id', selectedCategory)
+          .order('created_at', { ascending: false })
+          .limit(CATEGORY_FETCH_LIMIT);
 
-            return {
-              ...sheet,
-              categories: normalizedCategory ? { name: normalizedCategory.name ?? '' } : null,
-            } as DrumSheet;
-          });
-
-          allSheets = [...allSheets, ...normalizedSheets];
-          console.log(`✅ [${page + 1}/${totalPages}] 현재까지 로드된 악보 수: ${allSheets.length}개 (이번 페이지: ${data.length}개)`);
-          from += pageSize;
-        } else {
-          console.log(`⚠️ [${page + 1}/${totalPages}] 데이터가 없습니다.`);
-          break;
-        }
-      }
-
-      // drum_sheet_categories 테이블에서 추가 카테고리 관계 가져오기
-      if (allSheets.length > 0) {
-        const sheetIds = allSheets.map(sheet => sheet.id);
-        const categoryMap = new Map<string, string[]>();
-
-        console.log(`카테고리 관계 조회 시작: ${sheetIds.length}개 악보`);
-        
-        // 100개씩 나눠서 조회 (Supabase의 in 쿼리 제한 고려)
-        const batchSize = 100;
-        for (let i = 0; i < sheetIds.length; i += batchSize) {
-          const batch = sheetIds.slice(i, i + batchSize);
-          
-          const { data: categoryRelations, error: relationError } = await supabase
-            .from('drum_sheet_categories')
-            .select('sheet_id, category_id')
-            .in('sheet_id', batch);
-
-          if (relationError) {
-            console.error('카테고리 관계 조회 오류:', relationError);
-          } else if (categoryRelations) {
-            console.log(`카테고리 관계 조회 결과 (배치 ${i / batchSize + 1}):`, categoryRelations.length, '개');
-            categoryRelations.forEach((relation: any) => {
-              if (relation.sheet_id && relation.category_id) {
-                const existing = categoryMap.get(relation.sheet_id) || [];
-                if (!existing.includes(relation.category_id)) {
-                  existing.push(relation.category_id);
-                  categoryMap.set(relation.sheet_id, existing);
-                }
-              }
-            });
-          }
+        if (error) {
+          throw error;
         }
 
-        console.log('카테고리 관계 맵:', Array.from(categoryMap.entries()).slice(0, 5));
-
-        // 각 악보에 추가 카테고리 ID 목록 추가
-        allSheets = allSheets.map(sheet => ({
-          ...sheet,
-          category_ids: categoryMap.get(sheet.id) || []
-        }));
-      }
-
-      setDrumSheets(allSheets);
-      console.log(`🎉 최종 로드 완료: 총 ${allSheets.length}개의 악보를 로드했습니다. (예상: ${totalCount}개)`);
-
-      if (allSheets.length !== totalCount) {
-        console.warn(`⚠️ 경고: 로드된 악보 수(${allSheets.length})와 총 개수(${totalCount})가 일치하지 않습니다.`);
+        if (fetchId !== fetchIdRef.current) return;
+        const normalized = normalizeSheets(data || []);
+        setDrumSheets(normalized.slice(0, itemsPerPage * MAX_CATEGORY_PAGES));
       }
     } catch (err) {
       console.error('Drum sheets loading error:', err);
+    } finally {
+      if (fetchId === fetchIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -536,6 +510,8 @@ const CategoriesPage: React.FC = () => {
     return sheet.price;
   };
 
+  const isSearchMode = Boolean(searchTerm.trim());
+
   // Filtered sheets based on search, category, difficulty, price range, artist, album
   const filteredSheets = React.useMemo(() => {
     let filtered = [...drumSheets];
@@ -564,7 +540,7 @@ const CategoriesPage: React.FC = () => {
     }
 
     // Category filter - category_id 또는 category_ids 배열에서 확인
-    if (selectedCategory) {
+    if (!isSearchMode && selectedCategory) {
       filtered = filtered.filter(sheet => 
         sheet.category_id === selectedCategory || 
         (sheet.category_ids && sheet.category_ids.includes(selectedCategory))
@@ -625,11 +601,24 @@ const CategoriesPage: React.FC = () => {
     return sorted;
   }, [drumSheets, searchTerm, selectedCategory, selectedDifficulty, priceRange, sortBy, selectedArtist, selectedAlbum]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredSheets.length / itemsPerPage);
+  const rawTotalPages = Math.ceil(filteredSheets.length / itemsPerPage);
+  const totalPages = isSearchMode ? rawTotalPages : Math.min(MAX_CATEGORY_PAGES, rawTotalPages);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedSheets = filteredSheets.slice(startIndex, endIndex);
+  const showCategoryLimitNotice = !isSearchMode && totalPages >= MAX_CATEGORY_PAGES && currentPage === MAX_CATEGORY_PAGES;
+
+  useEffect(() => {
+    if (!totalPages || currentPage <= totalPages) return;
+    const clampedPage = Math.max(1, totalPages);
+    setCurrentPage(clampedPage);
+    updateQueryParams(
+      {
+        page: clampedPage > 1 ? String(clampedPage) : null,
+      },
+      { replace: true }
+    );
+  }, [totalPages, currentPage, updateQueryParams]);
 
   const selectedDisplayPrice = selectedSheet ? getDisplayPrice(selectedSheet) : 0;
   const selectedSheetIsFavorite = selectedSheet ? favoriteIds.has(selectedSheet.id) : false;
@@ -862,6 +851,13 @@ const CategoriesPage: React.FC = () => {
                 <i className="ri-arrow-right-s-line text-lg" />
               </button>
             </div>
+          )}
+          {showCategoryLimitNotice && (
+            <p className="mt-3 text-center text-xs text-gray-500 leading-relaxed">
+              {t('categoriesPage.paginationLimitTitle')}
+              <br />
+              {t('categoriesPage.paginationLimitDescription')}
+            </p>
           )}
         </div>
       </div>
@@ -1468,6 +1464,13 @@ const CategoriesPage: React.FC = () => {
                 <i className="ri-arrow-right-s-line"></i>
               </button>
             </div>
+          )}
+          {showCategoryLimitNotice && (
+            <p className="mt-3 text-center text-sm text-gray-600 leading-relaxed">
+              {t('categoriesPage.paginationLimitTitle')}
+              <br />
+              {t('categoriesPage.paginationLimitDescription')}
+            </p>
           )}
 
           {/* 로딩 중 */}

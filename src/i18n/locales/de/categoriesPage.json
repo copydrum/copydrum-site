@@ -63,6 +63,8 @@
   "favoriteRemove": "Aus Favoriten entfernen",
   "total": "GESAMT",
   "loadingSheetsMessage": "🎧 Notenblätter werden geladen. Bitte warten!",
+  "paginationLimitTitle": "Die neuesten Noten pro Genre werden bis maximal 10 Seiten angezeigt.",
+  "paginationLimitDescription": "Für weitere Noten nutze bitte die Suche.",
   "categories": {
     "kpop": "K-POP",
     "pop": "Pop",

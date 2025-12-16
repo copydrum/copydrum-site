@@ -63,6 +63,8 @@
   "favoriteRemove": "Retirer des favoris",
   "total": "TOTAL",
   "loadingSheetsMessage": "🎧 Chargement des partitions. Veuillez patienter !",
+  "paginationLimitTitle": "Les partitions récentes par genre sont affichées jusqu’à 10 pages.",
+  "paginationLimitDescription": "Utilisez la recherche pour voir plus de partitions.",
   "categories": {
     "kpop": "K-POP",
     "pop": "Pop",

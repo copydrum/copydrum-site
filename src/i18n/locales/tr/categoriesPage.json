@@ -63,6 +63,8 @@
   "favoriteRemove": "Favorilerden çıkar",
   "total": "TOPLAM",
   "loadingSheetsMessage": "🎧 Notalar yükleniyor. Lütfen bekleyin!",
+  "paginationLimitTitle": "Her türdeki en yeni notalar en fazla 10 sayfaya kadar gösterilir.",
+  "paginationLimitDescription": "Daha fazla nota için aramayı kullanın.",
   "categories": {
     "kpop": "K-POP",
     "pop": "Pop",

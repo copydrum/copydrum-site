@@ -63,6 +63,8 @@
   "favoriteRemove": "Hapus dari favorit",
   "total": "TOTAL",
   "loadingSheetsMessage": "🎧 Memuat lembaran musik. Harap tunggu!",
+  "paginationLimitTitle": "Partitur terbaru per genre ditampilkan maksimal 10 halaman.",
+  "paginationLimitDescription": "Gunakan pencarian untuk melihat lebih banyak partitur.",
   "categories": {
     "kpop": "K-POP",
     "pop": "Pop",

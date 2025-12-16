@@ -63,6 +63,8 @@
   "favoriteRemove": "Rimuovi dai preferiti",
   "total": "TOTALE",
   "loadingSheetsMessage": "🎧 Caricamento spartiti. Attendi!",
+  "paginationLimitTitle": "Le partiture più recenti per genere sono visibili fino a 10 pagine.",
+  "paginationLimitDescription": "Per altre partiture usa la ricerca.",
   "categories": {
     "kpop": "K-POP",
     "pop": "Pop",

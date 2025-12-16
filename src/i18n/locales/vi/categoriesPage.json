@@ -63,6 +63,8 @@
   "favoriteRemove": "Xóa khỏi yêu thích",
   "total": "TỔNG",
   "loadingSheetsMessage": "🎧 Đang tải bản nhạc. Vui lòng đợi!",
+  "paginationLimitTitle": "Bản nhạc mới nhất theo thể loại chỉ hiển thị tối đa 10 trang.",
+  "paginationLimitDescription": "Hãy dùng tìm kiếm để xem thêm bản nhạc.",
   "categories": {
     "kpop": "K-POP",
     "pop": "Pop",

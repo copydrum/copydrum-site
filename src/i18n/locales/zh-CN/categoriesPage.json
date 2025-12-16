@@ -63,6 +63,8 @@
   "favoriteRemove": "从收藏中移除",
   "total": "总计",
   "loadingSheetsMessage": "🎧 正在加载乐谱。请稍候！",
+  "paginationLimitTitle": "各曲风的最新乐谱仅显示前10页。",
+  "paginationLimitDescription": "更多乐谱信息请使用搜索。",
   "categories": {
     "kpop": "K-POP",
     "pop": "流行",
