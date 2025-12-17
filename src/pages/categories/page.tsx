@@ -165,11 +165,11 @@ const CategoriesPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!searchTerm.trim() && !selectedCategory) {
+    if (!searchTerm.trim() && !selectedCategory && !selectedArtist && !selectedAlbum) {
       return;
     }
     loadDrumSheets();
-  }, [selectedCategory, searchTerm]);
+  }, [selectedCategory, searchTerm, selectedArtist, selectedAlbum]);
 
   useEffect(() => {
     const categoryParam = searchParams.get('category');
@@ -319,7 +319,7 @@ const CategoriesPage: React.FC = () => {
 
   const loadDrumSheets = async () => {
     const trimmedSearch = searchTerm.trim();
-    if (!trimmedSearch && !selectedCategory) {
+    if (!trimmedSearch && !selectedCategory && !selectedArtist && !selectedAlbum) {
       setDrumSheets([]);
       setLoading(false);
       return;
@@ -339,6 +339,29 @@ const CategoriesPage: React.FC = () => {
           .select(baseSelect)
           .eq('is_active', true)
           .or(`title.ilike.${searchPattern},artist.ilike.${searchPattern},album_name.ilike.${searchPattern}`)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          throw error;
+        }
+
+        if (fetchId !== fetchIdRef.current) return;
+        setDrumSheets(normalizeSheets(data || []));
+      } else if (selectedArtist || selectedAlbum) {
+        // 아티스트나 앨범 필터가 있을 때는 카테고리 제한 없이 모든 곡을 가져옴
+        let query = supabase
+          .from('drum_sheets')
+          .select(baseSelect)
+          .eq('is_active', true);
+
+        if (selectedArtist) {
+          query = query.eq('artist', selectedArtist);
+        }
+        if (selectedAlbum) {
+          query = query.eq('album_name', selectedAlbum);
+        }
+
+        const { data, error } = await query
           .order('created_at', { ascending: false });
 
         if (error) {
