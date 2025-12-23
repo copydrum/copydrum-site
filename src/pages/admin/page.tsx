@@ -968,6 +968,7 @@ const AdminPage: React.FC = () => {
     category_id: '',
     category_ids: [] as string[],
     thumbnail_url: '',
+    thumbnail_file: null as File | null,
     album_name: '',
     page_count: 0,
     tempo: 0,
@@ -978,6 +979,7 @@ const AdminPage: React.FC = () => {
   });
   const [isLoadingSpotify, setIsLoadingSpotify] = useState(false);
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
   const [editingSheet, setEditingSheet] = useState<DrumSheet | null>(null);
   const [editingSheetData, setEditingSheetData] = useState({
     title: '',
@@ -4070,6 +4072,68 @@ const AdminPage: React.FC = () => {
       setIsUploadingPdf(false);
     }
   };
+
+  // 썸네일 파일 업로드
+  const handleThumbnailUpload = async (file: File) => {
+    setIsUploadingThumbnail(true);
+    try {
+      // 이미지 파일 형식 확인
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+      const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+      if (!allowedExtensions.includes(fileExt)) {
+        alert('지원하지 않는 이미지 형식입니다. JPG, PNG, WEBP 파일만 업로드 가능합니다.');
+        setIsUploadingThumbnail(false);
+        return;
+      }
+
+      // 파일명 안전하게 처리 (한글/공백/특수문자 제거)
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '');
+      // 만약 이름이 다 지워졌다면(한글로만 된 파일 등), 랜덤 ID 사용
+      const safeName = sanitizedName.length > 2 
+        ? sanitizedName 
+        : `thumbnail_${Math.random().toString(36).substring(2, 10)}.${fileExt}`;
+      
+      // 타임스탬프 + 안전한 파일명 조합
+      const fileName = `${Date.now()}_${safeName}`;
+      const filePath = `thumbnails/${fileName}`;
+
+      // Supabase Storage에 업로드
+      const contentType = fileExt === 'png' ? 'image/png' : 
+                          fileExt === 'webp' ? 'image/webp' : 
+                          'image/jpeg';
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('drum-sheets')
+        .upload(filePath, file, {
+          contentType: contentType,
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      // 업로드된 썸네일의 공개 URL 가져오기
+      const { data: urlData } = supabase.storage
+        .from('drum-sheets')
+        .getPublicUrl(filePath);
+
+      const thumbnailUrl = urlData.publicUrl;
+
+      // 상태 업데이트
+      setNewSheet(prev => ({ 
+        ...prev, 
+        thumbnail_url: thumbnailUrl,
+        thumbnail_file: file
+      }));
+
+      alert('썸네일이 업로드되었습니다.');
+    } catch (error: any) {
+      console.error('썸네일 업로드 오류:', error);
+      alert(`썸네일 업로드 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
+    } finally {
+      setIsUploadingThumbnail(false);
+    }
+  };
+
   const handleAddSheet = async () => {
     if (!newSheet.title || !newSheet.artist || newSheet.category_ids.length === 0) {
       alert('제목, 아티스트, 카테고리는 필수입니다.');
@@ -4230,6 +4294,7 @@ const AdminPage: React.FC = () => {
         category_id: '',
         category_ids: [],
         thumbnail_url: '',
+        thumbnail_file: null,
         album_name: '',
         page_count: 0,
         tempo: 0,
@@ -7046,6 +7111,28 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                     />
                   </div>
+                </div>
+
+                {/* 썸네일 파일 업로드 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">썸네일 파일 업로드 (선택)</label>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/webp"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        handleThumbnailUpload(file);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                  {isUploadingThumbnail && (
+                    <p className="mt-1 text-sm text-blue-600">썸네일 업로드 중...</p>
+                  )}
+                  {newSheet.thumbnail_file && (
+                    <p className="mt-1 text-sm text-gray-600">업로드된 파일: {newSheet.thumbnail_file.name}</p>
+                  )}
                 </div>
 
                 {/* 썸네일 미리보기 */}
