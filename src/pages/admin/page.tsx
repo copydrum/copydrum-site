@@ -11709,11 +11709,57 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
         });
 
         if (updates.length > 0) {
-          const { error: upsertError } = await supabase
+          // 기존 레코드 조회
+          const sheetIds = updates.map(u => u.sheet_id);
+          const { data: existingRecords, error: fetchError } = await supabase
             .from('drum_sheet_categories')
-            .upsert(updates, { onConflict: 'sheet_id,category_id' });
+            .select('sheet_id, category_id, id')
+            .eq('category_id', popularitySelectedGenre)
+            .in('sheet_id', sheetIds);
 
-          if (upsertError) throw upsertError;
+          if (fetchError) throw fetchError;
+
+          const existingMap = new Map(
+            (existingRecords || []).map(r => [`${r.sheet_id}_${r.category_id}`, r.id])
+          );
+
+          // UPDATE와 INSERT를 분리
+          const toUpdate: Array<{ id: string; popularity_rank: number }> = [];
+          const toInsert: Array<{ sheet_id: string; category_id: string; popularity_rank: number }> = [];
+
+          updates.forEach(update => {
+            const key = `${update.sheet_id}_${update.category_id}`;
+            const existingId = existingMap.get(key);
+            if (existingId) {
+              toUpdate.push({ id: existingId, popularity_rank: update.popularity_rank });
+            } else {
+              toInsert.push(update);
+            }
+          });
+
+          // UPDATE 수행
+          if (toUpdate.length > 0) {
+            const updatePromises = toUpdate.map(item =>
+              supabase
+                .from('drum_sheet_categories')
+                .update({ popularity_rank: item.popularity_rank })
+                .eq('id', item.id)
+            );
+            const updateResults = await Promise.all(updatePromises);
+            const updateErrors = updateResults.filter(result => result.error);
+            if (updateErrors.length > 0) {
+              throw updateErrors[0].error;
+            }
+          }
+
+          // INSERT 수행
+          if (toInsert.length > 0) {
+            const { error: insertError } = await supabase
+              .from('drum_sheet_categories')
+              .insert(toInsert);
+
+            if (insertError) throw insertError;
+          }
 
           // 4) drum_sheets.popularity_rank도 동기화 (기본 category_id가 선택된 장르인 경우만)
           const sheetUpdates = updates
