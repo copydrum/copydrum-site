@@ -202,7 +202,11 @@ export default function Footer() {
                     <p>{t('footer.email')}</p>
                   </>
                 ) : (
-                  <p>{t('footer.contactInfoGlobal')}</p>
+                  <>
+                    <p>{t('footer.contactInfoGlobal')}</p>
+                    <p>{t('footer.phone')}</p>
+                    <p>{t('footer.email')}</p>
+                  </>
                 )}
                 <div className="mt-8 pt-8 border-t border-gray-800 text-center text-gray-400 text-sm">
                   <p>{t('footer.copyright', { year: new Date().getFullYear() })}</p>

@@ -429,6 +429,7 @@ export default {
   'footer.address': '住所: 世宗特別自治市 南世宗路 454 江南第一タワー 8階 836号',
   'footer.contactInfo': '連絡先: 070-7570-0028 (業務中は電話に出られない場合があるため、1:1お問い合わせまたはカカオトーク相談をご利用ください)',
   'footer.email': 'メール: copydrum@hanmail.net',
+  'footer.phone': '電話番号: 070-7570-0028',
   'footer.contactInfoGlobal': 'ご質問がございましたら、マイページの「1:1お問い合わせ」からお問い合わせください。',
   'footer.copyright': '© {{year}} CopyDrum. All rights reserved.',
   'footer.globalService': 'グローバルサービス | 英語 / 日本語 / ベトナム語 / フランス語 / ドイツ語 / スペイン語 / ポルトガル語',
