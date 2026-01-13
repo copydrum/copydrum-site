@@ -4544,6 +4544,73 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   } catch (e) {
                     console.warn(`행 ${rowNum}: 페이지 수 추출 실패`);
                   }
+
+                  // [추가] 미리보기 이미지 생성 및 업로드
+                  try {
+                    console.log(`행 ${rowNum}: 미리보기 이미지 생성 시작`);
+                    const arrayBuffer = await matchedFile.arrayBuffer();
+                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                    const pdf = await loadingTask.promise;
+                    
+                    if (pdf.numPages === 0) {
+                      throw new Error('PDF에 페이지가 없습니다.');
+                    }
+                    
+                    const page = await pdf.getPage(1);
+                    const viewport = page.getViewport({ scale: 2.0 });
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    
+                    if (!context) {
+                      throw new Error('Canvas context를 가져올 수 없습니다.');
+                    }
+                    
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    
+                    await page.render({
+                      canvasContext: context,
+                      viewport: viewport
+                    }).promise;
+                    
+                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                    const mosaicImageData = applyMosaicToImageData(imageData, 15);
+                    context.putImageData(mosaicImageData, 0, 0);
+                    
+                    const blob = await new Promise<Blob>((resolve, reject) => {
+                      canvas.toBlob((blob) => {
+                        if (blob) {
+                          resolve(blob);
+                        } else {
+                          reject(new Error('Canvas를 Blob으로 변환 실패'));
+                        }
+                      }, 'image/jpeg', 0.85);
+                    });
+                    
+                    const imageFileName = `preview_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+                    const imageFilePath = `previews/${imageFileName}`;
+                    
+                    const { error: imageUploadError } = await supabase.storage
+                      .from('drum-sheets')
+                      .upload(imageFilePath, blob, {
+                        contentType: 'image/jpeg',
+                        upsert: false
+                      });
+                      
+                    if (imageUploadError) {
+                      throw new Error(`이미지 업로드 실패: ${imageUploadError.message}`);
+                    }
+                    
+                    const { data: imageUrlData } = supabase.storage
+                      .from('drum-sheets')
+                      .getPublicUrl(imageFilePath);
+                    previewImageUrl = imageUrlData.publicUrl;
+                    console.log(`행 ${rowNum}: 미리보기 이미지 생성 완료`);
+                  } catch (e) {
+                    console.error(`행 ${rowNum}: 미리보기 이미지 생성 실패`, e);
+                    const errorMessage = e instanceof Error ? e.message : '알 수 없는 오류';
+                    console.warn(`행 ${rowNum}: 미리보기 이미지 생성 실패 - ${errorMessage}`);
+                  }
                 } else {
                   console.error(`행 ${rowNum}: PDF 업로드 실패`, uploadError);
                   errors.push(`행 ${rowNum}: PDF 업로드 실패 (${fileName})`);
