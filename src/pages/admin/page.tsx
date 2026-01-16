@@ -3963,8 +3963,12 @@ const AdminPage: React.FC = () => {
   const handlePdfUpload = async (file: File) => {
     setIsUploadingPdf(true);
     try {
-      // 1. 페이지수 추출
-      const pageCount = await extractPdfPageCount(file);
+      // File 객체를 ArrayBuffer로 변환 (한 번만 읽고 재사용)
+      // (File 객체를 직접 업로드하면 원시 데이터가 표시되는 문제 방지)
+      const arrayBuffer = await file.arrayBuffer();
+      
+      // 1. 페이지수 추출 (arrayBuffer 사용)
+      const pageCount = await extractPdfPageCount(new File([arrayBuffer], file.name, { type: 'application/pdf' }));
       setNewSheet(prev => ({ ...prev, page_count: pageCount }));
 
       // 2. PDF 파일을 Supabase Storage에 업로드
@@ -3981,9 +3985,12 @@ const AdminPage: React.FC = () => {
       const fileName = `${Date.now()}_${safeName}`;
       const filePath = `pdfs/${fileName}`;
 
+      // Blob으로 만들어서 업로드
+      const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('drum-sheets')
-        .upload(filePath, file, {
+        .upload(filePath, blob, {
           contentType: 'application/pdf',
           upsert: false
         });
@@ -4001,7 +4008,7 @@ const AdminPage: React.FC = () => {
       let previewImageUrl = '';
       try {
         console.log('미리보기 이미지 생성 시작 (클라이언트 사이드 렌더링)');
-        const arrayBuffer = await file.arrayBuffer();
+        // 이미 생성한 arrayBuffer를 재사용
         const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
         const pdf = await loadingTask.promise;
         if (pdf.numPages === 0) {
@@ -4527,6 +4534,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                 
                 // File 객체를 ArrayBuffer로 변환한 후 Blob으로 만들어서 업로드
                 // (이전에 해결했던 문제: File 객체를 직접 업로드하면 원시 데이터가 표시되는 문제 방지)
+                // File 객체는 한 번만 읽을 수 있으므로, arrayBuffer를 한 번만 생성하고 재사용
                 const arrayBuffer = await matchedFile.arrayBuffer();
                 const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
                 
@@ -4545,7 +4553,8 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
 
                   // 페이지 수 추출 (선택 사항)
                   try {
-                    const pageCountResult = await extractPdfPageCount(matchedFile);
+                    // arrayBuffer를 사용하여 페이지 수 추출
+                    const pageCountResult = await extractPdfPageCount(new File([arrayBuffer], matchedFile.name, { type: 'application/pdf' }));
                     if (pageCountResult > 0) pageCount = pageCountResult;
                   } catch (e) {
                     console.warn(`행 ${rowNum}: 페이지 수 추출 실패`);
@@ -4554,7 +4563,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   // [추가] 미리보기 이미지 생성 및 업로드
                   try {
                     console.log(`행 ${rowNum}: 미리보기 이미지 생성 시작`);
-                    const arrayBuffer = await matchedFile.arrayBuffer();
+                    // 이미 읽은 arrayBuffer를 재사용
                     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
                     const pdf = await loadingTask.promise;
                     
@@ -7439,6 +7448,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                     difficulty: '초급',
                     price: 0,
                     category_id: '',
+                    category_ids: [],
                     thumbnail_url: '',
                     album_name: '',
                     page_count: 0,
@@ -7501,17 +7511,18 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                           <label key={category.id} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-1 rounded">
                             <input
                               type="checkbox"
-                              checked={editingSheetData.category_ids.includes(category.id)}
+                              checked={(editingSheetData.category_ids || []).includes(category.id)}
                               onChange={(e) => {
+                                const currentCategoryIds = editingSheetData.category_ids || [];
                                 if (e.target.checked) {
-                                  const newCategoryIds = [...editingSheetData.category_ids, category.id];
+                                  const newCategoryIds = [...currentCategoryIds, category.id];
                                   setEditingSheetData({
                                     ...editingSheetData,
                                     category_ids: newCategoryIds,
                                     category_id: category.id // 첫 번째 선택된 카테고리를 category_id에도 저장 (하위 호환성)
                                   });
                                 } else {
-                                  const newCategoryIds = editingSheetData.category_ids.filter((id) => id !== category.id);
+                                  const newCategoryIds = currentCategoryIds.filter((id) => id !== category.id);
                                   setEditingSheetData({
                                     ...editingSheetData,
                                     category_ids: newCategoryIds,
@@ -7527,9 +7538,9 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                       </div>
                     )}
                   </div>
-                  {editingSheetData.category_ids.length > 0 && (
+                  {(editingSheetData.category_ids || []).length > 0 && (
                     <p className="text-xs text-gray-500 mt-1">
-                      선택됨: {editingSheetData.category_ids.length}개
+                      선택됨: {(editingSheetData.category_ids || []).length}개
                     </p>
                   )}
                 </div>
@@ -7661,14 +7672,15 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                 onClick={async () => {
                   if (!editingSheet) return;
 
-                  if (!editingSheetData.title || !editingSheetData.artist || editingSheetData.category_ids.length === 0) {
+                  const categoryIds = editingSheetData.category_ids || [];
+                  if (!editingSheetData.title || !editingSheetData.artist || categoryIds.length === 0) {
                     alert('제목, 아티스트, 카테고리는 필수입니다.');
                     return;
                   }
 
                   try {
                     // category_id는 첫 번째 선택된 카테고리로 설정 (하위 호환성)
-                    const categoryId = editingSheetData.category_ids.length > 0 ? editingSheetData.category_ids[0] : '';
+                    const categoryId = categoryIds.length > 0 ? categoryIds[0] : '';
 
                     const updateData: any = {
                       title: editingSheetData.title,
@@ -7723,8 +7735,9 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                     }
 
                     // 새로운 관계 추가
-                    if (editingSheetData.category_ids.length > 0) {
-                      const categoryRelations = editingSheetData.category_ids.map(categoryId => ({
+                    const categoryIds = editingSheetData.category_ids || [];
+                    if (categoryIds.length > 0) {
+                      const categoryRelations = categoryIds.map(categoryId => ({
                         sheet_id: editingSheet.id,
                         category_id: categoryId
                       }));
