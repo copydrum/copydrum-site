@@ -4524,9 +4524,15 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                 const uploadFileName = `${Date.now()}_${safeName}`;
                 
                 const uploadPath = `pdfs/${uploadFileName}`;
+                
+                // File 객체를 ArrayBuffer로 변환한 후 Blob으로 만들어서 업로드
+                // (이전에 해결했던 문제: File 객체를 직접 업로드하면 원시 데이터가 표시되는 문제 방지)
+                const arrayBuffer = await matchedFile.arrayBuffer();
+                const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+                
                 const { error: uploadError } = await supabase.storage
                   .from('drum-sheets')
-                  .upload(uploadPath, matchedFile, {
+                  .upload(uploadPath, blob, {
                     contentType: 'application/pdf',
                     upsert: false
                   });
