@@ -11,6 +11,26 @@ import { isMobileDevice } from '../../utils/device';
 // PortOne currency type
 type PortOneCurrency = 'CURRENCY_KRW' | 'CURRENCY_USD' | 'CURRENCY_JPY';
 
+// PortOne locale for PayPal UI labels
+type PortOneLocale =
+  | 'EN_US'
+  | 'JA_JP'
+  | 'KO_KR'
+  | 'ZH_CN'
+  | 'ZH_TW'
+  | 'FR_FR'
+  | 'DE_DE'
+  | 'ES_ES'
+  | 'IT_IT'
+  | 'PT_BR'
+  | 'RU_RU'
+  | 'TH_TH'
+  | 'VI_VN'
+  | 'ID_ID'
+  | 'HI_IN'
+  | 'UK_UA'
+  | 'TR_TR';
+
 // Convert our currency format to PortOne format
 function toPortOneCurrency(currency: 'KRW' | 'USD' | 'JPY'): PortOneCurrency {
   switch (currency) {
@@ -20,6 +40,46 @@ function toPortOneCurrency(currency: 'KRW' | 'USD' | 'JPY'): PortOneCurrency {
       return 'CURRENCY_JPY';
     default:
       return 'CURRENCY_KRW';
+  }
+}
+
+function toPortOneLocale(language: string): PortOneLocale {
+  switch (language) {
+    case 'ko':
+      return 'KO_KR';
+    case 'ja':
+      return 'JA_JP';
+    case 'zh-CN':
+      return 'ZH_CN';
+    case 'zh-TW':
+      return 'ZH_TW';
+    case 'fr':
+      return 'FR_FR';
+    case 'de':
+      return 'DE_DE';
+    case 'es':
+      return 'ES_ES';
+    case 'it':
+      return 'IT_IT';
+    case 'pt':
+      return 'PT_BR';
+    case 'ru':
+      return 'RU_RU';
+    case 'th':
+      return 'TH_TH';
+    case 'vi':
+      return 'VI_VN';
+    case 'id':
+      return 'ID_ID';
+    case 'hi':
+      return 'HI_IN';
+    case 'uk':
+      return 'UK_UA';
+    case 'tr':
+      return 'TR_TR';
+    case 'en':
+    default:
+      return 'EN_US';
   }
 }
 
@@ -269,6 +329,7 @@ export const requestPayPalPayment = async (
     const returnUrl = params.returnUrl || getPortOneReturnUrl();
     const hostname = window.location.hostname;
     const locale = getLocaleFromHost(window.location.host);
+    const portOneLocale = toPortOneLocale(locale);
 
     // PayPal 통화 결정
     const isJapanSite = locale === 'ja' || isJapaneseSiteHost(hostname);
@@ -338,6 +399,7 @@ export const requestPayPalPayment = async (
       orderName: params.description,
       totalAmount: finalAmount,
       currency: portOneCurrency,
+      locale: portOneLocale,
       customer: {
         customerId: params.userId ?? undefined,
         email: params.buyerEmail ?? undefined,

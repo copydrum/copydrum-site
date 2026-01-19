@@ -32,6 +32,8 @@ const PortOnePayPalReturnPage = lazy(() => import('../pages/payments/portone-pay
 const PortOneReturnPage = lazy(() => import('../pages/PortOneReturn'));
 const PortonePaypalTestPage = lazy(() => import('../pages/dev/PortonePaypalTest'));
 const RefundPolicyPage = lazy(() => import('../pages/policy/RefundPolicyPage'));
+const CollectionsPage = lazy(() => import('../pages/collections/page'));
+const CollectionDetailPage = lazy(() => import('../pages/collection-detail/page'));
 
 // 로딩 컴포넌트
 const LoadingSpinner = () => (
@@ -305,6 +307,22 @@ const routes: RouteObject[] = [
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <RefundPolicyPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/collections',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <CollectionsPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/collections/:id',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <CollectionDetailPage />
       </Suspense>
     ),
   },

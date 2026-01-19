@@ -611,7 +611,10 @@ const buildInitialTranslations = (
   const safeFallback = fallback ?? '';
   const initial: Record<string, string> = {};
 
-  languages.forEach(({ code }) => {
+  // 악보 모음집은 한국어와 영어만 지원
+  const collectionLanguageCodes = ['ko', 'en'];
+  
+  collectionLanguageCodes.forEach((code) => {
     if (existing?.[code]) {
       initial[code] = existing[code] ?? '';
     } else if (code === 'ko') {
@@ -658,10 +661,9 @@ const copyKoreanTranslationsToAll = (setState: CollectionFormStateSetter) => {
     const titleTranslations = { ...(prev.title_translations ?? {}) };
     const descriptionTranslations = { ...(prev.description_translations ?? {}) };
 
-    languages.forEach(({ code }) => {
-      titleTranslations[code] = title;
-      descriptionTranslations[code] = description;
-    });
+    // 악보 모음집은 영어에만 복사
+    titleTranslations['en'] = title;
+    descriptionTranslations['en'] = description;
 
     return {
       ...prev,
@@ -678,7 +680,9 @@ const renderTranslationEditor = (
   onChange: (lang: string, field: CollectionTranslationField, value: string) => void,
   onCopyKoreanToAll: () => void,
 ) => {
-  const currentLanguage = languages.find((lang) => lang.code === activeLang) ?? languages[0];
+  // 악보 모음집은 한국어와 영어만 지원
+  const collectionLanguages = languages.filter((lang) => lang.code === 'ko' || lang.code === 'en');
+  const currentLanguage = collectionLanguages.find((lang) => lang.code === activeLang) ?? collectionLanguages[0];
   const resolvedLang = currentLanguage.code;
 
   const getFieldValue = (field: CollectionTranslationField) => {
@@ -693,7 +697,7 @@ const renderTranslationEditor = (
     <div className="space-y-4 border border-gray-200 rounded-xl p-4 bg-gray-50">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
-          {languages.map((lang) => (
+          {collectionLanguages.map((lang) => (
             <button
               key={lang.code}
               type="button"
@@ -713,7 +717,7 @@ const renderTranslationEditor = (
           onClick={onCopyKoreanToAll}
           className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 font-medium"
         >
-          한국어 내용을 전체 언어에 복사
+          한국어 내용을 영어로 복사
         </button>
       </div>
 
@@ -744,7 +748,7 @@ const renderTranslationEditor = (
         </div>
       </div>
       <p className="text-xs text-gray-500">
-        언어별 제목과 설명을 입력하면 해당 언어 사이트에서 노출됩니다. 입력하지 않은 언어는 한국어(기본값)으로 노출됩니다.
+        한국어 페이지에서는 한국어로, 그 외 모든 페이지에서는 영어로 노출됩니다. 영어 번역이 없으면 한국어가 표시됩니다.
       </p>
     </div>
   );

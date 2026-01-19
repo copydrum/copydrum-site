@@ -89,6 +89,11 @@ export default function MainHeader({ user }: MainHeaderProps) {
       return categoryParam;
     }
     
+    // 모음집 페이지 활성 상태
+    if (location.pathname === '/collections' || location.pathname.startsWith('/collections/')) {
+      return 'collections';
+    }
+    
     return null;
   }, [location]);
 
@@ -107,8 +112,15 @@ export default function MainHeader({ user }: MainHeaderProps) {
   }, [genreList, categories, i18n.language, t]);
 
   const navItems = useMemo(
-    () => [...genreNavItems],
-    [genreNavItems],
+    () => [
+      ...genreNavItems,
+      {
+        id: 'collections',
+        label: t('nav.collections'),
+        href: '/collections',
+      },
+    ],
+    [genreNavItems, t],
   );
 
   const containerClassName = useMemo(() => {

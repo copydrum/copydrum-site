@@ -174,6 +174,13 @@ export default function Header({ user: propUser }: HeaderProps) {
             {t('nav.categories')}
           </a>
           <a
+            href="/collections"
+            className={`font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors duration-200 ${isActive('/collections') ? 'text-white' : 'text-white hover:text-blue-200'
+              }`}
+          >
+            {t('nav.collections')}
+          </a>
+          <a
             href={customOrderLink}
             className={`font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors duration-200 ${isCustomOrderActive() ? 'text-white' : 'text-white hover:text-blue-200'
               }`}

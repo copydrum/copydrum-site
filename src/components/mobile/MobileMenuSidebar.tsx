@@ -27,6 +27,7 @@ interface NavItem {
 
 const baseMenuItems: NavItem[] = [
   { labelKey: 'nav.categories', href: '/categories', icon: 'ri-apps-line' },
+  { labelKey: 'nav.collections', href: '/collections', icon: 'ri-bookmark-line' },
   { labelKey: 'nav.customOrder', href: '/custom-order', icon: 'ri-edit-line' },
 ];
 

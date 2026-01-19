@@ -29,6 +29,19 @@ interface Category {
   name: string;
 }
 
+interface Collection {
+  id: string;
+  title: string;
+  description?: string;
+  thumbnail_url?: string;
+  original_price: number;
+  sale_price: number;
+  discount_percentage: number;
+  is_active: boolean;
+  title_translations?: Record<string, string> | null;
+  description_translations?: Record<string, string> | null;
+}
+
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -37,6 +50,8 @@ export default function Home() {
   const [popularSheets, setPopularSheets] = useState<DrumSheet[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedGenre, setSelectedGenre] = useState<string>('');
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [currentCollectionIndex, setCurrentCollectionIndex] = useState(0);
   const navigate = useNavigate();
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoriteLoadingIds, setFavoriteLoadingIds] = useState<Set<string>>(new Set());
@@ -71,6 +86,26 @@ export default function Home() {
       console.error(t('home.console.latestSheetsLoadError'), error);
     }
   }, [t, categories, isKoreanSite]);
+
+  const loadCollections = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('collections')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+      const normalized = (data || []).map((collection: any) => ({
+        ...collection,
+        category_ids: collection.category_ids || (collection.category_id ? [collection.category_id] : [])
+      }));
+      setCollections(normalized || []);
+    } catch (error) {
+      console.error('컬렉션 로드 오류:', error);
+    }
+  }, []);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -457,6 +492,24 @@ export default function Home() {
   useEffect(() => {
     loadFavorites();
   }, [loadFavorites]);
+
+  useEffect(() => {
+    loadCollections();
+  }, [loadCollections]);
+
+  // 컬렉션 슬라이드 자동 전환
+  useEffect(() => {
+    if (collections.length <= 3) return;
+    
+    const interval = setInterval(() => {
+      setCurrentCollectionIndex((prev) => {
+        const maxIndex = Math.max(0, collections.length - 3);
+        return (prev + 1) % (maxIndex + 1);
+      });
+    }, 5000); // 5초마다 전환
+
+    return () => clearInterval(interval);
+  }, [collections.length]);
 
   const getThumbnailUrl = (sheet: DrumSheet): string => {
     if (sheet.youtube_url) {
@@ -986,31 +1039,212 @@ export default function Home() {
           </div>
         </section>
 
-      </div>
+        {/* Collections Slider - 인기 악보 아래 */}
+        {collections.length > 0 && (
+          <section className="py-6 md:py-12">
+            <div className="w-full">
+              <div className="mb-6 flex items-center justify-between">
+                <h3 className="text-2xl md:text-3xl font-bold text-gray-900">
+                  {t('home.collections') || '악보 모음집'}
+                </h3>
+                <a
+                  href="/collections"
+                  className="text-sm text-gray-500 hover:text-gray-700 font-medium"
+                >
+                  {t('home.viewAll') || '전체보기'} &gt;
+                </a>
+              </div>
 
-      {/* Custom Order CTA */}
-      <div className="">
-        <section className="bg-blue-600 text-center text-white">
-          <div className="px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
-            <h3 className="text-2xl sm:text-3xl font-bold mb-4">{t('home.customOrderCTATitle')}</h3>
-            {/* Mobile Version */}
-            <div className="md:hidden text-lg sm:text-xl text-blue-100 mb-8 space-y-1">
-              <p>{t('home.customOrderCTADescription')}</p>
-              <p>{t('home.customOrderCTADescription2')}</p>
+              {/* 슬라이드 컨테이너 - 한 줄에 3개 */}
+              <div className="relative overflow-hidden">
+                <div
+                  className="flex transition-transform duration-500 ease-in-out"
+                  style={{
+                    transform: `translateX(-${currentCollectionIndex * (100 / 3)}%)`,
+                  }}
+                >
+                  {collections.map((collection) => {
+                    const getCollectionTitle = (): string => {
+                      const currentLang = i18n.language;
+                      const targetLang = currentLang === 'ko' ? 'ko' : 'en';
+                      
+                      if (targetLang === 'ko') {
+                        return collection.title;
+                      }
+                      
+                      return collection.title_translations?.['en'] || collection.title;
+                    };
+
+                    const getCollectionDescription = (): string => {
+                      const currentLang = i18n.language;
+                      const targetLang = currentLang === 'ko' ? 'ko' : 'en';
+                      
+                      if (targetLang === 'ko') {
+                        return collection.description || '';
+                      }
+                      
+                      return collection.description_translations?.['en'] || collection.description || '';
+                    };
+
+                    const collectionPrice = collection.sale_price > 0 ? collection.sale_price : collection.original_price;
+
+                    return (
+                      <div
+                        key={collection.id}
+                        className="min-w-[33.333%] px-3"
+                        onClick={() => navigate(`/collections/${collection.id}`)}
+                      >
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group h-full">
+                        {/* 썸네일 */}
+                        {collection.thumbnail_url ? (
+                          <div className="aspect-video w-full overflow-hidden bg-gray-100">
+                            <img
+                              src={collection.thumbnail_url}
+                              alt={getCollectionTitle()}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                              onError={(e) => {
+                                const img = e.target as HTMLImageElement;
+                                img.style.display = 'none';
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="aspect-video w-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                            <div className="text-white text-center">
+                              <i className="ri-music-2-line text-4xl mb-2"></i>
+                              <p className="text-lg font-bold">{getCollectionTitle()}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 내용 */}
+                        <div className="p-6">
+                          <div className="flex items-start justify-between mb-2">
+                            <span className="px-2 py-1 text-xs font-semibold text-blue-600 bg-blue-50 rounded">
+                              {t('home.collections') || '모음집'}
+                            </span>
+                            {collection.discount_percentage > 0 && (
+                              <span className="px-2 py-1 text-xs font-semibold text-red-600 bg-red-50 rounded">
+                                {collection.discount_percentage}% OFF
+                              </span>
+                            )}
+                          </div>
+
+                          <h3 className="text-xl font-bold text-gray-900 mb-2 line-clamp-2 group-hover:text-blue-600 transition-colors duration-300">
+                            {getCollectionTitle()}
+                          </h3>
+
+                          {getCollectionDescription() && (
+                            <p className="text-gray-600 text-sm mb-4 line-clamp-2 group-hover:text-gray-700 transition-colors duration-300">
+                              {getCollectionDescription()}
+                            </p>
+                          )}
+
+                          {/* 가격 */}
+                          <div className="flex items-center justify-between">
+                            <div>
+                              {collection.sale_price > 0 ? (
+                                <div>
+                                  <span className="text-2xl font-bold text-gray-900">
+                                    {formatCurrency(collectionPrice)}
+                                  </span>
+                                  {collection.original_price > collection.sale_price && (
+                                    <span className="ml-2 text-sm text-gray-500 line-through">
+                                      {formatCurrency(collection.original_price)}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-2xl font-bold text-gray-900">
+                                  {formatCurrency(collection.original_price)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                  })}
+                </div>
+
+                {/* 네비게이션 버튼 */}
+                {collections.length > 3 && (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const maxIndex = Math.max(0, collections.length - 3);
+                        setCurrentCollectionIndex((prev) => (prev - 1 + maxIndex + 1) % (maxIndex + 1));
+                      }}
+                      className="absolute left-0 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-2 shadow-lg transition-all z-10"
+                      aria-label={t('home.prevSlide') || '이전 슬라이드'}
+                    >
+                      <i className="ri-arrow-left-line text-xl"></i>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const maxIndex = Math.max(0, collections.length - 3);
+                        setCurrentCollectionIndex((prev) => (prev + 1) % (maxIndex + 1));
+                      }}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-2 shadow-lg transition-all z-10"
+                      aria-label={t('home.nextSlide') || '다음 슬라이드'}
+                    >
+                      <i className="ri-arrow-right-line text-xl"></i>
+                    </button>
+                  </>
+                )}
+
+                {/* 인디케이터 */}
+                {collections.length > 3 && (
+                  <div className="flex justify-center gap-2 mt-6">
+                    {Array.from({ length: Math.max(1, collections.length - 2) }).map((_, index) => (
+                      <button
+                        key={index}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCurrentCollectionIndex(index);
+                        }}
+                        className={`h-2 rounded-full transition-all ${
+                          index === currentCollectionIndex
+                            ? 'bg-blue-600 w-8'
+                            : 'bg-gray-300 w-2 hover:bg-gray-400'
+                        }`}
+                        aria-label={t('home.slideNumber', { number: index + 1 }) || `슬라이드 ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            {/* PC Version */}
-            <div className="hidden md:block text-xl text-blue-100 mb-8 space-y-1">
-              <p>{t('home.customOrderCTADescription')}</p>
-              <p>{t('home.customOrderCTADescription2')}</p>
+          </section>
+        )}
+
+        {/* Custom Order CTA - 모음집 아래 */}
+        <div className="">
+          <section className="bg-blue-600 text-center text-white -mx-4 sm:-mx-6 lg:-mx-8">
+            <div className="px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
+              <h3 className="text-2xl sm:text-3xl font-bold mb-4">{t('home.customOrderCTATitle')}</h3>
+              {/* Mobile Version */}
+              <div className="md:hidden text-lg sm:text-xl text-blue-100 mb-8 space-y-1">
+                <p>{t('home.customOrderCTADescription')}</p>
+                <p>{t('home.customOrderCTADescription2')}</p>
+              </div>
+              {/* PC Version */}
+              <div className="hidden md:block text-xl text-blue-100 mb-8 space-y-1">
+                <p>{t('home.customOrderCTADescription')}</p>
+                <p>{t('home.customOrderCTADescription2')}</p>
+              </div>
+              <button
+                onClick={() => navigate('/custom-order')}
+                className="bg-white text-blue-600 px-8 py-4 rounded-lg hover:bg-gray-100 font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors shadow-lg"
+              >
+                {t('home.customOrderCTAButton')}
+              </button>
             </div>
-            <button
-              onClick={() => navigate('/custom-order')}
-              className="bg-white text-blue-600 px-8 py-4 rounded-lg hover:bg-gray-100 font-semibold text-lg whitespace-nowrap cursor-pointer transition-colors shadow-lg"
-            >
-              {t('home.customOrderCTAButton')}
-            </button>
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
 
       {/* Hero Section - 최하단으로 이동 */}
