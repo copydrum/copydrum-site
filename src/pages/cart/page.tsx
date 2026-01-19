@@ -4,6 +4,7 @@ import { useCart } from '../../hooks/useCart';
 import { useAuthStore } from '../../stores/authStore';
 import { splitPurchasedSheetIds } from '../../lib/purchaseCheck';
 import { BankTransferInfoModal, PaymentMethodSelector } from '../../components/payments';
+import ConfirmModal from '../../components/common/ConfirmModal';
 import type { PaymentMethod } from '../../components/payments';
 import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
@@ -30,6 +31,10 @@ export default function CartPage() {
   const { credits } = useUserCredits(user);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [processing, setProcessing] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    message: string;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
   const [showPaymentSelector, setShowPaymentSelector] = useState(false);
   const [pendingPurchase, setPendingPurchase] = useState<PendingCartPurchase | null>(null);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
@@ -110,23 +115,29 @@ export default function CartPage() {
       return;
     }
 
-    if (confirm(t('cartPage.confirmDelete', { count: selectedItems.length }))) {
-      const success = await removeSelectedItems(selectedItems);
-      if (success) {
-        setSelectedItems([]);
-      }
-    }
+    setConfirmDialog({
+      message: t('cartPage.confirmDelete', { count: selectedItems.length }),
+      onConfirm: async () => {
+        const success = await removeSelectedItems(selectedItems);
+        if (success) {
+          setSelectedItems([]);
+        }
+      },
+    });
   };
 
   const handleClearCart = async () => {
     if (cartItems.length === 0) return;
 
-    if (confirm(t('cartPage.confirmClear'))) {
-      const success = await clearCart();
-      if (success) {
-        setSelectedItems([]);
-      }
-    }
+    setConfirmDialog({
+      message: t('cartPage.confirmClear'),
+      onConfirm: async () => {
+        const success = await clearCart();
+        if (success) {
+          setSelectedItems([]);
+        }
+      },
+    });
   };
 
   const handlePurchase = async (itemIds: string[]) => {
@@ -222,6 +233,10 @@ export default function CartPage() {
     });
     setPaymentProcessing(false);
     setBankTransferInfo(null);
+    if (currency !== 'KRW') {
+      setShowPayPalModal(true);
+      return;
+    }
     setShowPaymentSelector(true);
   };
 
@@ -556,6 +571,21 @@ export default function CartPage() {
             </>
           )}
         </div>
+
+        <ConfirmModal
+          open={!!confirmDialog}
+          title={t('button.confirm')}
+          message={confirmDialog?.message || ''}
+          confirmLabel={t('button.confirm')}
+          cancelLabel={t('button.cancel')}
+          onConfirm={async () => {
+            if (!confirmDialog) return;
+            const action = confirmDialog.onConfirm;
+            setConfirmDialog(null);
+            await action();
+          }}
+          onCancel={() => setConfirmDialog(null)}
+        />
 
         <BankTransferInfoModal
           open={showBankTransferModal}
