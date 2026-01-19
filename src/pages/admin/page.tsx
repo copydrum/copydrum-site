@@ -3867,37 +3867,58 @@ const AdminPage: React.FC = () => {
 
   // 유튜브 썸네일 가져오기
   const fetchYoutubeThumbnail = async (youtubeUrl: string, isEditing: boolean = false) => {
-    const videoId = extractVideoId(youtubeUrl);
-    if (!videoId) {
-      alert('유효한 유튜브 URL이 아닙니다.');
-      return;
-    }
-
-    // 먼저 maxresdefault.jpg 시도
-    const maxResUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
-
     try {
-      // 이미지 존재 여부 확인
-      const response = await fetch(maxResUrl, { method: 'HEAD' });
-
-      if (response.ok) {
-        if (isEditing) {
-          setEditingSheetData(prev => ({ ...prev, thumbnail_url: maxResUrl }));
-        } else {
-          setNewSheet(prev => ({ ...prev, thumbnail_url: maxResUrl }));
-        }
+      const videoId = extractVideoId(youtubeUrl);
+      if (!videoId) {
+        alert('유효한 유튜브 URL이 아닙니다.');
         return;
       }
-    } catch (error) {
-      console.log('maxresdefault.jpg 로드 실패, 0.jpg로 폴백');
-    }
 
-    // 폴백: 0.jpg 사용
-    const fallbackUrl = `https://img.youtube.com/vi/${videoId}/0.jpg`;
-    if (isEditing) {
-      setEditingSheetData(prev => ({ ...prev, thumbnail_url: fallbackUrl }));
-    } else {
-      setNewSheet(prev => ({ ...prev, thumbnail_url: fallbackUrl }));
+      // 먼저 maxresdefault.jpg 시도
+      const maxResUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+
+      try {
+        // 이미지 존재 여부 확인
+        const response = await fetch(maxResUrl, { method: 'HEAD' });
+
+        if (response.ok && response.status === 200) {
+          if (isEditing) {
+            setEditingSheetData(prev => ({ ...prev, thumbnail_url: maxResUrl }));
+          } else {
+            setNewSheet(prev => ({ ...prev, thumbnail_url: maxResUrl }));
+          }
+          return;
+        } else if (response.status === 404) {
+          // 404 에러인 경우 폴백으로 진행
+          console.log('maxresdefault.jpg를 찾을 수 없음 (404), 0.jpg로 폴백');
+        }
+      } catch (fetchError) {
+        console.log('maxresdefault.jpg 로드 실패, 0.jpg로 폴백:', fetchError);
+      }
+
+      // 폴백: 0.jpg 사용
+      const fallbackUrl = `https://img.youtube.com/vi/${videoId}/0.jpg`;
+      
+      // 폴백 이미지도 확인
+      try {
+        const fallbackResponse = await fetch(fallbackUrl, { method: 'HEAD' });
+        if (fallbackResponse.ok && fallbackResponse.status === 200) {
+          if (isEditing) {
+            setEditingSheetData(prev => ({ ...prev, thumbnail_url: fallbackUrl }));
+          } else {
+            setNewSheet(prev => ({ ...prev, thumbnail_url: fallbackUrl }));
+          }
+        } else {
+          console.warn('유튜브 썸네일을 가져올 수 없습니다 (404)');
+          alert('유튜브 썸네일을 가져올 수 없습니다. URL을 확인해주세요.');
+        }
+      } catch (fallbackError) {
+        console.error('폴백 썸네일 로드 실패:', fallbackError);
+        alert('유튜브 썸네일을 가져올 수 없습니다. URL을 확인해주세요.');
+      }
+    } catch (error) {
+      console.error('유튜브 썸네일 가져오기 오류:', error);
+      alert('유튜브 썸네일을 가져오는 중 오류가 발생했습니다.');
     }
   };
 
@@ -7757,8 +7778,11 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                 onClick={async () => {
                   if (!editingSheet) return;
 
-                  const categoryIds = editingSheetData.category_ids || [];
-                  if (!editingSheetData.title || !editingSheetData.artist || categoryIds.length === 0) {
+                  // editingSheetData를 한 번만 읽어서 변수에 저장 (클로저 문제 방지)
+                  const currentSheetData = editingSheetData;
+                  const categoryIds = currentSheetData.category_ids || [];
+                  
+                  if (!currentSheetData.title || !currentSheetData.artist || categoryIds.length === 0) {
                     alert('제목, 아티스트, 카테고리는 필수입니다.');
                     return;
                   }
@@ -7768,34 +7792,34 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                     const categoryId = categoryIds.length > 0 ? categoryIds[0] : '';
 
                     const updateData: any = {
-                      title: editingSheetData.title,
-                      artist: editingSheetData.artist,
-                      difficulty: editingSheetData.difficulty,
-                      price: editingSheetData.price,
+                      title: currentSheetData.title,
+                      artist: currentSheetData.artist,
+                      difficulty: currentSheetData.difficulty,
+                      price: currentSheetData.price,
                       category_id: categoryId,
-                      is_active: editingSheetData.is_active
+                      is_active: currentSheetData.is_active
                     };
 
-                    if (editingSheetData.thumbnail_url) {
-                      updateData.thumbnail_url = editingSheetData.thumbnail_url;
+                    if (currentSheetData.thumbnail_url) {
+                      updateData.thumbnail_url = currentSheetData.thumbnail_url;
                     } else {
                       updateData.thumbnail_url = null;
                     }
 
-                    if (editingSheetData.album_name) {
-                      updateData.album_name = editingSheetData.album_name;
+                    if (currentSheetData.album_name) {
+                      updateData.album_name = currentSheetData.album_name;
                     }
 
-                    if (editingSheetData.page_count > 0) {
-                      updateData.page_count = editingSheetData.page_count;
+                    if (currentSheetData.page_count > 0) {
+                      updateData.page_count = currentSheetData.page_count;
                     }
 
-                    if (editingSheetData.tempo > 0) {
-                      updateData.tempo = editingSheetData.tempo;
+                    if (currentSheetData.tempo > 0) {
+                      updateData.tempo = currentSheetData.tempo;
                     }
 
-                    if (editingSheetData.youtube_url) {
-                      updateData.youtube_url = editingSheetData.youtube_url;
+                    if (currentSheetData.youtube_url) {
+                      updateData.youtube_url = currentSheetData.youtube_url;
                     }
 
                     const { error } = await supabase
@@ -7819,12 +7843,11 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                       console.log('기존 카테고리 관계 삭제 완료');
                     }
 
-                    // 새로운 관계 추가
-                    const categoryIds = editingSheetData.category_ids || [];
+                    // 새로운 관계 추가 (이미 선언된 categoryIds 변수 재사용)
                     if (categoryIds.length > 0) {
-                      const categoryRelations = categoryIds.map(categoryId => ({
+                      const categoryRelations = categoryIds.map(catId => ({
                         sheet_id: editingSheet.id,
-                        category_id: categoryId
+                        category_id: catId
                       }));
 
                       console.log('새 카테고리 관계 추가 시작:', categoryRelations);
