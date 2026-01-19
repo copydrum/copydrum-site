@@ -3902,12 +3902,17 @@ const AdminPage: React.FC = () => {
   };
 
   // PDF 페이지수 추출
-  const extractPdfPageCount = async (file: File): Promise<number> => {
+  const extractPdfPageCount = async (source: File | ArrayBuffer | Uint8Array): Promise<number> => {
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const data =
+        source instanceof File
+          ? await source.arrayBuffer()
+          : source;
+      const loadingTask = pdfjsLib.getDocument({ data });
       const pdf = await loadingTask.promise;
-      return pdf.numPages;
+      const pageCount = pdf.numPages;
+      await pdf.destroy();
+      return pageCount;
     } catch (error) {
       console.error('PDF 페이지수 추출 오류:', error);
       return 0;
@@ -3963,12 +3968,13 @@ const AdminPage: React.FC = () => {
   const handlePdfUpload = async (file: File) => {
     setIsUploadingPdf(true);
     try {
-      // File 객체를 ArrayBuffer로 변환 (한 번만 읽고 재사용)
+      // File 객체를 ArrayBuffer로 변환
       // (File 객체를 직접 업로드하면 원시 데이터가 표시되는 문제 방지)
       const arrayBuffer = await file.arrayBuffer();
+      const uploadBuffer = arrayBuffer.slice(0);
       
-      // 1. 페이지수 추출 (arrayBuffer 사용)
-      const pageCount = await extractPdfPageCount(new File([arrayBuffer], file.name, { type: 'application/pdf' }));
+      // 1. 페이지수 추출 (arrayBuffer 복사본 사용)
+      const pageCount = await extractPdfPageCount(arrayBuffer.slice(0));
       setNewSheet(prev => ({ ...prev, page_count: pageCount }));
 
       // 2. PDF 파일을 Supabase Storage에 업로드
@@ -3986,7 +3992,7 @@ const AdminPage: React.FC = () => {
       const filePath = `pdfs/${fileName}`;
 
       // Blob으로 만들어서 업로드
-      const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+      const blob = new Blob([uploadBuffer], { type: 'application/pdf' });
 
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('drum-sheets')
@@ -4008,8 +4014,8 @@ const AdminPage: React.FC = () => {
       let previewImageUrl = '';
       try {
         console.log('미리보기 이미지 생성 시작 (클라이언트 사이드 렌더링)');
-        // 이미 생성한 arrayBuffer를 재사용
-        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const previewData = arrayBuffer.slice(0);
+        const loadingTask = pdfjsLib.getDocument({ data: previewData });
         const pdf = await loadingTask.promise;
         if (pdf.numPages === 0) {
           throw new Error('PDF에 페이지가 없습니다.');
@@ -4039,6 +4045,7 @@ const AdminPage: React.FC = () => {
             }
           }, 'image/jpeg', 0.85);
         });
+        await pdf.destroy();
 
         // 미리보기 이미지명도 안전하게 처리
         const imageFileName = `preview_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
@@ -4064,6 +4071,25 @@ const AdminPage: React.FC = () => {
 
       } catch (previewError) {
         console.warn('미리보기 이미지 생성 중 오류 발생 (악보 등록은 계속 진행):', previewError);
+      }
+
+      // 클라이언트 렌더링 실패 시 서버 함수로 대체 미리보기 생성
+      if (!previewImageUrl && pdfUrl) {
+        try {
+          console.log('서버 미리보기 생성 시도 (pdf-to-image-mosaic)');
+          const { data, error } = await supabase.functions.invoke('pdf-to-image-mosaic', {
+            body: { pdfUrl }
+          });
+          if (error) {
+            throw error;
+          }
+          if (data?.imageUrl) {
+            previewImageUrl = data.imageUrl;
+            setNewSheet(prev => ({ ...prev, preview_image_url: previewImageUrl }));
+          }
+        } catch (fallbackError) {
+          console.warn('서버 미리보기 생성 실패:', fallbackError);
+        }
       }
 
       setNewSheet(prev => ({ ...prev, pdf_url: pdfUrl }));
@@ -4534,9 +4560,9 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                 
                 // File 객체를 ArrayBuffer로 변환한 후 Blob으로 만들어서 업로드
                 // (이전에 해결했던 문제: File 객체를 직접 업로드하면 원시 데이터가 표시되는 문제 방지)
-                // File 객체는 한 번만 읽을 수 있으므로, arrayBuffer를 한 번만 생성하고 재사용
                 const arrayBuffer = await matchedFile.arrayBuffer();
-                const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+                const uploadBuffer = arrayBuffer.slice(0);
+                const blob = new Blob([uploadBuffer], { type: 'application/pdf' });
                 
                 const { error: uploadError } = await supabase.storage
                   .from('drum-sheets')
@@ -4553,45 +4579,68 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
 
                   // 페이지 수 추출 (선택 사항)
                   try {
-                    // arrayBuffer를 사용하여 페이지 수 추출
-                    const pageCountResult = await extractPdfPageCount(new File([arrayBuffer], matchedFile.name, { type: 'application/pdf' }));
+                    // arrayBuffer 복사본으로 페이지 수 추출
+                    const pageCountResult = await extractPdfPageCount(arrayBuffer.slice(0));
                     if (pageCountResult > 0) pageCount = pageCountResult;
                   } catch (e) {
                     console.warn(`행 ${rowNum}: 페이지 수 추출 실패`);
                   }
 
                   // [추가] 미리보기 이미지 생성 및 업로드
+                  let pdfDocument: any = null; // 나중에 destroy 하기 위해 변수 선언
+                  
                   try {
                     console.log(`행 ${rowNum}: 미리보기 이미지 생성 시작`);
-                    // 이미 읽은 arrayBuffer를 재사용
-                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-                    const pdf = await loadingTask.promise;
                     
-                    if (pdf.numPages === 0) {
+                    // 1. PDF 로드
+                    const loadingTask = pdfjsLib.getDocument({ 
+                      data: new Uint8Array(arrayBuffer), // slice 대신 Uint8Array 권장
+                      cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/cmaps/`, // 한글 깨짐 방지
+                      cMapPacked: true,
+                    });
+                    
+                    pdfDocument = await loadingTask.promise;
+                    
+                    if (pdfDocument.numPages === 0) {
                       throw new Error('PDF에 페이지가 없습니다.');
                     }
                     
-                    const page = await pdf.getPage(1);
-                    const viewport = page.getViewport({ scale: 2.0 });
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
+                    // 2. 1페이지 가져오기
+                    const page = await pdfDocument.getPage(1);
                     
-                    if (!context) {
+                    // 3. 뷰포트 설정 (화질을 위해 스케일 조정)
+                    const viewport = page.getViewport({ scale: 1.5 });
+                    
+                    // 4. 캔버스 준비 (반복문 안에서 매번 새로 생성)
+                    const canvas = document.createElement('canvas');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    const ctx = canvas.getContext('2d');
+                    
+                    if (!ctx) {
                       throw new Error('Canvas context를 가져올 수 없습니다.');
                     }
                     
-                    canvas.width = viewport.width;
-                    canvas.height = viewport.height;
+                    // 🔥 [핵심 해결책] 캔버스 초기화! (이게 없으면 이미지가 겹칩니다)
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
                     
-                    await page.render({
-                      canvasContext: context,
-                      viewport: viewport
-                    }).promise;
+                    // 흰색 배경을 강제로 깔아주는 것도 좋습니다 (투명 PDF 대비)
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
                     
-                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                    // 5. 렌더링
+                    const renderContext = {
+                      canvasContext: ctx,
+                      viewport: viewport,
+                    };
+                    await page.render(renderContext).promise;
+                    
+                    // 6. 모자이크 효과 적용
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     const mosaicImageData = applyMosaicToImageData(imageData, 15);
-                    context.putImageData(mosaicImageData, 0, 0);
+                    ctx.putImageData(mosaicImageData, 0, 0);
                     
+                    // 7. 이미지 추출 (Blob)
                     const blob = await new Promise<Blob>((resolve, reject) => {
                       canvas.toBlob((blob) => {
                         if (blob) {
@@ -4599,7 +4648,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                         } else {
                           reject(new Error('Canvas를 Blob으로 변환 실패'));
                         }
-                      }, 'image/jpeg', 0.85);
+                      }, 'image/jpeg', 0.8);
                     });
                     
                     const imageFileName = `preview_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
@@ -4625,6 +4674,40 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                     console.error(`행 ${rowNum}: 미리보기 이미지 생성 실패`, e);
                     const errorMessage = e instanceof Error ? e.message : '알 수 없는 오류';
                     console.warn(`행 ${rowNum}: 미리보기 이미지 생성 실패 - ${errorMessage}`);
+                  } finally {
+                    // 🔥 [중요] 메모리 해제
+                    // 반복문에서 대량 처리 시, 이걸 안 하면 메모리 터져서 이미지가 깨집니다.
+                    if (pdfDocument) {
+                      try {
+                        if (pdfDocument.destroy) {
+                          await pdfDocument.destroy();
+                        }
+                        if (pdfDocument.cleanup) {
+                          await pdfDocument.cleanup();
+                        }
+                      } catch (destroyError) {
+                        console.warn(`행 ${rowNum}: PDF 문서 정리 중 오류 (무시됨):`, destroyError);
+                      }
+                    }
+                  }
+
+                  // 클라이언트 렌더링 실패 시 서버 함수로 대체 미리보기 생성
+                  if (!previewImageUrl && pdfUrl) {
+                    try {
+                      console.log(`행 ${rowNum}: 서버 미리보기 생성 시도 (pdf-to-image-mosaic)`);
+                      const { data, error } = await supabase.functions.invoke('pdf-to-image-mosaic', {
+                        body: { pdfUrl }
+                      });
+                      if (error) {
+                        throw error;
+                      }
+                      if (data?.imageUrl) {
+                        previewImageUrl = data.imageUrl;
+                        console.log(`행 ${rowNum}: 서버 미리보기 생성 완료`);
+                      }
+                    } catch (fallbackError) {
+                      console.warn(`행 ${rowNum}: 서버 미리보기 생성 실패`, fallbackError);
+                    }
                   }
                 } else {
                   console.error(`행 ${rowNum}: PDF 업로드 실패`, uploadError);
@@ -7513,22 +7596,24 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                               type="checkbox"
                               checked={(editingSheetData.category_ids || []).includes(category.id)}
                               onChange={(e) => {
-                                const currentCategoryIds = editingSheetData.category_ids || [];
-                                if (e.target.checked) {
-                                  const newCategoryIds = [...currentCategoryIds, category.id];
-                                  setEditingSheetData({
-                                    ...editingSheetData,
-                                    category_ids: newCategoryIds,
-                                    category_id: category.id // 첫 번째 선택된 카테고리를 category_id에도 저장 (하위 호환성)
-                                  });
-                                } else {
-                                  const newCategoryIds = currentCategoryIds.filter((id) => id !== category.id);
-                                  setEditingSheetData({
-                                    ...editingSheetData,
-                                    category_ids: newCategoryIds,
-                                    category_id: newCategoryIds.length > 0 ? newCategoryIds[0] : '' // 첫 번째 카테고리를 category_id에 저장
-                                  });
-                                }
+                                setEditingSheetData((prev) => {
+                                  const currentCategoryIds = prev.category_ids || [];
+                                  if (e.target.checked) {
+                                    const newCategoryIds = [...currentCategoryIds, category.id];
+                                    return {
+                                      ...prev,
+                                      category_ids: newCategoryIds,
+                                      category_id: category.id // 첫 번째 선택된 카테고리를 category_id에도 저장 (하위 호환성)
+                                    };
+                                  } else {
+                                    const newCategoryIds = currentCategoryIds.filter((id) => id !== category.id);
+                                    return {
+                                      ...prev,
+                                      category_ids: newCategoryIds,
+                                      category_id: newCategoryIds.length > 0 ? newCategoryIds[0] : '' // 첫 번째 카테고리를 category_id에 저장
+                                    };
+                                  }
+                                });
                               }}
                               className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                             />
@@ -7597,7 +7682,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   value={editingSheetData.youtube_url}
                   onChange={(e) => {
                     const url = e.target.value;
-                    setEditingSheetData({ ...editingSheetData, youtube_url: url });
+                    setEditingSheetData((prev) => ({ ...prev, youtube_url: url }));
                     // 유튜브 URL이 입력되면 자동으로 썸네일 가져오기
                     if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
                       fetchYoutubeThumbnail(url, true);
