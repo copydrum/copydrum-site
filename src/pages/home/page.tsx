@@ -52,6 +52,7 @@ export default function Home() {
   const [selectedGenre, setSelectedGenre] = useState<string>('');
   const [collections, setCollections] = useState<Collection[]>([]);
   const [currentCollectionIndex, setCurrentCollectionIndex] = useState(0);
+  const [collectionsPerView, setCollectionsPerView] = useState(3);
   const navigate = useNavigate();
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoriteLoadingIds, setFavoriteLoadingIds] = useState<Set<string>>(new Set());
@@ -497,19 +498,38 @@ export default function Home() {
     loadCollections();
   }, [loadCollections]);
 
+  // 컬렉션 슬라이드: 화면 크기에 따른 노출 개수
+  useEffect(() => {
+    const updatePerView = () => {
+      if (typeof window === 'undefined') return;
+      const width = window.innerWidth;
+      if (width >= 1024) {
+        setCollectionsPerView(3);
+      } else if (width >= 768) {
+        setCollectionsPerView(2);
+      } else {
+        setCollectionsPerView(1);
+      }
+    };
+
+    updatePerView();
+    window.addEventListener('resize', updatePerView);
+    return () => window.removeEventListener('resize', updatePerView);
+  }, []);
+
   // 컬렉션 슬라이드 자동 전환
   useEffect(() => {
-    if (collections.length <= 3) return;
+    if (collections.length <= collectionsPerView) return;
     
     const interval = setInterval(() => {
       setCurrentCollectionIndex((prev) => {
-        const maxIndex = Math.max(0, collections.length - 3);
+        const maxIndex = Math.max(0, collections.length - collectionsPerView);
         return (prev + 1) % (maxIndex + 1);
       });
     }, 5000); // 5초마다 전환
 
     return () => clearInterval(interval);
-  }, [collections.length]);
+  }, [collections.length, collectionsPerView]);
 
   const getThumbnailUrl = (sheet: DrumSheet): string => {
     if (sheet.youtube_url) {
@@ -1060,7 +1080,7 @@ export default function Home() {
                 <div
                   className="flex transition-transform duration-500 ease-in-out"
                   style={{
-                    transform: `translateX(-${currentCollectionIndex * (100 / 3)}%)`,
+                    transform: `translateX(-${currentCollectionIndex * (100 / collectionsPerView)}%)`,
                   }}
                 >
                   {collections.map((collection) => {
@@ -1091,7 +1111,8 @@ export default function Home() {
                     return (
                       <div
                         key={collection.id}
-                        className="min-w-[33.333%] px-3"
+                        className="px-3"
+                        style={{ flex: `0 0 ${100 / collectionsPerView}%` }}
                         onClick={() => navigate(`/collections/${collection.id}`)}
                       >
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group h-full">
@@ -1169,12 +1190,12 @@ export default function Home() {
                 </div>
 
                 {/* 네비게이션 버튼 */}
-                {collections.length > 3 && (
+                {collections.length > collectionsPerView && (
                   <>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        const maxIndex = Math.max(0, collections.length - 3);
+                        const maxIndex = Math.max(0, collections.length - collectionsPerView);
                         setCurrentCollectionIndex((prev) => (prev - 1 + maxIndex + 1) % (maxIndex + 1));
                       }}
                       className="absolute left-0 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-2 shadow-lg transition-all z-10"
@@ -1185,7 +1206,7 @@ export default function Home() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        const maxIndex = Math.max(0, collections.length - 3);
+                        const maxIndex = Math.max(0, collections.length - collectionsPerView);
                         setCurrentCollectionIndex((prev) => (prev + 1) % (maxIndex + 1));
                       }}
                       className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-2 shadow-lg transition-all z-10"
@@ -1197,9 +1218,9 @@ export default function Home() {
                 )}
 
                 {/* 인디케이터 */}
-                {collections.length > 3 && (
+                {collections.length > collectionsPerView && (
                   <div className="flex justify-center gap-2 mt-6">
-                    {Array.from({ length: Math.max(1, collections.length - 2) }).map((_, index) => (
+                    {Array.from({ length: Math.max(1, collections.length - (collectionsPerView - 1)) }).map((_, index) => (
                       <button
                         key={index}
                         onClick={(e) => {
