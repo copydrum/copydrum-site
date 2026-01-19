@@ -6,6 +6,7 @@ import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 import MainHeader from '../../components/common/MainHeader';
 import { useCart } from '../../hooks/useCart';
+import ConfirmModal from '../../components/common/ConfirmModal';
 import type { FavoriteSheet } from '../../lib/favorites';
 import { fetchUserFavorites, removeFavorite } from '../../lib/favorites';
 import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
@@ -111,6 +112,7 @@ export default function MyPage() {
   // user 상태를 최상단에 선언 (다른 훅에서 사용하기 전에 선언 필요)
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showCartConfirm, setShowCartConfirm] = useState(false);
 
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'copydrum.com';
   const currency = getSiteCurrency(hostname, i18n.language);
@@ -1088,7 +1090,10 @@ export default function MyPage() {
   };
 
   const handleAddToCart = async (sheetId: string) => {
-    await addToCart(sheetId);
+    const added = await addToCart(sheetId);
+    if (added) {
+      setShowCartConfirm(true);
+    }
   };
 
   const handleGoToSheet = (sheetId: string) => {
@@ -1889,6 +1894,19 @@ export default function MyPage() {
           </span>
         ) : null}
       </button>
+
+      <ConfirmModal
+        open={showCartConfirm}
+        title={t('button.confirm')}
+        message={t('cart.addedConfirm')}
+        confirmLabel={t('button.confirm')}
+        cancelLabel={t('button.cancel')}
+        onConfirm={() => {
+          setShowCartConfirm(false);
+          navigate('/cart');
+        }}
+        onCancel={() => setShowCartConfirm(false)}
+      />
     </div>
   );
 }

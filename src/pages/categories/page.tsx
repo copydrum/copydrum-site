@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import React from 'react';
 import { useCart } from '../../hooks/useCart';
+import ConfirmModal from '../../components/common/ConfirmModal';
 import { generateDefaultThumbnail } from '../../lib/defaultThumbnail';
 import { fetchUserFavorites, toggleFavorite } from '../../lib/favorites';
 import MainHeader from '../../components/common/MainHeader';
@@ -87,6 +88,7 @@ const CategoriesPage: React.FC = () => {
   const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
   const [showInsufficientCashModal, setShowInsufficientCashModal] = useState(false);
   const [insufficientCashInfo, setInsufficientCashInfo] = useState<{ currentBalance: number; requiredAmount: number } | null>(null);
+  const [showCartConfirm, setShowCartConfirm] = useState(false);
   const [showPayPalModal, setShowPayPalModal] = useState(false);
   const { i18n, t } = useTranslation();
   const { isKoreanSite } = useSiteLanguage();
@@ -442,7 +444,10 @@ const CategoriesPage: React.FC = () => {
       return;
     }
 
-    await addToCart(sheetId);
+    const added = await addToCart(sheetId);
+    if (added) {
+      setShowCartConfirm(true);
+    }
   };
 
   const [buyingNowSheetId, setBuyingNowSheetId] = useState<string | null>(null);
@@ -1515,6 +1520,19 @@ const CategoriesPage: React.FC = () => {
         </div>
       </div>
 
+      {/* ✅ 공유 useBuyNow 훅의 모달들 */}
+      <ConfirmModal
+        open={showCartConfirm}
+        title={t('button.confirm')}
+        message={t('cart.addedConfirm')}
+        confirmLabel={t('button.confirm')}
+        cancelLabel={t('button.cancel')}
+        onConfirm={() => {
+          setShowCartConfirm(false);
+          navigate('/cart');
+        }}
+        onCancel={() => setShowCartConfirm(false)}
+      />
 
       {/* ✅ 공유 useBuyNow 훅의 모달들 */}
       <PaymentMethodSelector

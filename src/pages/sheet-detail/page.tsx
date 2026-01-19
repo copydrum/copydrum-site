@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import { ArrowLeft, Star, ShoppingCart, Music, X } from 'lucide-react';
 import { useCart } from '../../hooks/useCart';
+import ConfirmModal from '../../components/common/ConfirmModal';
 import MainHeader from '../../components/common/MainHeader';
 import Footer from '../../components/common/Footer';
 import { isFavorite, toggleFavorite } from '../../lib/favorites';
@@ -57,6 +58,7 @@ export default function SheetDetailPage() {
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [bankTransferInfo, setBankTransferInfo] = useState<VirtualAccountInfo | null>(null);
   const [showBankTransferModal, setShowBankTransferModal] = useState(false);
+  const [showCartConfirm, setShowCartConfirm] = useState(false);
   const [virtualAccountInfo, setVirtualAccountInfo] = useState<VirtualAccountInfo | null>(null);
   const [showVirtualAccountModal, setShowVirtualAccountModal] = useState(false);
   const { i18n, t } = useTranslation();
@@ -594,7 +596,10 @@ export default function SheetDetailPage() {
       return;
     }
 
-    await addToCart(sheet.id);
+    const added = await addToCart(sheet.id);
+    if (added) {
+      setShowCartConfirm(true);
+    }
   };
 
   const handleToggleFavorite = async () => {
@@ -1133,6 +1138,19 @@ export default function SheetDetailPage() {
           context="buyNow"
         />
       )}
+
+      <ConfirmModal
+        open={showCartConfirm}
+        title={t('button.confirm')}
+        message={t('cart.addedConfirm')}
+        confirmLabel={t('button.confirm')}
+        cancelLabel={t('button.cancel')}
+        onConfirm={() => {
+          setShowCartConfirm(false);
+          navigate('/cart');
+        }}
+        onCancel={() => setShowCartConfirm(false)}
+      />
 
     </div>
   );
