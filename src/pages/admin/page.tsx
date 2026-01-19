@@ -7782,6 +7782,12 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   const currentSheetData = editingSheetData;
                   const categoryIds = currentSheetData.category_ids || [];
                   
+                  // 썸네일 URL 변수를 함수 최상단에서 선언 (TDZ 문제 방지)
+                  // 이미지 파일(File 객체)과 이미지 주소(String) 구분
+                  const thumbnailUrl: string | null = currentSheetData.thumbnail_url 
+                    ? String(currentSheetData.thumbnail_url).trim() 
+                    : null;
+                  
                   if (!currentSheetData.title || !currentSheetData.artist || categoryIds.length === 0) {
                     alert('제목, 아티스트, 카테고리는 필수입니다.');
                     return;
@@ -7800,8 +7806,9 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                       is_active: currentSheetData.is_active
                     };
 
-                    if (currentSheetData.thumbnail_url) {
-                      updateData.thumbnail_url = currentSheetData.thumbnail_url;
+                    // 썸네일 URL 처리 (이미 선언된 thumbnailUrl 변수 사용)
+                    if (thumbnailUrl && thumbnailUrl.length > 0) {
+                      updateData.thumbnail_url = thumbnailUrl;
                     } else {
                       updateData.thumbnail_url = null;
                     }
