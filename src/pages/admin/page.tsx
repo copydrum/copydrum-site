@@ -7553,7 +7553,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   <input
                     type="text"
                     value={editingSheetData.title}
-                    onChange={(e) => setEditingSheetData({ ...editingSheetData, title: e.target.value })}
+                    onChange={(e) => setEditingSheetData((prev) => ({ ...prev, title: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   />
                 </div>
@@ -7563,7 +7563,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   <input
                     type="text"
                     value={editingSheetData.artist}
-                    onChange={(e) => setEditingSheetData({ ...editingSheetData, artist: e.target.value })}
+                    onChange={(e) => setEditingSheetData((prev) => ({ ...prev, artist: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   />
                 </div>
@@ -7574,7 +7574,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   <label className="block text-sm font-medium text-gray-700 mb-1">난이도</label>
                   <select
                     value={editingSheetData.difficulty}
-                    onChange={(e) => setEditingSheetData({ ...editingSheetData, difficulty: e.target.value })}
+                    onChange={(e) => setEditingSheetData((prev) => ({ ...prev, difficulty: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   >
                     <option value="초급">초급</option>
@@ -7637,7 +7637,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   <input
                     type="number"
                     value={editingSheetData.price}
-                    onChange={(e) => setEditingSheetData({ ...editingSheetData, price: Number(e.target.value) })}
+                    onChange={(e) => setEditingSheetData((prev) => ({ ...prev, price: Number(e.target.value) }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   />
                 </div>
@@ -7647,7 +7647,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   <input
                     type="number"
                     value={editingSheetData.page_count}
-                    onChange={(e) => setEditingSheetData({ ...editingSheetData, page_count: Number(e.target.value) })}
+                    onChange={(e) => setEditingSheetData((prev) => ({ ...prev, page_count: Number(e.target.value) }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                     min="0"
                   />
@@ -7658,7 +7658,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   <input
                     type="number"
                     value={editingSheetData.tempo}
-                    onChange={(e) => setEditingSheetData({ ...editingSheetData, tempo: Number(e.target.value) })}
+                    onChange={(e) => setEditingSheetData((prev) => ({ ...prev, tempo: Number(e.target.value) }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                     min="0"
                   />
@@ -7670,7 +7670,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                 <input
                   type="text"
                   value={editingSheetData.album_name}
-                  onChange={(e) => setEditingSheetData({ ...editingSheetData, album_name: e.target.value })}
+                  onChange={(e) => setEditingSheetData((prev) => ({ ...prev, album_name: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
               </div>
@@ -7698,7 +7698,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                 <input
                   type="text"
                   value={editingSheetData.thumbnail_url}
-                  onChange={(e) => setEditingSheetData({ ...editingSheetData, thumbnail_url: e.target.value })}
+                  onChange={(e) => setEditingSheetData((prev) => ({ ...prev, thumbnail_url: e.target.value }))}
                   placeholder="썸네일 이미지 URL을 입력하세요"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
@@ -7722,7 +7722,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                   <input
                     type="checkbox"
                     checked={editingSheetData.is_active}
-                    onChange={(e) => setEditingSheetData({ ...editingSheetData, is_active: e.target.checked })}
+                    onChange={(e) => setEditingSheetData((prev) => ({ ...prev, is_active: e.target.checked }))}
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                   />
                   <span className="text-sm font-medium text-gray-700">활성 상태</span>
