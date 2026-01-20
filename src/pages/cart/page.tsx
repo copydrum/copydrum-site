@@ -5,13 +5,14 @@ import { useAuthStore } from '../../stores/authStore';
 import { splitPurchasedSheetIds } from '../../lib/purchaseCheck';
 import { BankTransferInfoModal, PaymentMethodSelector } from '../../components/payments';
 import ConfirmModal from '../../components/common/ConfirmModal';
-import type { PaymentMethod } from '../../components/payments';
+import type { PaymentMethod, PaymentMethodOption } from '../../components/payments';
 import { startSheetPurchase } from '../../lib/payments';
 import type { VirtualAccountInfo } from '../../lib/payments';
 import { useTranslation } from 'react-i18next';
 import { getSiteCurrency, convertFromKrw, formatCurrency as formatCurrencyUtil } from '../../lib/currency';
 import PayPalPaymentModal from '../../components/payments/PayPalPaymentModal';
 import { useUserCredits } from '../../hooks/useUserCredits';
+import { processCashPurchase } from '../../lib/cashPurchases';
 
 type PendingCartPurchase = {
   targetItemIds: string[];
@@ -249,6 +250,18 @@ export default function CartPage() {
     await handlePurchase(allItemIds);
   };
 
+  const finalizeCartPurchase = async () => {
+    if (!pendingPurchase) return;
+    const removed = await removeSelectedItems(pendingPurchase.targetItemIds);
+    if (!removed) {
+      console.warn(t('cartPage.console.cartUpdateAfterPaymentError'));
+    }
+
+    setSelectedItems(prev =>
+      prev.filter(id => !pendingPurchase.targetItemIds.includes(id)),
+    );
+  };
+
   const completeOnlinePurchase = async (
     method: 'card' | 'bank_transfer' | 'paypal' | 'kakaopay',
     options?: { depositorName?: string },
@@ -267,14 +280,7 @@ export default function CartPage() {
       depositorName: options?.depositorName,
     });
 
-    const removed = await removeSelectedItems(pendingPurchase.targetItemIds);
-    if (!removed) {
-      console.warn(t('cartPage.console.cartUpdateAfterPaymentError'));
-    }
-
-    setSelectedItems(prev =>
-      prev.filter(id => !pendingPurchase.targetItemIds.includes(id)),
-    );
+    await finalizeCartPurchase();
 
     if (method === 'bank_transfer') {
       setBankTransferInfo(purchaseResult.virtualAccountInfo ?? null);
@@ -317,12 +323,12 @@ export default function CartPage() {
     setPaymentProcessing(false);
   };
 
-  const handlePaymentMethodSelect = async (method: PaymentMethod) => {
+  const handlePaymentMethodSelect = async (method: PaymentMethod, option?: PaymentMethodOption) => {
     if (!user || !pendingPurchase) return;
 
     setShowPaymentSelector(false);
 
-    if (method === 'bank') {
+    if (method === 'bank' || method === 'bank_transfer') {
       setShowBankTransferModal(true);
       return;
     }
@@ -343,24 +349,61 @@ export default function CartPage() {
 
       if (method === 'kakaopay') {
         // 카카오페이 결제 처리
-        try {
-          await completeOnlinePurchase('kakaopay');
-          // 카카오페이는 결제창이 열리므로 여기서는 처리만 하고 pendingPurchase는 Webhook에서 처리 후 정리
-        } catch (error) {
-          console.error('[cart] KakaoPay 결제 오류:', error);
-          alert(error instanceof Error ? error.message : t('cartPage.paymentError'));
-        } finally {
-          setProcessing(false);
-          setPaymentProcessing(false);
+        await completeOnlinePurchase('kakaopay');
+        // 카카오페이는 결제창이 열리므로 여기서는 처리만 하고 pendingPurchase는 Webhook에서 처리 후 정리
+        return;
+      }
+
+      if (method === 'card' || method === 'transfer') {
+        if (!option?.payMethod) {
+          alert('결제 수단 정보가 올바르지 않습니다.');
+          return;
+        }
+
+        await startSheetPurchase({
+          userId: user.id,
+          items: pendingPurchase.items,
+          amount: pendingPurchase.amount,
+          paymentMethod: 'inicis',
+          inicisPayMethod: option.payMethod as 'CARD' | 'TRANSFER' | 'VIRTUAL_ACCOUNT',
+          description: pendingPurchase.description,
+          buyerName: user.email ?? null,
+          buyerEmail: user.email ?? null,
+        });
+
+        await finalizeCartPurchase();
+        setBankTransferInfo(null);
+        alert(t('cartPage.paymentWindowOpen'));
+        return;
+      }
+
+      if (method === 'cash') {
+        const result = await processCashPurchase({
+          userId: user.id,
+          totalPrice: pendingPurchase.amount,
+          description: pendingPurchase.description,
+          items: pendingPurchase.items.map(item => ({
+            sheetId: item.sheetId,
+            sheetTitle: item.sheetTitle,
+            price: item.price,
+          })),
+          paymentMethod: 'cash',
+        });
+
+        if (result.success) {
+          await finalizeCartPurchase();
+          alert(t('cartPage.purchaseComplete'));
+          navigate('/my-orders');
+        } else if (result.reason === 'INSUFFICIENT_CREDIT') {
+          alert(
+            t('payment.notEnoughCashMessage') ||
+            `보유 포인트가 부족합니다. 현재 잔액: ${result.currentCredits.toLocaleString()}원`,
+          );
         }
         return;
       }
 
-      // legacy: 카드 결제는 현재 비활성화 (포트원 심사 진행 중)
-      // await completeOnlinePurchase('card');
-
-      // 한국 사이트에서는 무통장 입금만 가능
-      alert(t('cartPage.bankTransferOnly') || '현재 무통장 입금만 가능합니다.');
+      alert(t('cartPage.paymentError'));
     } catch (error) {
       console.error(t('cartPage.console.paymentProcessingError'), error);
       alert(error instanceof Error ? error.message : t('cartPage.paymentError'));
