@@ -43,46 +43,6 @@ function toPortOneCurrency(currency: 'KRW' | 'USD' | 'JPY'): PortOneCurrency {
   }
 }
 
-function toPortOneLocale(language: string): PortOneLocale {
-  switch (language) {
-    case 'ko':
-      return 'KO_KR';
-    case 'ja':
-      return 'JA_JP';
-    case 'zh-CN':
-      return 'ZH_CN';
-    case 'zh-TW':
-      return 'ZH_TW';
-    case 'fr':
-      return 'FR_FR';
-    case 'de':
-      return 'DE_DE';
-    case 'es':
-      return 'ES_ES';
-    case 'it':
-      return 'IT_IT';
-    case 'pt':
-      return 'PT_BR';
-    case 'ru':
-      return 'RU_RU';
-    case 'th':
-      return 'TH_TH';
-    case 'vi':
-      return 'VI_VN';
-    case 'id':
-      return 'ID_ID';
-    case 'hi':
-      return 'HI_IN';
-    case 'uk':
-      return 'UK_UA';
-    case 'tr':
-      return 'TR_TR';
-    case 'en':
-    default:
-      return 'EN_US';
-  }
-}
-
 // 포트원 스크립트 URL (최신 버전 사용)
 const PORTONE_SCRIPT_URL = 'https://cdn.iamport.kr/js/iamport.payment-1.2.0.js';
 
@@ -329,7 +289,7 @@ export const requestPayPalPayment = async (
     const returnUrl = params.returnUrl || getPortOneReturnUrl();
     const hostname = window.location.hostname;
     const locale = getLocaleFromHost(window.location.host);
-    const portOneLocale = toPortOneLocale(locale);
+    const portOneLocale: PortOneLocale = 'EN_US';
 
     // PayPal 통화 결정
     const isJapanSite = locale === 'ja' || isJapaneseSiteHost(hostname);
