@@ -242,6 +242,11 @@ export const PaymentMethodSelector = ({
             })}
           </div>
 
+          <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <p className="text-sm font-semibold text-gray-900">{t('payments.helpTitle')}</p>
+            <p className="mt-1 text-xs text-gray-600">{t('payments.helpBody')}</p>
+          </div>
+
           <div className="mt-6 flex justify-end space-x-2">
             <button
               type="button"

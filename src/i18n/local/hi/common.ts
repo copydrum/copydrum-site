@@ -86,6 +86,9 @@ export default {
   'payments.paypalDescription': 'PayPal के साथ सुरक्षित भुगतान करें। तेज़ और आसान भुगतान।',
   'payments.modalTitle': 'PayPal भुगतान',
   'payments.loadingPayPal': 'PayPal लोड हो रहा है...',
+  'payments.paypalCardHelp': 'PayPal खाते के बिना भी आप "Debit or Credit Card" बटन पर क्लिक करके सीधे क्रेडिट या डेबिट कार्ड से भुगतान कर सकते हैं।',
+  'payments.helpTitle': 'भुगतान मार्गदर्शिका',
+  'payments.helpBody': 'PayPal खाते के बिना भी आप "Debit or Credit Card" बटन पर क्लिक करके सीधे क्रेडिट या डेबिट कार्ड से भुगतान कर सकते हैं।',
 
   // Auth
   'auth.email': 'ईमेल',

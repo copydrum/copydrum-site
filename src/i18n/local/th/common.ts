@@ -86,6 +86,9 @@ export default {
   'payments.paypalDescription': 'ชำระเงินอย่างปลอดภัยด้วย PayPal รวดเร็วและสะดวก',
   'payments.modalTitle': 'ชำระเงินผ่าน PayPal',
   'payments.loadingPayPal': 'กำลังโหลด PayPal...',
+  'payments.paypalCardHelp': 'แม้ไม่มีบัญชี PayPal ก็สามารถชำระด้วยบัตรเครดิตหรือบัตรเดบิตได้ทันทีโดยกดปุ่ม "Debit or Credit Card".',
+  'payments.helpTitle': 'คู่มือการชำระเงิน',
+  'payments.helpBody': 'แม้ไม่มีบัญชี PayPal ก็สามารถชำระด้วยบัตรเครดิตหรือบัตรเดบิตได้ทันทีโดยกดปุ่ม "Debit or Credit Card".',
 
   // Auth
   'auth.email': 'อีเมล',

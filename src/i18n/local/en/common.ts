@@ -103,6 +103,9 @@ export default {
   'payments.paypalDescription': 'Pay safely with PayPal. Fast and easy checkout.',
   'payments.modalTitle': 'PayPal Payment',
   'payments.loadingPayPal': 'Loading PayPal...',
+  'payments.paypalCardHelp': 'You can pay with your Credit or Debit card directly by clicking the "Debit or Credit Card" button, even if you do not have a PayPal account.',
+  'payments.helpTitle': 'Payment Guide',
+  'payments.helpBody': 'You can pay with your Credit or Debit card directly by clicking the "Debit or Credit Card" button, even if you do not have a PayPal account.',
 
   // Auth
   'auth.email': 'Email',

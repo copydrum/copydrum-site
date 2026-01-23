@@ -103,6 +103,9 @@ export default {
   'payments.paypalDescription': '페이팔로 안전하게 결제하세요. 빠르고 간편한 결제.',
   'payments.modalTitle': 'PayPal 결제',
   'payments.loadingPayPal': 'PayPal 로딩 중...',
+  'payments.paypalCardHelp': 'PayPal 계정이 없어도 "직불카드 또는 신용카드" 버튼을 눌러 신용/직불카드로 바로 결제할 수 있습니다.',
+  'payments.helpTitle': '결제 안내',
+  'payments.helpBody': 'PayPal 계정이 없어도 "직불카드 또는 신용카드" 버튼을 눌러 신용/직불카드로 바로 결제할 수 있습니다.',
 
   // Auth
   'auth.email': '이메일',

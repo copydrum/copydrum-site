@@ -86,6 +86,9 @@ export default {
   'payments.paypalDescription': 'Bayar dengan aman menggunakan PayPal. Cepat dan mudah.',
   'payments.modalTitle': 'Pembayaran PayPal',
   'payments.loadingPayPal': 'Memuat PayPal...',
+  'payments.paypalCardHelp': 'Anda dapat membayar langsung dengan kartu kredit atau debit dengan menekan tombol "Debit or Credit Card", meskipun tidak memiliki akun PayPal.',
+  'payments.helpTitle': 'Panduan pembayaran',
+  'payments.helpBody': 'Anda dapat membayar langsung dengan kartu kredit atau debit dengan menekan tombol "Debit or Credit Card", meskipun tidak memiliki akun PayPal.',
 
   // Auth
   'auth.email': 'Email',

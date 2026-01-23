@@ -86,6 +86,9 @@ export default {
   'payments.paypalDescription': '透過 PayPal 安全付款。快速又方便。',
   'payments.modalTitle': 'PayPal 付款',
   'payments.loadingPayPal': '正在載入 PayPal...',
+  'payments.paypalCardHelp': '即使沒有 PayPal 帳戶，也可以點擊「Debit or Credit Card」按鈕直接使用信用卡或簽帳卡付款。',
+  'payments.helpTitle': '付款指南',
+  'payments.helpBody': '即使沒有 PayPal 帳戶，也可以點擊「Debit or Credit Card」按鈕直接使用信用卡或簽帳卡付款。',
 
   // Auth
   'auth.email': '電子郵件',

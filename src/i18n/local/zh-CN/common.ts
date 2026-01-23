@@ -86,6 +86,9 @@ export default {
   'payments.paypalDescription': '通过 PayPal 安全付款。快捷、方便的支付方式。',
   'payments.modalTitle': 'PayPal 支付',
   'payments.loadingPayPal': '正在加载 PayPal...',
+  'payments.paypalCardHelp': '即使没有 PayPal 账户，也可以点击“Debit or Credit Card”按钮直接使用信用卡或借记卡付款。',
+  'payments.helpTitle': '支付指南',
+  'payments.helpBody': '即使没有 PayPal 账户，也可以点击“Debit or Credit Card”按钮直接使用信用卡或借记卡付款。',
 
   // Auth
   'auth.email': '邮箱',

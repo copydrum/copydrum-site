@@ -86,6 +86,9 @@ export default {
   'payments.paypalDescription': 'Thanh toán an toàn qua PayPal. Nhanh chóng và dễ dàng.',
   'payments.modalTitle': 'Thanh toán PayPal',
   'payments.loadingPayPal': 'Đang tải PayPal...',
+  'payments.paypalCardHelp': 'Bạn có thể thanh toán trực tiếp bằng thẻ tín dụng hoặc thẻ ghi nợ bằng cách nhấn nút "Debit or Credit Card", ngay cả khi không có tài khoản PayPal.',
+  'payments.helpTitle': 'Hướng dẫn thanh toán',
+  'payments.helpBody': 'Bạn có thể thanh toán trực tiếp bằng thẻ tín dụng hoặc thẻ ghi nợ bằng cách nhấn nút "Debit or Credit Card", ngay cả khi không có tài khoản PayPal.',
 
   // Auth
   'auth.email': 'Email',

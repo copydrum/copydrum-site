@@ -86,6 +86,9 @@ export default {
   'payments.paypalDescription': 'Оплачивайте безопасно через PayPal. Быстрая и удобная оплата.',
   'payments.modalTitle': 'Оплата через PayPal',
   'payments.loadingPayPal': 'Загрузка PayPal...',
+  'payments.paypalCardHelp': 'Вы можете оплатить напрямую кредитной или дебетовой картой, нажав кнопку "Debit or Credit Card", даже без аккаунта PayPal.',
+  'payments.helpTitle': 'Руководство по оплате',
+  'payments.helpBody': 'Вы можете оплатить напрямую кредитной или дебетовой картой, нажав кнопку "Debit or Credit Card", даже без аккаунта PayPal.',
 
   // Auth
   'auth.email': 'Электронная почта',

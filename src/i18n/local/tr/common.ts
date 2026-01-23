@@ -86,6 +86,9 @@ export default {
   'payments.paypalDescription': 'PayPal ile güvenli ödeme yapın. Hızlı ve kolay ödeme.',
   'payments.modalTitle': 'PayPal Ödemesi',
   'payments.loadingPayPal': 'PayPal yükleniyor...',
+  'payments.paypalCardHelp': 'PayPal hesabınız olmasa bile "Debit or Credit Card" düğmesine tıklayarak kredi veya banka kartıyla doğrudan ödeme yapabilirsiniz.',
+  'payments.helpTitle': 'Ödeme Rehberi',
+  'payments.helpBody': 'PayPal hesabınız olmasa bile "Debit or Credit Card" düğmesine tıklayarak kredi veya banka kartıyla doğrudan ödeme yapabilirsiniz.',
 
   // Auth
   'auth.email': 'E-posta',

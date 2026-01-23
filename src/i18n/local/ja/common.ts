@@ -101,6 +101,9 @@ export default {
   'payments.paypalDescription': 'PayPalで安全にお支払いください。スピーディーで簡単です。',
   'payments.modalTitle': 'PayPal決済',
   'payments.loadingPayPal': 'PayPalを読み込み中...',
+  'payments.paypalCardHelp': 'PayPalアカウントがなくても、「Debit or Credit Card」ボタンからクレジット/デビットカードで直接お支払いできます。',
+  'payments.helpTitle': 'お支払い案内',
+  'payments.helpBody': 'PayPalアカウントがなくても、「Debit or Credit Card」ボタンからクレジット/デビットカードで直接お支払いできます。',
 
   // Auth
   'auth.email': 'メールアドレス',

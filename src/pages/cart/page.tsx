@@ -610,6 +610,11 @@ export default function CartPage() {
                     {t('cartPage.continueShopping')}
                   </button>
                 </div>
+
+                <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+                  <p className="text-sm font-semibold text-gray-900">{t('payments.helpTitle')}</p>
+                  <p className="mt-1 text-xs text-gray-600">{t('payments.helpBody')}</p>
+                </div>
               </div>
             </>
           )}

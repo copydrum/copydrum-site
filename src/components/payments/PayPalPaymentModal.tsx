@@ -132,6 +132,10 @@ export default function PayPalPaymentModal({
                         <p className="text-2xl font-bold text-gray-900">{formatCurrency(amount)}</p>
                     </div>
 
+                    <p className="mb-4 text-xs text-gray-500 text-center">
+                        {t('payments.paypalCardHelp')}
+                    </p>
+
                     {error ? (
                         <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center text-red-600 text-sm mb-4">
                             {error}

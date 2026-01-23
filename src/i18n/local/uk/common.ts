@@ -86,6 +86,9 @@ export default {
   'payments.paypalDescription': 'Оплачуйте безпечно через PayPal. Швидка та зручна оплата.',
   'payments.modalTitle': 'Оплата через PayPal',
   'payments.loadingPayPal': 'Завантаження PayPal...',
+  'payments.paypalCardHelp': 'Ви можете оплатити напряму кредитною або дебетовою карткою, натиснувши кнопку "Debit or Credit Card", навіть без облікового запису PayPal.',
+  'payments.helpTitle': 'Посібник з оплати',
+  'payments.helpBody': 'Ви можете оплатити напряму кредитною або дебетовою карткою, натиснувши кнопку "Debit or Credit Card", навіть без облікового запису PayPal.',
 
   // Auth
   'auth.email': 'Електронна пошта',
