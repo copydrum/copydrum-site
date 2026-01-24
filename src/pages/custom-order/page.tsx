@@ -4,9 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import MainHeader from '../../components/common/MainHeader';
+import { useSiteLanguage } from '../../hooks/useSiteLanguage';
 
 const CustomOrderPage = () => {
   const { t } = useTranslation();
+  const { isKoreanSite } = useSiteLanguage();
   const { user } = useAuthStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -102,6 +104,110 @@ const CustomOrderPage = () => {
       <div>
         {/* Main Content */}
         <main className="max-w-4xl mx-auto px-4 py-12">
+          {isKoreanSite && (
+            <div className="mb-8 rounded-xl border border-red-200 bg-red-50 px-5 py-5 text-red-900 shadow-sm md:px-6">
+              <div className="flex items-start gap-3">
+                <i className="ri-notification-3-line text-2xl text-red-600 mt-0.5"></i>
+                <div className="space-y-2">
+                  <h2 className="text-sm font-bold md:text-base">
+                    {t('customOrder.notice.title')}
+                  </h2>
+                  <p className="text-sm text-red-900/90 md:text-base">
+                    <span className="font-bold text-red-900 bg-red-100 px-1.5 py-0.5 rounded">
+                      {t('customOrder.notice.line1.highlight')}
+                    </span>
+                    {t('customOrder.notice.line1.rest')}
+                  </p>
+                  <p className="text-sm text-red-900/90 md:text-base">
+                    {t('customOrder.notice.line2.prefix')}
+                    <span className="font-bold text-red-900 bg-red-100 px-1.5 py-0.5 rounded">
+                      {t('customOrder.notice.line2.highlight')}
+                    </span>
+                    {t('customOrder.notice.line2.suffix')}
+                  </p>
+                  <div className="mt-3 rounded-lg border border-red-200 bg-white px-4 py-4">
+                    <div className="flex items-center justify-between gap-3 text-xs font-semibold text-red-800 md:text-sm">
+                      <span>{t('customOrder.notice.calendar.title')}</span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] text-red-700 md:text-xs">
+                        <span className="inline-block h-2 w-2 rounded-full bg-red-500"></span>
+                        {t('customOrder.notice.calendar.legend')}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid gap-4 md:grid-cols-2">
+                      {[
+                        {
+                          label: t('customOrder.notice.calendar.months.jan'),
+                          month: 1,
+                          weeks: [
+                            [null, null, null, null, 1, 2, 3],
+                            [4, 5, 6, 7, 8, 9, 10],
+                            [11, 12, 13, 14, 15, 16, 17],
+                            [18, 19, 20, 21, 22, 23, 24],
+                            [25, 26, 27, 28, 29, 30, 31]
+                          ]
+                        },
+                        {
+                          label: t('customOrder.notice.calendar.months.feb'),
+                          month: 2,
+                          weeks: [
+                            [1, 2, 3, 4, 5, 6, 7],
+                            [8, 9, 10, 11, 12, 13, 14],
+                            [15, 16, 17, 18, 19, 20, 21],
+                            [22, 23, 24, 25, 26, 27, 28]
+                          ]
+                        }
+                      ].map((monthData) => (
+                        <div key={monthData.month} className="rounded-lg border border-red-100 bg-red-50/40 p-3">
+                          <div className="text-xs font-semibold text-red-900 md:text-sm">
+                            {monthData.label}
+                          </div>
+                          <div className="mt-2 grid grid-cols-7 gap-1 text-[10px] font-medium text-red-700 md:text-xs">
+                            {[
+                              t('customOrder.notice.calendar.weekdays.sun'),
+                              t('customOrder.notice.calendar.weekdays.mon'),
+                              t('customOrder.notice.calendar.weekdays.tue'),
+                              t('customOrder.notice.calendar.weekdays.wed'),
+                              t('customOrder.notice.calendar.weekdays.thu'),
+                              t('customOrder.notice.calendar.weekdays.fri'),
+                              t('customOrder.notice.calendar.weekdays.sat')
+                            ].map((day) => (
+                              <div key={day} className="text-center">
+                                {day}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-1 grid grid-cols-7 gap-1 text-[11px] md:text-xs">
+                            {monthData.weeks.flat().map((day, index) => {
+                              if (!day) {
+                                return <div key={`${monthData.month}-empty-${index}`} className="h-7"></div>;
+                              }
+
+                              const isVacationDate = monthData.month === 1
+                                ? day >= 24
+                                : day <= 1;
+
+                              return (
+                                <div
+                                  key={`${monthData.month}-${day}-${index}`}
+                                  className={`flex h-7 items-center justify-center rounded-md border text-[11px] font-semibold md:text-xs ${
+                                    isVacationDate
+                                      ? 'border-red-600 bg-red-600 text-white'
+                                      : 'border-red-100 bg-white text-red-900'
+                                  }`}
+                                >
+                                  {day}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Hero Section */}
           <div className="text-center mb-10 md:mb-12">
             <h1 className="text-3xl font-bold text-gray-900 mb-3 md:text-4xl md:mb-4">
