@@ -81,6 +81,10 @@
             "question": "Kann ich die heruntergeladenen Notenblätter drucken?",
             "answer": "Ja, Sie können für den persönlichen Übungsgebrauch drucken. Kommerzielle Nutzung oder Weiterverteilung ist jedoch verboten."
           },
+          "mobileDownload": {
+            "question": "Kein Download auf dem Handy möglich?",
+            "answer": "Wenn Sie über In-App-Browser wie Naver, KakaoTalk oder Instagram zugreifen, kann der Download durch Sicherheitsrichtlinien blockiert werden. Schließen Sie die App, öffnen Sie Chrome/Samsung Internet/Safari, rufen Sie copydrum.com auf, melden Sie sich an und laden Sie unter [Meine Seite > Bestellungen] herunter. Die Datei wird im Downloads-Ordner der Dateien-App gespeichert. Wenn es weiterhin nicht funktioniert, kontaktieren Sie uns."
+          },
           "difficulty": {
             "question": "Wie werden Schwierigkeitsgrade klassifiziert?",
             "answer": "Sie werden als Anfänger (Grundmuster), Mittelstufe (einschließlich Variationsmuster) und Fortgeschritten (einschließlich komplexer Techniken) klassifiziert."

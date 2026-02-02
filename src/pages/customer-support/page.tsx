@@ -114,6 +114,10 @@ export default function CustomerSupport() {
         {
           question: t('customerSupport.faq.categories.sheetDownload.items.print.question'),
           answer: t('customerSupport.faq.categories.sheetDownload.items.print.answer')
+            },
+            {
+              question: t('customerSupport.faq.categories.sheetDownload.items.mobileDownload.question'),
+              answer: t('customerSupport.faq.categories.sheetDownload.items.mobileDownload.answer')
         },
         {
           question: t('customerSupport.faq.categories.sheetDownload.items.difficulty.question'),

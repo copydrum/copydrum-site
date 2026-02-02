@@ -81,6 +81,10 @@
             "question": "Posso stampare gli spartiti scaricati?",
             "answer": "Sì, puoi stampare per uso personale di pratica. Tuttavia, l'uso commerciale o la ridistribuzione sono vietati."
           },
+          "mobileDownload": {
+            "question": "Non riesci a scaricare dal telefono?",
+            "answer": "Se accedi tramite browser in-app come Naver, KakaoTalk o Instagram, il download può essere bloccato dalle policy di sicurezza. Chiudi l'app e apri Chrome/Samsung Internet/Safari, vai su copydrum.com, accedi e scarica da [La mia pagina > Ordini]. Il file verrà salvato nella cartella Download dell'app File. Se il problema persiste, contattaci."
+          },
           "difficulty": {
             "question": "Come sono classificati i livelli di difficoltà?",
             "answer": "Sono classificati come Principiante (pattern di base), Intermedio (inclusi pattern di variazione) e Avanzato (inclusi tecniche complesse)."

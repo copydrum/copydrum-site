@@ -81,6 +81,10 @@
             "question": "Bisakah saya mencetak lembaran musik yang diunduh?",
             "answer": "Ya, Anda dapat mencetak untuk penggunaan latihan pribadi. Namun, penggunaan komersial atau redistribusi dilarang."
           },
+          "mobileDownload": {
+            "question": "Tidak bisa mengunduh di ponsel?",
+            "answer": "Jika Anda membuka melalui browser dalam aplikasi seperti Naver, KakaoTalk, atau Instagram, unduhan dapat diblokir oleh kebijakan keamanan. Tutup aplikasinya lalu buka Chrome/Samsung Internet/Safari, kunjungi copydrum.com, login, dan unduh di [Halaman Saya > Pesanan]. File akan tersimpan di folder Unduhan pada aplikasi File. Jika masih bermasalah, silakan hubungi kami."
+          },
           "difficulty": {
             "question": "Bagaimana tingkat kesulitan diklasifikasikan?",
             "answer": "Mereka diklasifikasikan sebagai Pemula (pola dasar), Menengah (termasuk pola variasi), dan Lanjutan (termasuk teknik kompleks)."

@@ -81,6 +81,10 @@
             "question": "Puis-je imprimer les partitions téléchargées ?",
             "answer": "Oui, vous pouvez imprimer pour un usage personnel de pratique. Cependant, l'utilisation commerciale ou la redistribution est interdite."
           },
+          "mobileDownload": {
+            "question": "Impossible de télécharger sur mobile ?",
+            "answer": "Si vous avez accédé via un navigateur intégré (Naver, KakaoTalk, Instagram, etc.), le téléchargement peut être bloqué par des politiques de sécurité. Fermez l'application, ouvrez Chrome/Samsung Internet/Safari, allez sur copydrum.com, connectez-vous, puis téléchargez depuis [Ma page > Commandes]. Le fichier sera enregistré dans le dossier Téléchargements de l'app Fichiers. Si le problème persiste, contactez-nous."
+          },
           "difficulty": {
             "question": "Comment les niveaux de difficulté sont-ils classés ?",
             "answer": "Ils sont classés comme Débutant (motifs de base), Intermédiaire (incluant les motifs de variation) et Avancé (incluant les techniques complexes)."

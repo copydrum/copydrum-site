@@ -81,6 +81,10 @@
             "question": "İndirilen notaları yazdırabilir miyim?",
             "answer": "Evet, kişisel pratik kullanımı için yazdırabilirsiniz. Ancak ticari kullanım veya yeniden dağıtım yasaktır."
           },
+          "mobileDownload": {
+            "question": "Telefonda indirme yapılamıyor mu?",
+            "answer": "Naver, KakaoTalk, Instagram gibi uygulama içi tarayıcılarla eriştiyseniz güvenlik politikaları nedeniyle indirme engellenebilir. Uygulamayı kapatıp Chrome/Samsung Internet/Safari ile copydrum.com'a girin, giriş yaptıktan sonra [Sayfam > Siparişler] üzerinden indirin. Dosya, Dosyalar uygulamasındaki İndirilenler klasörüne kaydedilir. Sorun devam ederse bizimle iletişime geçin."
+          },
           "difficulty": {
             "question": "Zorluk seviyeleri nasıl sınıflandırılır?",
             "answer": "Başlangıç (temel kalıplar), Orta (varyasyon kalıpları dahil) ve İleri (karmaşık teknikler dahil) olarak sınıflandırılır."

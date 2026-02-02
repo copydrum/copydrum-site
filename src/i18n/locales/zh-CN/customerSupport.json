@@ -81,6 +81,10 @@
             "question": "我可以打印下载的乐谱吗？",
             "answer": "是的，您可以打印用于个人练习。但是，禁止商业使用或重新分发。"
           },
+          "mobileDownload": {
+            "question": "手机无法下载吗？",
+            "answer": "如果通过Naver、KakaoTalk、Instagram等应用内浏览器访问，可能因安全策略导致下载被阻止。请关闭该应用，使用Chrome/三星互联网/Safari打开copydrum.com并登录，然后在[我的页面 > 订单]中下载。文件会保存在“文件”应用的下载文件夹中。如仍无法下载，请联系我们。"
+          },
           "difficulty": {
             "question": "难度级别如何分类？",
             "answer": "分为初级（基本模式）、中级（包括变化模式）和高级（包括复杂技巧）。"

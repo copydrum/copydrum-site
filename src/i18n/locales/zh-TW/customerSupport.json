@@ -81,6 +81,10 @@
             "question": "我可以列印下載的樂譜嗎？",
             "answer": "是的，您可以列印用於個人練習。但是，禁止商業使用或重新分發。"
           },
+          "mobileDownload": {
+            "question": "手機無法下載嗎？",
+            "answer": "若透過 Naver、KakaoTalk、Instagram 等 App 內建瀏覽器開啟，可能因安全政策導致下載被阻擋。請關閉該 App，使用 Chrome/三星網際網路/Safari 開啟 copydrum.com 並登入，再於 [我的頁面 > 訂單] 下載。檔案會儲存在「檔案」App 的下載資料夾。若仍無法下載，請聯繫我們。"
+          },
           "difficulty": {
             "question": "難度等級如何分類？",
             "answer": "分為初學者（基本節奏型）、中級（包括變化節奏型）和進階（包括複雜技巧）。"

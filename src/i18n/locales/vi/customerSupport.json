@@ -81,6 +81,10 @@
             "question": "Tôi có thể in bản nhạc đã tải xuống không?",
             "answer": "Có, bạn có thể in để sử dụng luyện tập cá nhân. Tuy nhiên, sử dụng thương mại hoặc phân phối lại bị cấm."
           },
+          "mobileDownload": {
+            "question": "Không tải được trên điện thoại?",
+            "answer": "Nếu bạn truy cập qua trình duyệt trong ứng dụng như Naver, KakaoTalk hoặc Instagram, việc tải xuống có thể bị chặn bởi chính sách bảo mật. Hãy đóng ứng dụng đó và mở Chrome/Samsung Internet/Safari, truy cập copydrum.com, đăng nhập, rồi tải tại [Trang của tôi > Đơn hàng]. Tệp sẽ được lưu trong thư mục Tải xuống của ứng dụng Tệp. Nếu vẫn không được, vui lòng liên hệ với chúng tôi."
+          },
           "difficulty": {
             "question": "Các cấp độ độ khó được phân loại như thế nào?",
             "answer": "Chúng được phân loại là Người mới bắt đầu (mẫu cơ bản), Trung cấp (bao gồm mẫu biến thể) và Nâng cao (bao gồm kỹ thuật phức tạp)."

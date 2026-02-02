@@ -81,6 +81,10 @@
             "question": "Can I print the downloaded sheet music?",
             "answer": "Yes, you can print for personal practice use. However, commercial use or redistribution is prohibited."
           },
+          "mobileDownload": {
+            "question": "Can't download on your phone?",
+            "answer": "If you opened the site via in-app browsers like Naver, KakaoTalk, or Instagram, downloads may be blocked by their security policies. Close the app and open Chrome/Samsung Internet/Safari, visit copydrum.com and log in, then download from [My Page > Orders]. The file will be saved in the Downloads folder in your Files app. If it still doesn't work, please contact us."
+          },
           "difficulty": {
             "question": "How are difficulty levels classified?",
             "answer": "They are classified as Beginner (basic patterns), Intermediate (including variation patterns), and Advanced (including complex techniques)."

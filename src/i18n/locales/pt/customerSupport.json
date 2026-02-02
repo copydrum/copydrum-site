@@ -81,6 +81,10 @@
             "question": "Posso imprimir as partituras baixadas?",
             "answer": "Sim, você pode imprimir para uso pessoal de prática. No entanto, uso comercial ou redistribuição é proibido."
           },
+          "mobileDownload": {
+            "question": "Não consegue baixar no celular?",
+            "answer": "Se você acessou por navegadores internos como Naver, KakaoTalk ou Instagram, o download pode ser bloqueado por políticas de segurança. Feche o app e abra Chrome/Samsung Internet/Safari, acesse copydrum.com, faça login e baixe em [Minha Página > Pedidos]. O arquivo será salvo na pasta Downloads do app Arquivos. Se ainda não funcionar, entre em contato conosco."
+          },
           "difficulty": {
             "question": "Como os níveis de dificuldade são classificados?",
             "answer": "São classificados como Iniciante (padrões básicos), Intermediário (incluindo padrões de variação) e Avançado (incluindo técnicas complexas)."
