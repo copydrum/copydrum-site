@@ -2638,15 +2638,13 @@ const AdminPage: React.FC = () => {
     try {
       const XLSX = await import('xlsx');
       const worksheetData = [
-        ['SONG ID', '앨범명', '작품명', '가수명', '구매 수', '', '장르 카테고리', '매출액'],
+        ['상품ID', '', '곡명', '가수명', '총 판매건수', '판매액'],
         ...copyrightReportData.map((row) => [
           row.songId,
-          row.albumName ?? '',
+          '',
           row.title,
           row.artist,
           row.purchaseCount,
-          '',
-          row.categoryName ?? '',
           Math.round(row.revenue),
         ]),
       ];
@@ -2880,15 +2878,13 @@ const AdminPage: React.FC = () => {
       const workbook = XLSX.utils.book_new();
 
       const purchaseSheetData = [
-        ['SONG ID', '앨범명', '작품명', '가수명', '구매 수', '', '장르 카테고리', '매출액'],
+        ['상품ID', '', '곡명', '가수명', '총 판매건수', '판매액'],
         ...copyrightReportData.map((row) => [
           row.songId,
-          row.albumName ?? '',
+          '',
           row.title,
           row.artist,
           row.purchaseCount,
-          '',
-          row.categoryName ?? '',
           Math.round(row.revenue),
         ]),
       ];
@@ -11379,25 +11375,19 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      SONG ID
+                      상품ID
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      작품명
+                      곡명
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                       가수명
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      앨범명
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      장르
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      총 판매건수
                     </th>
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      구매 수
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      매출액
+                      판매액
                     </th>
                   </tr>
                 </thead>
@@ -11407,8 +11397,6 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
                       <td className="px-4 py-3 text-sm font-semibold text-gray-900">{row.songId}</td>
                       <td className="px-4 py-3 text-sm text-gray-800">{row.title || '-'}</td>
                       <td className="px-4 py-3 text-sm text-gray-700">{row.artist || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{row.albumName || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{row.categoryName || '-'}</td>
                       <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">
                         {row.purchaseCount.toLocaleString('ko-KR')}
                       </td>
