@@ -286,7 +286,7 @@ const ORDER_STATUS_FALLBACK_MAP: Record<string, OrderStatus> = {
 
 const REFUNDABLE_STATUSES: OrderStatus[] = ['payment_confirmed', 'completed'];
 const CANCELLABLE_STATUSES: OrderStatus[] = ['pending', 'awaiting_deposit', 'payment_confirmed', 'completed'];
-const KOREAN_PAYMENT_METHODS = ['card', 'bank_transfer', 'kakaopay'] as const;
+const KOREAN_PAYMENT_METHODS = ['card', 'bank_transfer', 'kakaopay', 'inicis'] as const;
 
 const normalizeOrderStatus = (status: string | null | undefined): OrderStatus => {
   if (!status) return 'pending';
