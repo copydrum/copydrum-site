@@ -139,9 +139,11 @@ interface CopyrightReportRow {
   artist: string;
   albumName: string | null;
   categoryName: string | null;
+  categoryId: string | null;
   purchaseCount: number;
   unitAmount: number;
   revenue: number;
+  paymentMethodLabels: string[];
 }
 
 interface DirectSaleRow {
@@ -2393,10 +2395,7 @@ const AdminPage: React.FC = () => {
             status,
             payment_method,
             total_amount,
-            profiles:profiles!orders_user_id_fkey (
-              id,
-              email
-            ),
+            user_id,
             order_items (
               id,
               drum_sheet_id,
@@ -2408,12 +2407,14 @@ const AdminPage: React.FC = () => {
                 title,
                 artist,
                 price,
-                album_name
+                album_name,
+                category_id
               )
             )
           `,
           )
           .eq('status', 'completed')
+          .eq('payment_status', 'paid')
           .in('payment_method', [...KOREAN_PAYMENT_METHODS])
           .gte('created_at', startTimestamp)
           .lte('created_at', endTimestamp)
@@ -2425,9 +2426,11 @@ const AdminPage: React.FC = () => {
 
         const aggregatedMap = new Map<string, CopyrightReportRow>();
         const sheetIds = new Set<string>();
+        const categoryIds = new Set<string>();
 
         (data ?? []).forEach((order: any) => {
           const items = Array.isArray(order.order_items) ? order.order_items : [];
+          const paymentMethodLabel = getPaymentMethodLabel(order.payment_method);
           items.forEach((item: any) => {
             const sheet = item.drum_sheets ?? null;
             const sheetId = sheet?.id ?? item.drum_sheet_id ?? null;
@@ -2440,6 +2443,7 @@ const AdminPage: React.FC = () => {
             const resolvedTitle = sheet?.title ?? item.sheet_title ?? '';
             const resolvedArtist = sheet?.artist ?? '';
             const resolvedAlbum = (sheet?.album_name ?? null) as string | null;
+            const resolvedCategoryId = (sheet?.category_id ?? null) as string | null;
 
             const resolvedAmount = Number(
               typeof item.price === 'number' ? item.price : sheet?.price ?? 0,
@@ -2453,6 +2457,12 @@ const AdminPage: React.FC = () => {
               if (!existing.albumName && resolvedAlbum) {
                 existing.albumName = resolvedAlbum;
               }
+              if (!existing.categoryId && resolvedCategoryId) {
+                existing.categoryId = resolvedCategoryId;
+              }
+              if (!existing.paymentMethodLabels.includes(paymentMethodLabel)) {
+                existing.paymentMethodLabels.push(paymentMethodLabel);
+              }
             } else {
               aggregatedMap.set(sheetId, {
                 songId: sheetId,
@@ -2460,13 +2470,41 @@ const AdminPage: React.FC = () => {
                 artist: resolvedArtist,
                 albumName: resolvedAlbum,
                 categoryName: null,
+                categoryId: resolvedCategoryId,
                 purchaseCount: 1,
                 unitAmount: normalizedAmount,
                 revenue: normalizedAmount,
+                paymentMethodLabels: [paymentMethodLabel],
               });
+            }
+            if (resolvedCategoryId) {
+              categoryIds.add(resolvedCategoryId);
             }
           });
         });
+
+        const orderUserIds = new Set<string>();
+        (data ?? []).forEach((order: any) => {
+          if (order.user_id) {
+            orderUserIds.add(order.user_id);
+          }
+        });
+
+        let profileEmailMap = new Map<string, string>();
+        if (orderUserIds.size > 0) {
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('id, email')
+            .in('id', Array.from(orderUserIds));
+
+          if (!profileError && profileData) {
+            profileData.forEach((profile: any) => {
+              if (profile.id && profile.email) {
+                profileEmailMap.set(profile.id, profile.email);
+              }
+            });
+          }
+        }
 
         const directSalesRows: DirectSaleRow[] = (data ?? []).map((order: any) => {
           const orderItems = Array.isArray(order.order_items) ? order.order_items : [];
@@ -2481,7 +2519,7 @@ const AdminPage: React.FC = () => {
             paymentMethodLabel,
             totalAmount: Number(order.total_amount ?? 0),
             itemCount: orderItems.length,
-            customerEmail: order.profiles?.email ?? null,
+            customerEmail: order.user_id ? profileEmailMap.get(order.user_id) ?? null : null,
           };
         });
 
@@ -2567,10 +2605,36 @@ const AdminPage: React.FC = () => {
           }
         }
 
+        if (categoryIds.size > 0) {
+          const { data: categoryNames, error: categoryNameError } = await supabase
+            .from('categories')
+            .select('id, name')
+            .in('id', Array.from(categoryIds));
+
+          if (!categoryNameError && categoryNames) {
+            const categoryIdMap = new Map<string, string>();
+            categoryNames.forEach((row: any) => {
+              if (row.id && row.name) {
+                categoryIdMap.set(row.id, row.name);
+              }
+            });
+
+            aggregatedMap.forEach((row) => {
+              if (!row.categoryName && row.categoryId) {
+                const categoryName = categoryIdMap.get(row.categoryId);
+                if (categoryName) {
+                  row.categoryName = categoryName;
+                }
+              }
+            });
+          }
+        }
+
         const rows = Array.from(aggregatedMap.values()).map((row) => ({
           ...row,
           unitAmount:
             row.purchaseCount > 0 ? Number(row.revenue / row.purchaseCount) : row.unitAmount,
+          paymentMethodLabels: row.paymentMethodLabels.sort((a, b) => a.localeCompare(b, 'ko')),
         }));
 
         rows.sort((a, b) => {
@@ -2638,7 +2702,7 @@ const AdminPage: React.FC = () => {
     try {
       const XLSX = await import('xlsx');
       const worksheetData = [
-        ['상품ID', '', '곡명', '가수명', '총 판매건수', '판매액'],
+        ['상품ID', '', '곡명', '가수명', '총 판매건수', '판매액', '결제수단', '악보카테고리명'],
         ...copyrightReportData.map((row) => [
           row.songId,
           '',
@@ -2646,6 +2710,8 @@ const AdminPage: React.FC = () => {
           row.artist,
           row.purchaseCount,
           Math.round(row.revenue),
+          row.paymentMethodLabels.join(', '),
+          row.categoryName ?? '',
         ]),
       ];
 
@@ -2878,7 +2944,7 @@ const AdminPage: React.FC = () => {
       const workbook = XLSX.utils.book_new();
 
       const purchaseSheetData = [
-        ['상품ID', '', '곡명', '가수명', '총 판매건수', '판매액'],
+        ['상품ID', '', '곡명', '가수명', '총 판매건수', '판매액', '결제수단', '악보카테고리명'],
         ...copyrightReportData.map((row) => [
           row.songId,
           '',
@@ -2886,6 +2952,8 @@ const AdminPage: React.FC = () => {
           row.artist,
           row.purchaseCount,
           Math.round(row.revenue),
+          row.paymentMethodLabels.join(', '),
+          row.categoryName ?? '',
         ]),
       ];
       const purchaseSheet = XLSX.utils.aoa_to_sheet(purchaseSheetData);
@@ -11301,7 +11369,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
               disabled={copyrightReportLoading || !hasPurchaseData}
             >
               <i className="ri-download-2-line mr-2"></i>
-              Excel 다운로드
+              저작권 보고 Excel
             </button>
             {copyrightReportLoading && (
               <span className="inline-flex items-center text-sm text-gray-500">
@@ -11426,7 +11494,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
               disabled={copyrightReportLoading || directSalesData.length === 0}
             >
               <i className="ri-download-2-line mr-2"></i>
-              Excel 다운로드
+              직접 결제 매출 Excel
             </button>
           </div>
 
@@ -11504,7 +11572,7 @@ ONE MORE TIME,ALLDAY PROJECT,중급,ALLDAY PROJECT - ONE MORE TIME.pdf,https://w
               disabled={copyrightReportLoading || cashChargeData.length === 0}
             >
               <i className="ri-download-2-line mr-2"></i>
-              Excel 다운로드
+              캐시 충전 Excel
             </button>
           </div>
 
