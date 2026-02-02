@@ -1,0 +1,35 @@
+{
+  "title": "利用規約",
+  "lastUpdated": "最終更新日: 2026年2月2日",
+  "sections": {
+    "introduction": {
+      "title": "1. はじめに",
+      "description": "CopyDrum（以下「当社」）へようこそ。https://copydrum.com（以下「サイト」）にアクセスまたは購入した場合、本利用規約に同意したものとみなされます。"
+    },
+    "digitalProducts": {
+      "title": "2. デジタル商品と利用権",
+      "description1": "CopyDrumで販売されるすべての商品（PDFドラム楽譜およびオーディオトラックを含む）はデジタルダウンロードです。",
+      "description2": "購入後、ファイルを",
+      "emphasis": "個人的・非商業的利用のみ",
+      "description3": "に使用できる、非独占的・譲渡不可のライセンスが付与されます。",
+      "restrictionsTitle": "以下は禁止されています:",
+      "restrictions": {
+        "item1": "第三者への再販売、再配布、共有",
+        "item2": "公開ファイル共有サイトへのアップロード"
+      }
+    },
+    "payments": {
+      "title": "3. 支払い",
+      "description": "注文処理はオンライン再販業者であるPaddle.comにより行われます。Paddle.comはすべての注文のMerchant of Recordであり、カスタマーサポートおよび返金対応を行います。"
+    },
+    "liability": {
+      "title": "4. 免責事項",
+      "description": "CopyDrumは、当社製品の使用または使用不能により生じた直接的、間接的、付随的、結果的損害について責任を負いません。"
+    },
+    "contact": {
+      "title": "5. お問い合わせ",
+      "description": "本規約に関するご質問は、以下のメールアドレスまでご連絡ください:",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

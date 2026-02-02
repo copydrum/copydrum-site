@@ -1,0 +1,32 @@
+{
+  "title": "隱私權政策",
+  "lastUpdated": "最後更新：2026年2月2日",
+  "sections": {
+    "collect": {
+      "title": "1. 我們收集的資訊",
+      "description": "在您購買時，我們會收集您提供的姓名、電子郵件等資訊。信用卡資料不會儲存在我們的伺服器上。"
+    },
+    "use": {
+      "title": "2. 我們如何使用您的資訊",
+      "description": "我們使用您的資訊以：",
+      "items": {
+        "item1": "處理訂單並提供數位下載。",
+        "item2": "發送與您已購買商品相關的重要更新。",
+        "item3": "回應您的留言與客服請求。"
+      }
+    },
+    "payment": {
+      "title": "3. 付款處理",
+      "description": "訂單流程由線上經銷商 Paddle.com 處理。Paddle.com 為所有訂單之 Merchant of Record，所有付款資料依其隱私權政策安全處理。"
+    },
+    "cookies": {
+      "title": "4. Cookies",
+      "description": "我們使用 Cookies 分析網站流量並改善瀏覽體驗。使用本網站即表示您同意使用 Cookies。"
+    },
+    "contact": {
+      "title": "5. 聯絡我們",
+      "description": "如對本隱私權政策有任何疑問，請聯絡：",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

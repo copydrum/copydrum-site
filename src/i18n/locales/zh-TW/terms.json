@@ -1,0 +1,35 @@
+{
+  "title": "服務條款",
+  "lastUpdated": "最後更新：2026年2月2日",
+  "sections": {
+    "introduction": {
+      "title": "1. 介紹",
+      "description": "歡迎使用 CopyDrum（「我們」）。造訪或於 https://copydrum.com（「本網站」）購買即表示您同意受本服務條款約束。"
+    },
+    "digitalProducts": {
+      "title": "2. 數位商品與使用權",
+      "description1": "CopyDrum 所售商品（包含 PDF 鼓譜與音訊軌）皆為數位下載商品。",
+      "description2": "購買後，您將獲得非獨占、不可轉讓之授權，僅可用於",
+      "emphasis": "個人、非商業用途",
+      "description3": "。",
+      "restrictionsTitle": "您不得：",
+      "restrictions": {
+        "item1": "轉售、再分發或與第三方分享檔案。",
+        "item2": "將檔案上傳至公開檔案分享網站。"
+      }
+    },
+    "payments": {
+      "title": "3. 付款",
+      "description": "訂單流程由線上經銷商 Paddle.com 處理。Paddle.com 為所有訂單之 Merchant of Record，並負責客服與退款事宜。"
+    },
+    "liability": {
+      "title": "4. 責任限制",
+      "description": "因使用或無法使用本產品所造成之任何直接、間接、附帶或結果性損害，CopyDrum 不負責任。"
+    },
+    "contact": {
+      "title": "5. 聯絡我們",
+      "description": "如對本條款有任何疑問，請聯絡：",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

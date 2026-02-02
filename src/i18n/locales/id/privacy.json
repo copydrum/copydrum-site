@@ -1,0 +1,32 @@
+{
+  "title": "Kebijakan Privasi",
+  "lastUpdated": "Terakhir diperbarui: 02 Februari 2026",
+  "sections": {
+    "collect": {
+      "title": "1. Informasi yang kami kumpulkan",
+      "description": "Kami mengumpulkan informasi yang Anda berikan saat melakukan pembelian, seperti nama dan email. Kami tidak menyimpan detail kartu kredit di server kami."
+    },
+    "use": {
+      "title": "2. Cara kami menggunakan informasi Anda",
+      "description": "Kami menggunakan informasi Anda untuk:",
+      "items": {
+        "item1": "Memproses pesanan dan mengirimkan unduhan digital.",
+        "item2": "Mengirim pembaruan penting terkait produk yang dibeli.",
+        "item3": "Menanggapi komentar dan permintaan layanan pelanggan."
+      }
+    },
+    "payment": {
+      "title": "3. Pemrosesan pembayaran",
+      "description": "Proses pemesanan dilakukan oleh Paddle.com sebagai reseller online. Paddle.com adalah Merchant of Record untuk semua pesanan dan menangani data pembayaran secara aman sesuai kebijakan privasinya."
+    },
+    "cookies": {
+      "title": "4. Cookie",
+      "description": "Kami menggunakan cookie untuk menganalisis lalu lintas situs dan meningkatkan pengalaman browsing. Dengan menggunakan situs, Anda menyetujui penggunaan cookie."
+    },
+    "contact": {
+      "title": "5. Hubungi kami",
+      "description": "Jika Anda memiliki pertanyaan tentang kebijakan ini, hubungi kami di:",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

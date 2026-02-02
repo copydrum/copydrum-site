@@ -32,6 +32,8 @@ const PortOnePayPalReturnPage = lazy(() => import('../pages/payments/portone-pay
 const PortOneReturnPage = lazy(() => import('../pages/PortOneReturn'));
 const PortonePaypalTestPage = lazy(() => import('../pages/dev/PortonePaypalTest'));
 const RefundPolicyPage = lazy(() => import('../pages/policy/RefundPolicyPage'));
+const TermsPage = lazy(() => import('../pages/policy/TermsPage'));
+const PrivacyPolicyPage = lazy(() => import('../pages/policy/PrivacyPolicyPage'));
 const CollectionsPage = lazy(() => import('../pages/collections/page'));
 const CollectionDetailPage = lazy(() => import('../pages/collection-detail/page'));
 
@@ -307,6 +309,30 @@ const routes: RouteObject[] = [
     element: (
       <Suspense fallback={<LoadingSpinner />}>
         <RefundPolicyPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/refund-policy',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <RefundPolicyPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/terms',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <TermsPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/privacy',
+    element: (
+      <Suspense fallback={<LoadingSpinner />}>
+        <PrivacyPolicyPage />
       </Suspense>
     ),
   },

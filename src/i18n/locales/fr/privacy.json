@@ -1,0 +1,32 @@
+{
+  "title": "Politique de confidentialité",
+  "lastUpdated": "Dernière mise à jour : 02 février 2026",
+  "sections": {
+    "collect": {
+      "title": "1. Informations collectées",
+      "description": "Nous collectons les informations que vous fournissez lors d’un achat, telles que votre nom et votre adresse e-mail. Nous ne stockons pas les données de carte bancaire sur nos serveurs."
+    },
+    "use": {
+      "title": "2. Utilisation de vos informations",
+      "description": "Nous utilisons vos informations pour :",
+      "items": {
+        "item1": "Traiter vos commandes et fournir les téléchargements numériques.",
+        "item2": "Vous envoyer des informations importantes concernant vos achats.",
+        "item3": "Répondre à vos commentaires et demandes de support."
+      }
+    },
+    "payment": {
+      "title": "3. Traitement des paiements",
+      "description": "Le processus de commande est assuré par notre revendeur Paddle.com. Paddle.com est le Merchant of Record pour toutes les commandes et traite les données de paiement conformément à sa politique de confidentialité."
+    },
+    "cookies": {
+      "title": "4. Cookies",
+      "description": "Nous utilisons des cookies pour analyser le trafic du site et améliorer votre expérience de navigation. En utilisant notre site, vous consentez à l’utilisation des cookies."
+    },
+    "contact": {
+      "title": "5. Contact",
+      "description": "Si vous avez des questions concernant cette politique, contactez-nous à :",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

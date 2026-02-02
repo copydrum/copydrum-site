@@ -1,0 +1,32 @@
+{
+  "title": "Gizlilik Politikası",
+  "lastUpdated": "Son güncelleme: 02 Şubat 2026",
+  "sections": {
+    "collect": {
+      "title": "1. Topladığımız bilgiler",
+      "description": "Satın alma sırasında sağladığınız ad ve e-posta gibi bilgileri toplarız. Kredi kartı bilgilerinizi sunucularımızda saklamayız."
+    },
+    "use": {
+      "title": "2. Bilgilerinizi nasıl kullanıyoruz",
+      "description": "Bilgilerinizi şunlar için kullanırız:",
+      "items": {
+        "item1": "Siparişleri işlemek ve dijital indirmeleri teslim etmek.",
+        "item2": "Satın aldığınız ürünlerle ilgili önemli güncellemeleri göndermek.",
+        "item3": "Yorumlarınızı ve destek taleplerinizi yanıtlamak."
+      }
+    },
+    "payment": {
+      "title": "3. Ödeme işlemleri",
+      "description": "Sipariş süreci Paddle.com tarafından yürütülür. Paddle.com tüm siparişlerin Merchant of Record'udur ve ödeme verilerini kendi gizlilik politikasına uygun şekilde güvenle işler."
+    },
+    "cookies": {
+      "title": "4. Çerezler",
+      "description": "Web sitesi trafiğini analiz etmek ve deneyiminizi iyileştirmek için çerezler kullanırız. Sitemizi kullanarak çerez kullanımını kabul etmiş olursunuz."
+    },
+    "contact": {
+      "title": "5. İletişim",
+      "description": "Bu Gizlilik Politikası hakkında sorularınız varsa bizimle iletişime geçin:",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

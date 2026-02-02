@@ -1,36 +1,26 @@
 {
-  "title": "Reembolso e Entrega (Política de Produto Digital)",
+  "title": "Política de Reembolso",
+  "lastUpdated": "Última atualização: 02 de fevereiro de 2026",
   "sections": {
-    "productType": {
-      "title": "1. Tipo de Produto",
-      "description": "Todos os produtos vendidos no CopyDrum são conteúdos digitais (partituras de bateria em PDF). Estes são produtos eletrônicos não físicos disponíveis para download imediato após o pagamento."
+    "digitalProducts": {
+      "title": "1. Produtos digitais",
+      "description1": "Devido à natureza dos produtos digitais (partituras em PDF, arquivos de áudio),",
+      "emphasis": "todas as vendas são finais e não reembolsáveis",
+      "description2": "após o envio do link de download."
     },
-    "deliveryMethod": {
-      "title": "2. Método de Entrega",
-      "description1": "Após o pagamento bem-sucedido, os arquivos estão disponíveis para download instantâneo em",
-      "description2": "Minha Página > Histórico de Pedidos",
-      "description3": "Se o download não funcionar, fornecemos links de download reemitidos ou reenviamos os arquivos manualmente mediante solicitação."
-    },
-    "refundPolicy": {
-      "title": "3. Política de Reembolso",
-      "description": "Devido à natureza dos produtos digitais, reembolsos não estão disponíveis uma vez que o arquivo foi baixado ou acessado.",
-      "exceptionNote": "No entanto, oferecemos reembolsos ou trocas nos seguintes casos excepcionais:",
-      "exceptions": {
-        "exception1": "Dentro de 7 dias após a compra se o arquivo não foi baixado",
-        "exception2": "Arquivo incorreto fornecido ou erros técnicos que tornam o arquivo inutilizável",
-        "exception3": "Pagamentos duplicados para o mesmo produto"
+    "exceptions": {
+      "title": "2. Exceções",
+      "description": "Podemos oferecer reembolso ou substituição a nosso critério se:",
+      "items": {
+        "item1": "O arquivo baixado estiver corrompido ou tecnicamente defeituoso.",
+        "item2": "O conteúdo do arquivo não corresponder à descrição do produto.",
+        "item3": "Você ainda não tiver baixado o arquivo e desejar cancelar o pedido dentro de 14 dias da compra."
       }
     },
-    "customerProtection": {
-      "title": "4. Proteção ao Cliente",
-      "description": "Nos esforçamos para resolver problemas imediatamente:",
-      "protections": {
-        "protection1": "Substituição gratuita para erros de arquivo",
-        "protection2": "Reemissão de links de download se ocorrerem problemas de acesso",
-        "protection3": "Reembolso imediato para transações duplicadas"
-      },
-      "contact": "Atendimento ao Cliente:",
-      "email": "support@copydrum.com"
+    "request": {
+      "title": "3. Como solicitar reembolso",
+      "description": "Se você acredita se enquadrar nas exceções acima, entre em contato com o número do pedido em:",
+      "email": "copydrum@hanmail.net"
     }
   }
 }

@@ -1,0 +1,32 @@
+{
+  "title": "Datenschutzerklärung",
+  "lastUpdated": "Zuletzt aktualisiert: 02. Februar 2026",
+  "sections": {
+    "collect": {
+      "title": "1. Welche Informationen wir erfassen",
+      "description": "Wir erfassen Informationen, die Sie beim Kauf angeben, wie Name und E-Mail-Adresse. Kreditkartendaten werden nicht auf unseren Servern gespeichert."
+    },
+    "use": {
+      "title": "2. Wie wir Ihre Informationen verwenden",
+      "description": "Wir verwenden Ihre Informationen, um:",
+      "items": {
+        "item1": "Bestellungen zu verarbeiten und digitale Downloads bereitzustellen.",
+        "item2": "Wichtige Updates zu gekauften Produkten zu senden.",
+        "item3": "Auf Kommentare und Kundenanfragen zu antworten."
+      }
+    },
+    "payment": {
+      "title": "3. Zahlungsabwicklung",
+      "description": "Unser Bestellprozess wird von unserem Online-Reseller Paddle.com durchgeführt. Paddle.com ist der Merchant of Record für alle Bestellungen und verarbeitet Zahlungsdaten gemäß seiner Datenschutzerklärung."
+    },
+    "cookies": {
+      "title": "4. Cookies",
+      "description": "Wir verwenden Cookies, um den Website-Traffic zu analysieren und Ihr Nutzererlebnis zu verbessern. Durch die Nutzung unserer Website stimmen Sie der Verwendung von Cookies zu."
+    },
+    "contact": {
+      "title": "5. Kontakt",
+      "description": "Wenn Sie Fragen zu dieser Datenschutzerklärung haben, kontaktieren Sie uns unter:",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

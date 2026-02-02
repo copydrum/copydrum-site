@@ -1,0 +1,35 @@
+{
+  "title": "Şartlar ve Koşullar",
+  "lastUpdated": "Son güncelleme: 02 Şubat 2026",
+  "sections": {
+    "introduction": {
+      "title": "1. Giriş",
+      "description": "CopyDrum'a (\"biz\") hoş geldiniz. https://copydrum.com (\"Site\") üzerinden erişim sağlayarak veya satın alarak bu Şartlar ve Koşullar'ı kabul etmiş olursunuz."
+    },
+    "digitalProducts": {
+      "title": "2. Dijital ürünler ve kullanım hakları",
+      "description1": "CopyDrum'da satılan tüm ürünler (PDF davul notaları ve ses kayıtları dahil) dijital indirmelerdir.",
+      "description2": "Satın aldıktan sonra dosyaları",
+      "emphasis": "yalnızca kişisel ve ticari olmayan kullanım",
+      "description3": " için kullanmanıza izin veren devredilemez ve münhasır olmayan bir lisans verilir.",
+      "restrictionsTitle": "Şunları YAPAMAZSINIZ:",
+      "restrictions": {
+        "item1": "Dosyaları yeniden satmak, yeniden dağıtmak veya üçüncü kişilerle paylaşmak.",
+        "item2": "Dosyaları kamuya açık paylaşım sitelerine yüklemek."
+      }
+    },
+    "payments": {
+      "title": "3. Ödemeler",
+      "description": "Sipariş sürecimiz çevrimiçi satıcımız Paddle.com tarafından yürütülür. Paddle.com tüm siparişlerin Merchant of Record'udur ve müşteri hizmetleri ile iadeleri yönetir."
+    },
+    "liability": {
+      "title": "4. Sorumluluğun sınırlandırılması",
+      "description": "CopyDrum, ürünlerimizin kullanımı veya kullanılamamasından doğan doğrudan, dolaylı, arızi veya sonuçsal zararlardan sorumlu değildir."
+    },
+    "contact": {
+      "title": "5. İletişim",
+      "description": "Bu şartlarla ilgili sorularınız için bizimle iletişime geçin:",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

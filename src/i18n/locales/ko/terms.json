@@ -1,0 +1,35 @@
+{
+  "title": "이용약관",
+  "lastUpdated": "최종 업데이트: 2026년 2월 2일",
+  "sections": {
+    "introduction": {
+      "title": "1. 소개",
+      "description": "CopyDrum(이하 \"회사\")에 오신 것을 환영합니다. https://copydrum.com(이하 \"사이트\")에 접속하거나 구매하는 경우, 본 이용약관에 동의한 것으로 간주됩니다."
+    },
+    "digitalProducts": {
+      "title": "2. 디지털 상품 및 이용 권한",
+      "description1": "CopyDrum에서 판매되는 모든 상품(PDF 드럼 악보 및 오디오 트랙 포함)은 디지털 다운로드 상품입니다.",
+      "description2": "구매 시, 파일을",
+      "emphasis": "개인적·비상업적 용도",
+      "description3": "로 사용할 수 있는 양도 불가·비독점 라이선스가 부여됩니다.",
+      "restrictionsTitle": "다음 행위는 금지됩니다:",
+      "restrictions": {
+        "item1": "제3자에게 재판매, 재배포 또는 공유",
+        "item2": "공개 파일 공유 사이트에 업로드"
+      }
+    },
+    "payments": {
+      "title": "3. 결제",
+      "description": "결제 및 주문 처리는 온라인 리셀러인 Paddle.com을 통해 이루어집니다. Paddle.com은 모든 주문의 Merchant of Record이며, 고객 문의 및 환불 처리를 담당합니다."
+    },
+    "liability": {
+      "title": "4. 책임의 제한",
+      "description": "CopyDrum은 제품의 사용 또는 사용 불가로 인해 발생하는 직접, 간접, 부수적, 결과적 손해에 대해 책임을 지지 않습니다."
+    },
+    "contact": {
+      "title": "5. 문의",
+      "description": "본 약관에 대한 문의는 아래 이메일로 연락해 주세요:",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

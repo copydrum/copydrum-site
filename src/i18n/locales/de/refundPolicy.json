@@ -1,36 +1,26 @@
 {
-  "title": "Rückerstattung & Lieferung (Digitale Produktrichtlinie)",
+  "title": "Rückerstattungsrichtlinie",
+  "lastUpdated": "Zuletzt aktualisiert: 02. Februar 2026",
   "sections": {
-    "productType": {
-      "title": "1. Produkttyp",
-      "description": "Alle auf CopyDrum verkauften Produkte sind digitale Inhalte (PDF Schlagzeug-Notenblätter). Dies sind nicht-physische elektronische Produkte, die nach Zahlung sofort zum Download verfügbar sind."
+    "digitalProducts": {
+      "title": "1. Digitale Produkte",
+      "description1": "Aufgrund der Natur digitaler Produkte (PDF-Noten, Audiodateien) gelten",
+      "emphasis": "alle Verkäufe als endgültig und nicht erstattungsfähig",
+      "description2": "sobald der Download-Link bereitgestellt wurde."
     },
-    "deliveryMethod": {
-      "title": "2. Liefermethode",
-      "description1": "Nach erfolgreicher Zahlung sind Dateien sofort zum Download verfügbar unter",
-      "description2": "Meine Seite > Bestellhistorie",
-      "description3": "Wenn der Download nicht funktioniert, stellen wir auf Anfrage neu ausgestellte Download-Links bereit oder senden die Dateien manuell erneut."
-    },
-    "refundPolicy": {
-      "title": "3. Rückerstattungsrichtlinie",
-      "description": "Aufgrund der Natur digitaler Produkte sind Rückerstattungen nicht verfügbar, sobald die Datei heruntergeladen oder aufgerufen wurde.",
-      "exceptionNote": "Wir bieten jedoch Rückerstattungen oder Umtausch in den folgenden Ausnahmefällen an:",
-      "exceptions": {
-        "exception1": "Innerhalb von 7 Tagen nach dem Kauf, wenn die Datei nicht heruntergeladen wurde",
-        "exception2": "Falsche Datei bereitgestellt oder technische Fehler, die die Datei unbrauchbar machen",
-        "exception3": "Doppelte Zahlungen für dasselbe Produkt"
+    "exceptions": {
+      "title": "2. Ausnahmen",
+      "description": "Wir können nach eigenem Ermessen eine Rückerstattung oder einen Ersatz anbieten, wenn:",
+      "items": {
+        "item1": "Die heruntergeladene Datei beschädigt oder technisch fehlerhaft ist.",
+        "item2": "Der Dateiinhalt nicht der Produktbeschreibung entspricht.",
+        "item3": "Sie die Datei noch nicht heruntergeladen haben und die Bestellung innerhalb von 14 Tagen nach dem Kauf stornieren möchten."
       }
     },
-    "customerProtection": {
-      "title": "4. Kundenschutz",
-      "description": "Wir bemühen uns, Probleme sofort zu lösen:",
-      "protections": {
-        "protection1": "Kostenloser Ersatz bei Dateifehlern",
-        "protection2": "Neuausstellung von Download-Links bei Zugriffsproblemen",
-        "protection3": "Sofortige Rückerstattung bei doppelten Transaktionen"
-      },
-      "contact": "Kundensupport:",
-      "email": "support@copydrum.com"
+    "request": {
+      "title": "3. Rückerstattung beantragen",
+      "description": "Wenn Sie glauben, dass Sie die oben genannten Ausnahmen erfüllen, kontaktieren Sie uns mit Ihrer Bestellnummer unter:",
+      "email": "copydrum@hanmail.net"
     }
   }
 }

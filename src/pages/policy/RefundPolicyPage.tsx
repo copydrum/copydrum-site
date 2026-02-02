@@ -1,56 +1,51 @@
-import React from "react";
-import { useTranslation } from "react-i18next";
+import React from 'react';
+import { useTranslation } from 'react-i18next';
+import { useAuthStore } from '../../stores/authStore';
+import MainHeader from '../../components/common/MainHeader';
 
 const RefundPolicyPage: React.FC = () => {
   const { t } = useTranslation();
+  const { user } = useAuthStore();
 
   return (
-    <main className="refund-policy-page">
-      <h1>{t('refundPolicy.title')}</h1>
+    <div className="min-h-screen bg-white">
+      <MainHeader user={user} />
+      <main className="max-w-4xl mx-auto px-4 py-12 space-y-8">
+        <header className="space-y-2">
+          <h1 className="text-3xl font-bold text-gray-900">{t('refundPolicy.title')}</h1>
+          <p className="text-sm text-gray-500">{t('refundPolicy.lastUpdated')}</p>
+        </header>
 
-      <section>
-        <h2>{t('refundPolicy.sections.productType.title')}</h2>
-        <p>
-          {t('refundPolicy.sections.productType.description')}
-        </p>
-      </section>
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold text-gray-900">{t('refundPolicy.sections.digitalProducts.title')}</h2>
+          <p className="text-sm text-gray-700 leading-relaxed md:text-base">
+            {t('refundPolicy.sections.digitalProducts.description1')}
+            <strong> {t('refundPolicy.sections.digitalProducts.emphasis')}</strong>
+            {t('refundPolicy.sections.digitalProducts.description2')}
+          </p>
+        </section>
 
-      <section>
-        <h2>{t('refundPolicy.sections.deliveryMethod.title')}</h2>
-        <p>
-          {t('refundPolicy.sections.deliveryMethod.description1')}
-          <strong> {t('refundPolicy.sections.deliveryMethod.description2')}</strong>
-          {t('refundPolicy.sections.deliveryMethod.description3')}
-        </p>
-      </section>
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold text-gray-900">{t('refundPolicy.sections.exceptions.title')}</h2>
+          <p className="text-sm text-gray-700 leading-relaxed md:text-base">
+            {t('refundPolicy.sections.exceptions.description')}
+          </p>
+          <ul className="list-disc pl-5 text-sm text-gray-700 leading-relaxed md:text-base space-y-1">
+            <li>{t('refundPolicy.sections.exceptions.items.item1')}</li>
+            <li>{t('refundPolicy.sections.exceptions.items.item2')}</li>
+            <li>{t('refundPolicy.sections.exceptions.items.item3')}</li>
+          </ul>
+        </section>
 
-      <section>
-        <h2>{t('refundPolicy.sections.refundPolicy.title')}</h2>
-        <p>
-          {t('refundPolicy.sections.refundPolicy.description')}
-        </p>
-        <p>{t('refundPolicy.sections.refundPolicy.exceptionNote')}</p>
-        <ul>
-          <li>{t('refundPolicy.sections.refundPolicy.exceptions.exception1')}</li>
-          <li>{t('refundPolicy.sections.refundPolicy.exceptions.exception2')}</li>
-          <li>{t('refundPolicy.sections.refundPolicy.exceptions.exception3')}</li>
-        </ul>
-      </section>
-
-      <section>
-        <h2>{t('refundPolicy.sections.customerProtection.title')}</h2>
-        <p>{t('refundPolicy.sections.customerProtection.description')}</p>
-        <ul>
-          <li>{t('refundPolicy.sections.customerProtection.protections.protection1')}</li>
-          <li>{t('refundPolicy.sections.customerProtection.protections.protection2')}</li>
-          <li>{t('refundPolicy.sections.customerProtection.protections.protection3')}</li>
-        </ul>
-        <p>
-          {t('refundPolicy.sections.customerProtection.contact')}{" "}
-          <a href="mailto:support@copydrum.com">{t('refundPolicy.sections.customerProtection.email')}</a>
-        </p>
-      </section>
-    </main>
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold text-gray-900">{t('refundPolicy.sections.request.title')}</h2>
+          <p className="text-sm text-gray-700 leading-relaxed md:text-base">
+            {t('refundPolicy.sections.request.description')}
+            <strong> {t('refundPolicy.sections.request.email')}</strong>
+          </p>
+        </section>
+      </main>
+    </div>
   );
 };
 

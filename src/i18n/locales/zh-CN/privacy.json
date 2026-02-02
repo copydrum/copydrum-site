@@ -1,0 +1,32 @@
+{
+  "title": "隐私政策",
+  "lastUpdated": "最后更新：2026年2月2日",
+  "sections": {
+    "collect": {
+      "title": "1. 我们收集的信息",
+      "description": "当您购买时，我们会收集您直接提供的信息，例如姓名和电子邮件地址。我们不会在服务器上存储您的信用卡信息。"
+    },
+    "use": {
+      "title": "2. 我们如何使用您的信息",
+      "description": "我们使用您的信息来：",
+      "items": {
+        "item1": "处理订单并提供数字下载。",
+        "item2": "发送有关已购产品的重要更新。",
+        "item3": "回复您的评论和客服请求。"
+      }
+    },
+    "payment": {
+      "title": "3. 支付处理",
+      "description": "订单流程由我们的在线经销商 Paddle.com 处理。Paddle.com 是所有订单的 Merchant of Record，所有支付数据均按其隐私政策安全处理。"
+    },
+    "cookies": {
+      "title": "4. Cookies",
+      "description": "我们使用 Cookies 分析网站流量并改进浏览体验。使用本网站即表示您同意我们使用 Cookies。"
+    },
+    "contact": {
+      "title": "5. 联系我们",
+      "description": "如对本隐私政策有任何疑问，请联系：",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

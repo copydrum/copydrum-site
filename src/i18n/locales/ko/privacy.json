@@ -1,0 +1,32 @@
+{
+  "title": "개인정보처리방침",
+  "lastUpdated": "최종 업데이트: 2026년 2월 2일",
+  "sections": {
+    "collect": {
+      "title": "1. 수집하는 정보",
+      "description": "구매 시 이름, 이메일 주소 등 사용자가 직접 제공한 정보를 수집합니다. 신용카드 정보는 당사 서버에 저장하지 않습니다."
+    },
+    "use": {
+      "title": "2. 정보 이용 목적",
+      "description": "수집한 정보는 다음 목적으로 사용됩니다:",
+      "items": {
+        "item1": "주문 처리 및 디지털 다운로드 제공",
+        "item2": "구매한 상품과 관련된 중요 안내 발송",
+        "item3": "문의 및 고객 지원 요청 대응"
+      }
+    },
+    "payment": {
+      "title": "3. 결제 처리",
+      "description": "결제는 온라인 리셀러인 Paddle.com을 통해 처리됩니다. Paddle.com은 모든 주문의 Merchant of Record이며, 결제 정보는 Paddle의 개인정보처리방침에 따라 안전하게 처리됩니다."
+    },
+    "cookies": {
+      "title": "4. 쿠키",
+      "description": "웹사이트 트래픽 분석 및 사용자 경험 개선을 위해 쿠키를 사용합니다. 웹사이트를 이용함으로써 쿠키 사용에 동의하는 것으로 간주됩니다."
+    },
+    "contact": {
+      "title": "5. 문의",
+      "description": "본 개인정보처리방침에 대한 문의는 아래 이메일로 연락해 주세요:",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

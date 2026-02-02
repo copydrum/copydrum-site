@@ -1,0 +1,35 @@
+{
+  "title": "服务条款",
+  "lastUpdated": "最后更新：2026年2月2日",
+  "sections": {
+    "introduction": {
+      "title": "1. 介绍",
+      "description": "欢迎使用 CopyDrum（“我们”）。访问或在 https://copydrum.com（“本网站”）购买即表示您同意受本服务条款约束。"
+    },
+    "digitalProducts": {
+      "title": "2. 数字产品与使用权限",
+      "description1": "CopyDrum 销售的所有产品（包括 PDF 鼓谱和音频轨道）均为数字下载产品。",
+      "description2": "购买后，您将获得非独占、不可转让的许可，仅可用于",
+      "emphasis": "个人、非商业用途",
+      "description3": "。",
+      "restrictionsTitle": "您不得：",
+      "restrictions": {
+        "item1": "向第三方转售、再分发或分享文件。",
+        "item2": "将文件上传至公开的文件分享网站。"
+      }
+    },
+    "payments": {
+      "title": "3. 支付",
+      "description": "订单流程由我们的在线经销商 Paddle.com 处理。Paddle.com 是所有订单的 Merchant of Record，并负责客户服务与退款处理。"
+    },
+    "liability": {
+      "title": "4. 责任限制",
+      "description": "因使用或无法使用我们的产品而产生的任何直接、间接、附带或结果性损失，CopyDrum 不承担责任。"
+    },
+    "contact": {
+      "title": "5. 联系我们",
+      "description": "如对本条款有任何疑问，请联系：",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

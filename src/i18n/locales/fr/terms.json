@@ -1,0 +1,35 @@
+{
+  "title": "Conditions générales",
+  "lastUpdated": "Dernière mise à jour : 02 février 2026",
+  "sections": {
+    "introduction": {
+      "title": "1. Introduction",
+      "description": "Bienvenue sur CopyDrum (« nous »). En accédant ou en achetant sur https://copydrum.com (le « Site »), vous acceptez d’être lié par ces Conditions générales."
+    },
+    "digitalProducts": {
+      "title": "2. Produits numériques et droits d’utilisation",
+      "description1": "Tous les produits vendus sur CopyDrum (partitions PDF et pistes audio) sont des téléchargements numériques.",
+      "description2": "Après achat, vous recevez une licence non exclusive et non transférable pour utiliser les fichiers à des fins",
+      "emphasis": "personnelles et non commerciales",
+      "description3": ".",
+      "restrictionsTitle": "Vous ne pouvez PAS :",
+      "restrictions": {
+        "item1": "Revendre, redistribuer ou partager les fichiers avec des tiers.",
+        "item2": "Téléverser les fichiers sur des sites publics de partage."
+      }
+    },
+    "payments": {
+      "title": "3. Paiements",
+      "description": "Notre processus de commande est assuré par notre revendeur en ligne Paddle.com. Paddle.com est le Merchant of Record pour toutes les commandes et gère le service client ainsi que les retours."
+    },
+    "liability": {
+      "title": "4. Limitation de responsabilité",
+      "description": "CopyDrum ne saurait être tenu responsable des dommages directs, indirects, accessoires ou consécutifs résultant de l’utilisation ou de l’impossibilité d’utiliser nos produits."
+    },
+    "contact": {
+      "title": "5. Contact",
+      "description": "Pour toute question concernant ces conditions, contactez-nous à :",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

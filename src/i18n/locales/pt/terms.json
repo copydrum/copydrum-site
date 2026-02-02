@@ -1,0 +1,35 @@
+{
+  "title": "Termos e Condições",
+  "lastUpdated": "Última atualização: 02 de fevereiro de 2026",
+  "sections": {
+    "introduction": {
+      "title": "1. Introdução",
+      "description": "Bem-vindo à CopyDrum (\"nós\"). Ao acessar ou comprar em https://copydrum.com (o \"Site\"), você concorda com estes Termos e Condições."
+    },
+    "digitalProducts": {
+      "title": "2. Produtos digitais e direitos de uso",
+      "description1": "Todos os produtos vendidos na CopyDrum (incluindo partituras em PDF e faixas de áudio) são downloads digitais.",
+      "description2": "Após a compra, você recebe uma licença não exclusiva e intransferível para uso",
+      "emphasis": "pessoal e não comercial",
+      "description3": ".",
+      "restrictionsTitle": "Você NÃO pode:",
+      "restrictions": {
+        "item1": "Revender, redistribuir ou compartilhar os arquivos com terceiros.",
+        "item2": "Enviar os arquivos para sites públicos de compartilhamento."
+      }
+    },
+    "payments": {
+      "title": "3. Pagamentos",
+      "description": "Nosso processo de pedido é conduzido pelo nosso revendedor online Paddle.com. Paddle.com é o Merchant of Record de todos os pedidos e fornece atendimento ao cliente e devoluções."
+    },
+    "liability": {
+      "title": "4. Limitação de responsabilidade",
+      "description": "A CopyDrum não se responsabiliza por danos diretos, indiretos, incidentais ou consequentes decorrentes do uso ou da impossibilidade de uso de nossos produtos."
+    },
+    "contact": {
+      "title": "5. Contato",
+      "description": "Se tiver dúvidas sobre estes Termos, entre em contato em:",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

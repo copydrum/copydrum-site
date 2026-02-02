@@ -1,0 +1,35 @@
+{
+  "title": "Điều khoản và Điều kiện",
+  "lastUpdated": "Cập nhật lần cuối: 02 tháng 02, 2026",
+  "sections": {
+    "introduction": {
+      "title": "1. Giới thiệu",
+      "description": "Chào mừng bạn đến với CopyDrum (\"chúng tôi\"). Khi truy cập hoặc mua hàng tại https://copydrum.com (\"Trang web\"), bạn đồng ý với các Điều khoản và Điều kiện này."
+    },
+    "digitalProducts": {
+      "title": "2. Sản phẩm số và quyền sử dụng",
+      "description1": "Tất cả sản phẩm bán trên CopyDrum (bao gồm bản nhạc PDF và tệp âm thanh) là sản phẩm tải xuống kỹ thuật số.",
+      "description2": "Khi mua, bạn được cấp giấy phép không độc quyền, không thể chuyển nhượng để sử dụng",
+      "emphasis": "cho mục đích cá nhân, không thương mại",
+      "description3": ".",
+      "restrictionsTitle": "Bạn KHÔNG được:",
+      "restrictions": {
+        "item1": "Bán lại, phân phối lại hoặc chia sẻ tệp với bên thứ ba.",
+        "item2": "Tải tệp lên các trang chia sẻ công khai."
+      }
+    },
+    "payments": {
+      "title": "3. Thanh toán",
+      "description": "Quy trình đặt hàng được thực hiện bởi nhà bán lại trực tuyến Paddle.com. Paddle.com là Merchant of Record cho tất cả đơn hàng và xử lý hỗ trợ khách hàng cũng như hoàn tiền."
+    },
+    "liability": {
+      "title": "4. Giới hạn trách nhiệm",
+      "description": "CopyDrum không chịu trách nhiệm cho bất kỳ thiệt hại trực tiếp, gián tiếp, ngẫu nhiên hoặc hệ quả nào phát sinh từ việc sử dụng hoặc không thể sử dụng sản phẩm."
+    },
+    "contact": {
+      "title": "5. Liên hệ",
+      "description": "Nếu bạn có câu hỏi về các điều khoản này, vui lòng liên hệ:",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

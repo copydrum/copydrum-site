@@ -1,0 +1,32 @@
+{
+  "title": "Informativa sulla Privacy",
+  "lastUpdated": "Ultimo aggiornamento: 02 febbraio 2026",
+  "sections": {
+    "collect": {
+      "title": "1. Informazioni che raccogliamo",
+      "description": "Raccogliamo le informazioni che ci fornisci al momento dell'acquisto, come nome ed email. Non memorizziamo i dati della carta di credito sui nostri server."
+    },
+    "use": {
+      "title": "2. Come utilizziamo le informazioni",
+      "description": "Utilizziamo le informazioni per:",
+      "items": {
+        "item1": "Elaborare gli ordini e consegnare i download digitali.",
+        "item2": "Inviare aggiornamenti importanti sui prodotti acquistati.",
+        "item3": "Rispondere ai commenti e alle richieste di assistenza."
+      }
+    },
+    "payment": {
+      "title": "3. Elaborazione dei pagamenti",
+      "description": "Il processo d'ordine è gestito dal nostro rivenditore online Paddle.com. Paddle.com è il Merchant of Record per tutti gli ordini e gestisce i dati di pagamento in modo sicuro secondo la propria privacy policy."
+    },
+    "cookies": {
+      "title": "4. Cookie",
+      "description": "Utilizziamo i cookie per analizzare il traffico del sito e migliorare l'esperienza di navigazione. Utilizzando il nostro sito, acconsenti all'uso dei cookie."
+    },
+    "contact": {
+      "title": "5. Contattaci",
+      "description": "Per domande su questa Informativa, contattaci a:",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

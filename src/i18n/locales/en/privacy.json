@@ -1,0 +1,32 @@
+{
+  "title": "Privacy Policy",
+  "lastUpdated": "Last updated: February 02, 2026",
+  "sections": {
+    "collect": {
+      "title": "1. Information We Collect",
+      "description": "We collect information you provide directly to us when you make a purchase, such as your name and email address. We do not store your credit card details on our servers."
+    },
+    "use": {
+      "title": "2. How We Use Your Information",
+      "description": "We use your information to:",
+      "items": {
+        "item1": "Process your orders and deliver digital downloads.",
+        "item2": "Send you important updates regarding your purchased products.",
+        "item3": "Respond to your comments and customer service requests."
+      }
+    },
+    "payment": {
+      "title": "3. Payment Processing",
+      "description": "Our order process is conducted by our online reseller Paddle.com. Paddle.com is the Merchant of Record for all our orders. All payment data is handled securely by Paddle in accordance with their privacy policy."
+    },
+    "cookies": {
+      "title": "4. Cookies",
+      "description": "We use cookies to analyze website traffic and improve your browsing experience. By using our website, you consent to our use of cookies."
+    },
+    "contact": {
+      "title": "5. Contact Us",
+      "description": "If you have questions about this Privacy Policy, please contact us at:",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

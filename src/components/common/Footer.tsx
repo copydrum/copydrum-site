@@ -52,14 +52,15 @@ export default function Footer() {
     { label: t('footer.guide'), href: '/guide' },
     { label: t('footer.faq'), href: '/customer-support' },
     { label: t('footer.contact'), href: '/customer-support?tab=contact' },
-    { label: t('footer.refundPolicy'), href: '/policy/refund' },
+    { label: t('footer.refundPolicy'), href: '/refund-policy' },
   ];
 
   const companyLinks: FooterLink[] = [
     { label: t('footer.about'), href: '/company/about' },
     { label: t('footer.businessInfo'), href: '/company/business-info' },
-    { label: t('footer.terms'), href: '/guide#terms' },
-    { label: t('footer.privacy'), href: '/guide#privacy' },
+    { label: t('footer.terms'), href: '/terms' },
+    { label: t('footer.privacy'), href: '/privacy' },
+    { label: t('footer.refundPolicy'), href: '/refund-policy' },
     { label: t('footer.partnership'), href: '/company/partnership' },
   ];
 

@@ -1,36 +1,26 @@
 {
-  "title": "İade ve Teslimat (Dijital Ürün Politikası)",
+  "title": "İade Politikası",
+  "lastUpdated": "Son güncelleme: 02 Şubat 2026",
   "sections": {
-    "productType": {
-      "title": "1. Ürün Türü",
-      "description": "CopyDrum'da satılan tüm ürünler dijital içeriklerdir (PDF davul notası). Bunlar ödeme sonrası anında indirilebilen fiziksel olmayan elektronik ürünlerdir."
+    "digitalProducts": {
+      "title": "1. Dijital ürünler",
+      "description1": "Dijital ürünlerin (PDF notalar, ses dosyaları) doğası gereği,",
+      "emphasis": "indirme bağlantısı sağlandıktan sonra tüm satışlar kesin ve iade edilemez",
+      "description2": "."
     },
-    "deliveryMethod": {
-      "title": "2. Teslimat Yöntemi",
-      "description1": "Başarılı ödeme sonrası, dosyalar",
-      "description2": "Sayfam > Sipariş Geçmişi",
-      "description3": "altında anında indirme için mevcuttur. İndirme çalışmazsa, talep üzerine yeniden verilen indirme bağlantıları sağlıyoruz veya dosyaları manuel olarak yeniden gönderiyoruz."
-    },
-    "refundPolicy": {
-      "title": "3. İade Politikası",
-      "description": "Dijital ürünlerin doğası gereği, dosya indirildikten veya erişildikten sonra iadeler mevcut değildir.",
-      "exceptionNote": "Ancak, aşağıdaki istisnai durumlarda iade veya değişim sunuyoruz:",
-      "exceptions": {
-        "exception1": "Dosya indirilmediyse satın alma tarihinden itibaren 7 gün içinde",
-        "exception2": "Yanlış dosya sağlandı veya dosyayı kullanılamaz hale getiren teknik hatalar",
-        "exception3": "Aynı ürün için yinelenen ödemeler"
+    "exceptions": {
+      "title": "2. İstisnalar",
+      "description": "Aşağıdaki durumlarda kendi takdirimizle iade veya değişim sunabiliriz:",
+      "items": {
+        "item1": "İndirilen dosya bozuk veya teknik olarak hatalıysa.",
+        "item2": "Dosya içeriği ürün açıklamasıyla uyuşmuyorsa.",
+        "item3": "Dosyayı henüz indirmediyseniz ve satın alma tarihinden itibaren 14 gün içinde iptal etmek istiyorsanız."
       }
     },
-    "customerProtection": {
-      "title": "4. Müşteri Koruması",
-      "description": "Sorunları hemen çözmeye çalışıyoruz:",
-      "protections": {
-        "protection1": "Dosya hataları için ücretsiz değiştirme",
-        "protection2": "Erişim sorunları oluşursa indirme bağlantılarının yeniden verilmesi",
-        "protection3": "Yinelenen işlemler için anında iade"
-      },
-      "contact": "Müşteri Desteği:",
-      "email": "support@copydrum.com"
+    "request": {
+      "title": "3. İade talebi",
+      "description": "Yukarıdaki istisnalara uyduğunuzu düşünüyorsanız, sipariş numaranızla birlikte şu adresten bizimle iletişime geçin:",
+      "email": "copydrum@hanmail.net"
     }
   }
 }

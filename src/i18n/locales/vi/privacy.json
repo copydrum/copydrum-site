@@ -1,0 +1,32 @@
+{
+  "title": "Chính sách quyền riêng tư",
+  "lastUpdated": "Cập nhật lần cuối: 02 tháng 02, 2026",
+  "sections": {
+    "collect": {
+      "title": "1. Thông tin chúng tôi thu thập",
+      "description": "Chúng tôi thu thập thông tin bạn cung cấp khi mua hàng, כגון tên và email. Chúng tôi không lưu thông tin thẻ tín dụng trên máy chủ."
+    },
+    "use": {
+      "title": "2. Cách chúng tôi sử dụng thông tin",
+      "description": "Chúng tôi sử dụng thông tin để:",
+      "items": {
+        "item1": "Xử lý đơn hàng và cung cấp tải xuống kỹ thuật số.",
+        "item2": "Gửi cập nhật quan trọng liên quan đến sản phẩm đã mua.",
+        "item3": "Phản hồi bình luận và yêu cầu hỗ trợ khách hàng."
+      }
+    },
+    "payment": {
+      "title": "3. Xử lý thanh toán",
+      "description": "Quy trình đặt hàng được thực hiện bởi Paddle.com. Paddle.com là Merchant of Record cho tất cả đơn hàng và xử lý dữ liệu thanh toán an toàn theo chính sách riêng tư của họ."
+    },
+    "cookies": {
+      "title": "4. Cookie",
+      "description": "Chúng tôi sử dụng cookie để phân tích lưu lượng và cải thiện trải nghiệm. Việc sử dụng trang web đồng nghĩa bạn chấp thuận sử dụng cookie."
+    },
+    "contact": {
+      "title": "5. Liên hệ",
+      "description": "Nếu bạn có câu hỏi về chính sách này, vui lòng liên hệ:",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

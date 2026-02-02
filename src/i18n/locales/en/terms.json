@@ -1,0 +1,35 @@
+{
+  "title": "Terms and Conditions",
+  "lastUpdated": "Last updated: February 02, 2026",
+  "sections": {
+    "introduction": {
+      "title": "1. Introduction",
+      "description": "Welcome to CopyDrum (\"we,\" \"our,\" or \"us\"). By accessing or purchasing from https://copydrum.com (the \"Site\"), you agree to be bound by these Terms and Conditions."
+    },
+    "digitalProducts": {
+      "title": "2. Digital Products & Usage Rights",
+      "description1": "All products sold on CopyDrum (including PDF drum sheet music and audio tracks) are digital downloads.",
+      "description2": "Upon purchase, you are granted a non-exclusive, non-transferable license to use the files for your",
+      "emphasis": "personal, non-commercial use only",
+      "description3": ".",
+      "restrictionsTitle": "You may NOT:",
+      "restrictions": {
+        "item1": "Resell, redistribute, or share the files with third parties.",
+        "item2": "Upload the files to public file-sharing websites."
+      }
+    },
+    "payments": {
+      "title": "3. Payments",
+      "description": "Our order process is conducted by our online reseller Paddle.com. Paddle.com is the Merchant of Record for all our orders. Paddle provides all customer service inquiries and handles returns."
+    },
+    "liability": {
+      "title": "4. Limitation of Liability",
+      "description": "CopyDrum shall not be liable for any direct, indirect, incidental, or consequential damages resulting from the use or inability to use our products."
+    },
+    "contact": {
+      "title": "5. Contact Us",
+      "description": "If you have any questions about these Terms, please contact us at:",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

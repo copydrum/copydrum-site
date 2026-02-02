@@ -1,0 +1,35 @@
+{
+  "title": "Allgemeine Geschäftsbedingungen",
+  "lastUpdated": "Zuletzt aktualisiert: 02. Februar 2026",
+  "sections": {
+    "introduction": {
+      "title": "1. Einleitung",
+      "description": "Willkommen bei CopyDrum („wir“). Durch den Zugriff auf oder den Kauf bei https://copydrum.com (die „Website“) stimmen Sie diesen Bedingungen zu."
+    },
+    "digitalProducts": {
+      "title": "2. Digitale Produkte und Nutzungsrechte",
+      "description1": "Alle bei CopyDrum verkauften Produkte (PDF-Drumnoten und Audiospuren) sind digitale Downloads.",
+      "description2": "Mit dem Kauf erhalten Sie eine nicht-exklusive, nicht übertragbare Lizenz für",
+      "emphasis": "den persönlichen, nicht kommerziellen Gebrauch",
+      "description3": ".",
+      "restrictionsTitle": "Nicht erlaubt ist:",
+      "restrictions": {
+        "item1": "Weiterverkauf, Weitergabe oder Teilen der Dateien mit Dritten.",
+        "item2": "Hochladen der Dateien auf öffentliche File-Sharing-Websites."
+      }
+    },
+    "payments": {
+      "title": "3. Zahlungen",
+      "description": "Unser Bestellprozess wird von unserem Online-Reseller Paddle.com durchgeführt. Paddle.com ist der Merchant of Record für alle Bestellungen und übernimmt den Kundenservice sowie Rückerstattungen."
+    },
+    "liability": {
+      "title": "4. Haftungsbeschränkung",
+      "description": "CopyDrum haftet nicht für direkte, indirekte, zufällige oder Folgeschäden, die aus der Nutzung oder Nichtnutzung unserer Produkte entstehen."
+    },
+    "contact": {
+      "title": "5. Kontakt",
+      "description": "Bei Fragen zu diesen Bedingungen kontaktieren Sie uns unter:",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}

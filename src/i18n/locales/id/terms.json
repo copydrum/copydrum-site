@@ -1,0 +1,35 @@
+{
+  "title": "Syarat dan Ketentuan",
+  "lastUpdated": "Terakhir diperbarui: 02 Februari 2026",
+  "sections": {
+    "introduction": {
+      "title": "1. Pendahuluan",
+      "description": "Selamat datang di CopyDrum (\"kami\"). Dengan mengakses atau membeli dari https://copydrum.com (\"Situs\"), Anda setuju untuk terikat pada Syarat dan Ketentuan ini."
+    },
+    "digitalProducts": {
+      "title": "2. Produk digital & hak penggunaan",
+      "description1": "Semua produk yang dijual di CopyDrum (termasuk partitur PDF dan trek audio) adalah unduhan digital.",
+      "description2": "Setelah pembelian, Anda diberikan lisensi non-eksklusif dan tidak dapat dialihkan untuk penggunaan",
+      "emphasis": "pribadi dan non-komersial saja",
+      "description3": ".",
+      "restrictionsTitle": "Anda TIDAK boleh:",
+      "restrictions": {
+        "item1": "Menjual kembali, mendistribusikan ulang, atau membagikan file kepada pihak ketiga.",
+        "item2": "Mengunggah file ke situs berbagi file publik."
+      }
+    },
+    "payments": {
+      "title": "3. Pembayaran",
+      "description": "Proses pemesanan kami dilakukan oleh reseller online Paddle.com. Paddle.com adalah Merchant of Record untuk semua pesanan dan menangani layanan pelanggan serta pengembalian."
+    },
+    "liability": {
+      "title": "4. Batasan tanggung jawab",
+      "description": "CopyDrum tidak bertanggung jawab atas kerugian langsung, tidak langsung, insidental, atau konsekuensial yang timbul dari penggunaan atau ketidakmampuan menggunakan produk kami."
+    },
+    "contact": {
+      "title": "5. Hubungi kami",
+      "description": "Jika Anda memiliki pertanyaan tentang Syarat ini, hubungi kami di:",
+      "email": "copydrum@hanmail.net"
+    }
+  }
+}
